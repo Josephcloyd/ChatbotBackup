@@ -1,0 +1,10 @@
+﻿{
+  "mcp": {
+    "servers": {
+      "production-planner": {
+        "url": "http://localhost:3001/mcp",
+        "transport": "streamable-http"
+      }
+    }
+  }
+}

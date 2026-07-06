@@ -1,0 +1,21 @@
+# Dependencies and build outputs
+node_modules/
+.next/
+dist/
+coverage/
+.qa/
+
+# Local configuration and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+.xlsx
+
+# Generated workbooks
+mcp-server/outputs/*.xlsx
+
+# Logs and editor files
+*.log
+.DS_Store
+Thumbs.db

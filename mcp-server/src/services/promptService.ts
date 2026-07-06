@@ -1,0 +1,86 @@
+import type { TemplateWorkbookDefinition } from "./templateService.js";
+
+export interface ProductionPromptInput {
+  projectDescription: string;
+  templateDefinition: TemplateWorkbookDefinition;
+  currentDate?: string;
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function promptTemplate(definition: TemplateWorkbookDefinition): string {
+  return JSON.stringify(
+    definition.sheets.map((sheet) => ({
+      sheetName: sheet.sheetName,
+      columns: sheet.columns.map((column) => column.header),
+      existingDataRowCount: sheet.metadata?.existingDataRowCount ?? 0,
+    })),
+    null,
+    2,
+  );
+}
+
+export class PromptService {
+  buildProductionPrompt(input: ProductionPromptInput): string {
+    return `/no_think
+You are a production planning expert. Create a realistic plan for the requested project and populate the provided Excel workbook structure.
+
+PROJECT DESCRIPTION
+${input.projectDescription}
+
+PLANNING DATE
+${input.currentDate ?? todayIso()}
+
+AUTHORITATIVE WORKBOOK TEMPLATE
+${promptTemplate(input.templateDefinition)}
+
+The workbook template above is the sole source of truth for workbook structure.
+- Use ONLY the provided sheet names, with exact spelling and capitalization.
+- For each sheet, use ONLY its provided column headers, copied exactly.
+- Never invent, rename, normalize, abbreviate, or omit a column header.
+- Preserve the provided column order exactly.
+- Each row key must exactly match a column header for that row's sheet.
+- Include every provided column in the sheet's columns array and in every row object.
+- If a value is unknown or not applicable, use an empty string.
+- If a template sheet has no columns, return that sheet with empty columns and rows.
+- Return only the template sheet or sheets relevant to the requested production plan.
+- Prefer sheets with no existing data rows. Do not populate reference, credential, or account sheets unless the project explicitly requires them.
+- Do not return the same sheet more than once.
+- Treat the planning date as today. Unless the request explicitly asks for historical reporting, never use a past date.
+- For the Production Plan sheet, create one row per calendar day when the request specifies a duration in days.
+- When the request specifies total hours, the sum of all "Target Total Hours" values must equal that requested total exactly.
+- This is a plan, not a completed report. Leave all future "Actual" fields, variance fields, and completion-rate fields as empty strings.
+- Use YYYY-MM-DD for project and row dates. Make the project start date and deadline agree with the first and last planned rows.
+
+Respond with ONLY valid JSON matching this schema:
+{
+  "project": {
+    "projectName": "string",
+    "projectDescription": "string",
+    "client": "string",
+    "startDate": "string",
+    "deadline": "string",
+    "totalAssets": 0,
+    "assumptions": ["string"]
+  },
+  "workbook": {
+    "sheets": [
+      {
+        "sheetName": "an exact provided sheet name",
+        "columns": ["exact provided column headers"],
+        "rows": [
+          { "exact column header": "string, number, boolean, null, or empty string" }
+        ]
+      }
+    ]
+  },
+  "summary": "string"
+}
+
+JSON only. Do not include markdown or explanatory text.`;
+  }
+}
+
+export const promptService = new PromptService();

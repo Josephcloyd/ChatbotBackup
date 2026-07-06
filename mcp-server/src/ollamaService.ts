@@ -1,0 +1,154 @@
+/**
+ * ollamaService.ts
+ *
+ * Sends a prompt to the local Ollama instance and returns the raw text response.
+ * Uses the Ollama HTTP API directly — no extra SDK needed.
+ */
+
+import { config } from "./config.js";
+
+export interface OllamaResponse {
+  model?: string;
+  response?: string;
+  message?: {
+    content?: string;
+    [key: string]: unknown;
+  };
+  thinking?: string;
+  done?: boolean;
+  done_reason?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+/** Parse either one JSON response or a newline-delimited stream of JSON chunks. */
+export function parseOllamaResponseBody(rawBody: string): OllamaResponse[] {
+  if (!rawBody.trim()) {
+    throw new Error("Ollama returned an empty HTTP response body");
+  }
+
+  try {
+    return [JSON.parse(rawBody) as OllamaResponse];
+  } catch {
+    try {
+      return rawBody
+        .split(/\r?\n/)
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line) as OllamaResponse);
+    } catch (error) {
+      throw new Error(
+        `Ollama returned a body that is neither JSON nor NDJSON: ${(error as Error).message}`,
+      );
+    }
+  }
+}
+
+/** Extract generate.response or chat.message.content and join streamed chunks. */
+export function extractOllamaText(payloads: OllamaResponse[]): string {
+  const apiError = payloads.find((payload) => typeof payload.error === "string")?.error;
+  if (apiError) throw new Error(`Ollama generation failed: ${apiError}`);
+
+  const text = payloads
+    .map((payload) => {
+      if (typeof payload.response === "string") return payload.response;
+      if (typeof payload.message?.content === "string") return payload.message.content;
+      return "";
+    })
+    .join("")
+    .trim();
+
+  if (!text) {
+    const finalPayload = payloads.at(-1);
+    const fields = finalPayload ? Object.keys(finalPayload).join(", ") : "none";
+    const thinkingLength = payloads.reduce(
+      (length, payload) => length + (payload.thinking?.length ?? 0),
+      0,
+    );
+    throw new Error(
+      "Ollama returned an empty response body — check field extraction and streaming settings. " +
+        `Expected response for /api/generate or message.content for /api/chat; ` +
+        `received fields: ${fields}; done=${String(finalPayload?.done)}; ` +
+        `done_reason=${String(finalPayload?.done_reason)}; thinkingLength=${thinkingLength}.`,
+    );
+  }
+
+  return text;
+}
+
+/**
+ * Send a prompt to Ollama and return the completed text response.
+ * Uses non-streaming (stream: false) for simplicity.
+ */
+export async function generateWithOllama(prompt: string): Promise<string> {
+  const url = `${config.ollamaBaseUrl}/api/generate`;
+
+  console.log(`[ollamaService] Sending prompt to ${config.ollamaModel}...`);
+
+  const body = JSON.stringify({
+    model: config.ollamaModel,
+    prompt,
+    format: "json",
+    think: false,
+    stream: false,
+    options: {
+      temperature: 0.3,   // low temp for structured JSON output
+      top_p: 0.9,
+      num_predict: config.ollamaNumPredict,
+    },
+  });
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    signal: AbortSignal.timeout(config.ollamaTimeoutMs),
+  });
+
+  const rawBody = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Ollama request failed (${response.status}): ${rawBody}`);
+  }
+
+  const payloads = parseOllamaResponseBody(rawBody);
+  const unmodifiedPayload = payloads.length === 1 ? payloads[0] : payloads;
+  console.log(
+    "[ollamaService] Unmodified Ollama JSON response:",
+    JSON.stringify(unmodifiedPayload, null, 2),
+  );
+
+  const finalPayload = payloads.at(-1);
+  console.log(
+    `[ollamaService] Response received, chunks=${payloads.length}, done=${String(finalPayload?.done)}`,
+  );
+  return extractOllamaText(payloads);
+}
+
+/**
+ * Parse the JSON output from Ollama, stripping any accidental markdown fences.
+ */
+export function parseOllamaJson<T>(rawText: string): T {
+  if (typeof rawText !== "string" || !rawText.trim()) {
+    throw new Error("Cannot parse Ollama JSON because the extracted response text is empty");
+  }
+
+  // Strip markdown code fences if model added them despite instructions
+  let cleaned = rawText
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "")
+    .trim();
+
+  // Find the first { to handle any leading text
+  const firstBrace = cleaned.indexOf("{");
+  if (firstBrace > 0) {
+    cleaned = cleaned.slice(firstBrace);
+  }
+
+  // Find the last } to handle any trailing text
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (lastBrace !== -1 && lastBrace < cleaned.length - 1) {
+    cleaned = cleaned.slice(0, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned) as T;
+}

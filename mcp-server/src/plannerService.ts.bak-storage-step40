@@ -1,0 +1,107 @@
+import { generateWithOllama, parseOllamaJson } from "./ollamaService.js";
+import { savePlan } from "./supabaseService.js";
+import { excelService } from "./services/excelService.js";
+import { templateService } from "./services/templateService.js";
+import { validationService } from "./services/validationService.js";
+import { planRulesService } from "./services/planRulesService.js";
+import {
+  buildDynamicPlan,
+  buildDynamicPrompt,
+  validateDynamicProposal,
+} from "./services/dynamicPlanService.js";
+import { dynamicExcelService } from "./services/dynamicExcelService.js";
+import {
+  buildProductionPrompt,
+  buildWhatsAppSummary,
+  type ProductionPlanInput,
+  type ProductionPlanOutput,
+} from "./productionPrompt.js";
+
+export interface PlannerResult {
+  success: boolean;
+  planId?: string;
+  whatsappSummary: string;
+  plan?: ProductionPlanOutput;
+  workbookPath?: string;
+  error?: string;
+}
+
+export async function generateProductionPlan(
+  input: ProductionPlanInput,
+): Promise<PlannerResult> {
+  const mode = input.workbookMode ?? "template";
+  console.log("\n========== PLAN GENERATION STARTED ==========");
+  console.log("whatsappUserId:", input.whatsappUserId);
+  console.log("projectDescription:", input.projectDescription);
+  console.log("workbookMode:", mode);
+
+  try {
+    const currentDate = new Date().toISOString().slice(0, 10);
+    const templateDefinition = mode === "template"
+      ? await templateService.loadDefinition()
+      : undefined;
+    const prompt = mode === "dynamic"
+      ? buildDynamicPrompt(input.projectDescription, currentDate)
+      : buildProductionPrompt(input, templateDefinition!, currentDate);
+
+    console.log("[plannerService] Calling Ollama...");
+    const rawResponse = await generateWithOllama(prompt);
+    console.log("[plannerService] Raw response length:", rawResponse.length);
+
+    let parsedResponse: unknown;
+    try {
+      parsedResponse = parseOllamaJson<unknown>(rawResponse);
+    } catch (parseError) {
+      console.error("[plannerService] JSON parse failed:", parseError);
+      console.error("[plannerService] Raw response was:", rawResponse.slice(0, 500));
+      throw new Error(`Ollama returned invalid JSON: ${(parseError as Error).message}`);
+    }
+
+    let plan: ProductionPlanOutput;
+    let workbookPath: string;
+    if (mode === "dynamic") {
+      const proposal = validateDynamicProposal(parsedResponse, currentDate);
+      const dynamicResult = buildDynamicPlan(input, proposal, currentDate);
+      plan = planRulesService.validate(dynamicResult.plan, { currentDate, input });
+      workbookPath = await dynamicExcelService.writeDynamicProductionPlan(dynamicResult);
+    } else {
+      const structurallyValidPlan = validationService.validateProductionPlan(
+        parsedResponse,
+        templateDefinition!,
+      );
+      plan = planRulesService.validate(structurallyValidPlan, { currentDate, input });
+      workbookPath = await excelService.writeProductionPlan(plan, templateDefinition!);
+    }
+
+    console.log("[plannerService] Plan validated successfully:", plan.project.projectName);
+    console.log("[plannerService] Workbook written:", workbookPath);
+
+    let planId: string | undefined;
+    try {
+      const savedRecord = await savePlan(
+        input.whatsappUserId,
+        input.projectDescription,
+        plan,
+      );
+      planId = savedRecord.id;
+      console.log("[plannerService] Saved to Supabase, ID:", planId);
+    } catch (dbError) {
+      console.error(
+        "[plannerService] Supabase save failed (non-fatal):",
+        (dbError as Error).message,
+      );
+    }
+
+    const whatsappSummary = buildWhatsAppSummary(plan);
+    console.log("========== PLAN GENERATION COMPLETE ==========\n");
+    return { success: true, planId, whatsappSummary, plan, workbookPath };
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    console.error("[plannerService] FAILED:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+      whatsappSummary: `Production plan generation failed.\n\nError: ${errorMessage}\n\nPlease try again or contact support.`,
+    };
+  }
+}

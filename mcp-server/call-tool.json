@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"generate_production_plan","arguments":{"whatsappUserId":"dashboard-test","workbookMode":"dynamic","projectDescription":"Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today."}}}

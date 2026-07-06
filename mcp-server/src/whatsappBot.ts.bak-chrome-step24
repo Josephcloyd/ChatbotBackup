@@ -1,0 +1,75 @@
+﻿import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
+const qrcode = require("qrcode-terminal") as {
+  generate: (qr: string, options?: { small?: boolean }) => void;
+};
+
+const whatsappWeb = require("whatsapp-web.js") as typeof import("whatsapp-web.js");
+
+const { Client, LocalAuth } = whatsappWeb;
+
+const client = new Client({
+  authStrategy: new LocalAuth({
+    clientId: "production-planner-demo",
+  }),
+  puppeteer: {
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  },
+});
+
+client.on("qr", (qr: string) => {
+  console.log("");
+  console.log("Scan this QR code with WhatsApp:");
+  console.log("WhatsApp phone app → Linked devices → Link a device");
+  console.log("");
+  qrcode.generate(qr, { small: true });
+});
+
+client.on("ready", () => {
+  console.log("[whatsappBot] WhatsApp QR demo bot is ready.");
+  console.log("[whatsappBot] Send 'ping' to this WhatsApp account to test replies.");
+});
+
+client.on("authenticated", () => {
+  console.log("[whatsappBot] WhatsApp session authenticated.");
+});
+
+client.on("auth_failure", (message: string) => {
+  console.error("[whatsappBot] Authentication failed:", message);
+});
+
+client.on("message", async (message) => {
+  if (message.fromMe) {
+    return;
+  }
+
+  const text = message.body.trim();
+
+  console.log("[whatsappBot] Message received:", text);
+
+  if (text.toLowerCase() === "ping") {
+    await message.reply(
+      "Production Planner WhatsApp demo bot is connected. Next step: connect this to Ollama and Supabase plan generation.",
+    );
+    return;
+  }
+
+  if (text.toLowerCase().startsWith("plan:")) {
+    await message.reply(
+      "I received your production plan request. The planner connection will be added in the next step.",
+    );
+    return;
+  }
+
+  await message.reply(
+    "Demo bot received your message. Send 'ping' to test, or start a request with 'plan:'.",
+  );
+});
+
+client.initialize().catch((error: unknown) => {
+  console.error("[whatsappBot] Failed to initialize:", error);
+  process.exitCode = 1;
+});

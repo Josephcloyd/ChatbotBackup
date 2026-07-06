@@ -1,0 +1,53 @@
+=== Package scripts and dependencies ===
+{
+  "name": "mcp-server",
+  "version": "1.0.0",
+  "description": "Standalone MCP server for production planning",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "node --env-file=.env --watch --import tsx src/server.ts",
+    "start": "node --env-file=.env --import tsx src/server.ts",
+    "smoke": "tsx scripts/smokeTest.ts",
+    "demo:dynamic": "tsx scripts/generateDynamicDemo.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@supabase/supabase-js": "^2.110.0",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.0",
+    "tsx": "^4.22.5",
+    "typescript": "^6.0.3"
+  }
+}
+
+=== Source files ===
+src\config.ts
+src\ollamaService.ts
+src\plannerService.ts
+src\productionPrompt.ts
+src\server.ts
+src\supabaseService.ts
+src\services\dynamicExcelService.ts
+src\services\dynamicPlanService.ts
+src\services\excelService.ts
+src\services\planningConstraintsService.ts
+src\services\planRulesService.ts
+src\services\promptService.ts
+src\services\templateService.ts
+src\services\validationService.ts
+src\templates\ProductionPlanTemplate.xlsx
+src\templates\README.md
+src\types\productionPlan.ts
+
+=== Supabase / workbook / download references ===

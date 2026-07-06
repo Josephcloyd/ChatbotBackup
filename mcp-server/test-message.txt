@@ -1,0 +1,1 @@
+Use the MCP tool generate_production_plan now. whatsappUserId: dashboard-test projectDescription: Create a production plan for a data annotation project with a 30-day duration and 60 total hours. Do not answer manually. Call the tool and return its result.

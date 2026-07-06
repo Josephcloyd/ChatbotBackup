@@ -1,0 +1,141 @@
+# Chatbot2ProPl Production Planner
+
+Chatbot2ProPl is an early-stage production-planning assistant. Its working backend accepts a project description through MCP, asks a local Ollama model for planning context, creates and validates the schedule, writes an Excel workbook, and optionally stores the result in Supabase.
+
+It supports two workbook modes:
+
+- `template` preserves and fills the official company workbook.
+- `dynamic` needs no external template and creates a professional workbook with an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation.
+
+The repository now includes the Flowboard Next.js dashboard. No live WhatsApp provider integration exists yet.
+
+## Current architecture
+
+```text
+MCP client -> POST /mcp -> generate_production_plan -> Ollama proposal
+    -> template mode -> official workbook validation and filling
+    -> dynamic mode  -> deterministic schedule and workbook generation
+    -> business-rule validation -> optional Supabase record
+```
+
+In template mode, the official workbook at `mcp-server/src/templates/ProductionPlanTemplate.xlsx` is the source of truth for sheet names, headers, formulas, styles, and hidden-sheet state. Dynamic mode does not read that file.
+
+## Prerequisites
+
+- Node.js 20 or newer
+- npm
+- [Ollama](https://ollama.com/) running locally
+- The configured Ollama model (default: `qwen3:4b`)
+- Optional: a Supabase project for plan history
+
+## Setup
+
+From PowerShell:
+
+```powershell
+cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\mcp-server"
+npm.cmd install
+Copy-Item .env.example .env
+ollama pull qwen3:4b
+npm.cmd start
+```
+
+The MCP endpoint is `http://127.0.0.1:3001/mcp`. Health information is available at `http://127.0.0.1:3001/health`.
+
+Start the dashboard in a second PowerShell window:
+
+```powershell
+cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\next-jsdashboard"
+Copy-Item .env.example .env.local
+npm.cmd install
+npm.cmd run dev
+```
+
+Open `http://localhost:3000`. The dashboard provides the Ollama request panel, production-plan visualization, Excel download, and Supabase-backed history when credentials are configured.
+
+Node does not automatically load `.env` in every runtime. Either export the variables before starting the server or start Node with an environment-file option. The defaults work for a local Ollama instance; Supabase is optional.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MCP_PORT` | `3001` | HTTP server port |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama HTTP API |
+| `OLLAMA_MODEL` | `qwen3:4b` | Generation model |
+| `OLLAMA_NUM_PREDICT` | `8192` | Maximum generated tokens |
+| `OLLAMA_TIMEOUT_MS` | `600000` | Generation timeout |
+| `SUPABASE_URL` | none | Optional Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | none | Optional server-only database key |
+
+Never place `SUPABASE_SERVICE_ROLE_KEY` in browser code or commit a real `.env` file.
+
+## Supabase
+
+Apply `mcp-server/supabase/migrations/001_create_production_plans.sql` in the Supabase SQL editor or migration workflow. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
+
+## Verification
+
+```powershell
+cd mcp-server
+npm.cmd test
+npm.cmd run typecheck
+```
+
+Tests cover Ollama JSON/NDJSON parsing, both workbook modes, template preservation, dynamic formulas and styling, flexible constraints, semantic plan rules, health reporting, and MCP initialization over HTTP.
+
+## Run a notified live smoke test
+
+Start the MCP server in one PowerShell window, then run this in a second window:
+
+```powershell
+cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\mcp-server"
+npm.cmd run smoke
+```
+
+The command waits for Ollama and then prints and sounds a terminal notification:
+
+- `✅ DONE` means the plan and workbook were generated.
+- `❌ FAILED` means the health check or generation failed; the error follows the notification.
+
+It exits with code `0` on success and `1` on failure, so it can also be used by automation. The request can be edited in `mcp-server/call-tool.json` before running it. Restart the MCP server after changing application code.
+
+## Example MCP inputs
+
+Dynamic mode, without a template:
+
+```json
+{
+  "whatsappUserId": "dashboard-test",
+  "workbookMode": "dynamic",
+  "projectDescription": "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today."
+}
+```
+
+Template mode:
+
+```json
+{
+  "whatsappUserId": "dashboard-test",
+  "workbookMode": "template",
+  "projectDescription": "Create a production plan for a data annotation project with a 30-day duration and 60 total hours."
+}
+```
+
+If `workbookMode` is omitted, `template` is used for backward compatibility. Dynamic constraints recognize days, weeks, calendar months, total hours, team/class size, ISO or named start dates, weekdays-only schedules, and calendar-day schedules. Target hours are distributed exactly and future actuals remain editable and blank.
+
+To create the verified dynamic demonstration workbook without calling Ollama:
+
+```powershell
+npm.cmd run demo:dynamic
+```
+
+The demonstration output is written under `mcp-server/outputs/dual-mode-demo`.
+
+## Known gaps
+
+- There is no actual WhatsApp webhook/provider integration.
+- Ollama reachability is checked only when generation runs; `/health` reports configuration and template readiness.
+- Authentication, rate limiting, file retention, object storage, and production deployment are not implemented. Workbook URLs are non-guessable local-development links, not a production authorization system.
+- The root `.git` directory is not currently recognized as a valid Git repository; it has deliberately not been modified.
+
+See `CONTINUATION_PROMPT.md` for the broader delivery roadmap.
