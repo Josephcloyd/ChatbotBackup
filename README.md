@@ -12,11 +12,20 @@ The repository now includes the Flowboard Next.js dashboard. No live WhatsApp pr
 ## Current architecture
 
 ```text
-MCP client -> POST /mcp -> generate_production_plan -> Ollama proposal
+OpenClaw / MCP client -> reads openclaw.json -> POST /mcp
+    -> generate_production_plan -> Ollama proposal
     -> template mode -> official workbook validation and filling
     -> dynamic mode  -> deterministic schedule and workbook generation
     -> business-rule validation -> optional Supabase record
 ```
+
+OpenClaw is not part of the production-planning logic itself. It is the
+configured MCP client entry point for this repository. The root
+`openclaw.json` file points OpenClaw to the backend MCP endpoint at
+`http://localhost:3001/mcp` using the `streamable-http` transport. From there,
+OpenClaw can call the backend's `generate_production_plan` tool. Any other
+MCP-compatible client could call the same endpoint, which is why the backend is
+described generically as an MCP server.
 
 In template mode, the official workbook at `mcp-server/src/templates/ProductionPlanTemplate.xlsx` is the source of truth for sheet names, headers, formulas, styles, and hidden-sheet state. Dynamic mode does not read that file.
 
