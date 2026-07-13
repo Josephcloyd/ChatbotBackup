@@ -9,11 +9,16 @@ coverage/
 .env
 .env.local
 .env.*.local
+local.env
 !.env.example
 .xlsx
 
 # Generated workbooks
 mcp-server/outputs/*.xlsx
+
+# Local WhatsApp Web session/cache data
+mcp-server/.wwebjs_auth/
+mcp-server/.wwebjs_cache/
 
 # Logs and editor files
 *.log

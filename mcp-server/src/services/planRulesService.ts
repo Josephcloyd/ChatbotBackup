@@ -4,6 +4,7 @@ import {
   extractRequestedConstraints,
   resolvePlanningSettings,
 } from "./planningConstraintsService.js";
+import { isWeekday, parseIsoDate } from "./dateNormalizationService.js";
 export { extractRequestedConstraints } from "./planningConstraintsService.js";
 
 export interface PlanRuleOptions {
@@ -54,10 +55,14 @@ export class PlanRulesService {
       if (!date) {
         throw new Error(`Production Plan row ${rowNumber} Date must use YYYY-MM-DD format`);
       }
-      if (date < options.currentDate) {
+      const constraints = extractRequestedConstraints(options.input.projectDescription, options.currentDate);
+      if (!constraints.allowPastDates && date < options.currentDate) {
         throw new Error(
           `Production Plan row ${rowNumber} uses past date ${date}; planning date is ${options.currentDate}`,
         );
+      }
+      if (constraints.weekdaysOnly === true && !isWeekday(parseIsoDate(date))) {
+        throw new Error(`Production Plan row ${rowNumber} schedules weekend date ${date}`);
       }
       if (seenDates.has(date)) throw new Error(`Production Plan contains duplicate date ${date}`);
       seenDates.add(date);
@@ -75,7 +80,7 @@ export class PlanRulesService {
       }
     });
 
-    const constraints = extractRequestedConstraints(options.input.projectDescription);
+    const constraints = extractRequestedConstraints(options.input.projectDescription, options.currentDate);
     if (constraints.duration !== undefined) {
       const expectedDates = buildScheduleDates(resolvePlanningSettings(
         options.input.projectDescription,

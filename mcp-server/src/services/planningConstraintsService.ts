@@ -1,3 +1,14 @@
+import {
+  addDays,
+  extractNormalizedDateConstraints,
+  formatIsoDate,
+  isIsoDate,
+  isWeekday,
+  nextBusinessDay,
+  parseIsoDate,
+  type DateInterpretation,
+} from "./dateNormalizationService.js";
+
 export type DurationUnit = "days" | "weeks" | "months";
 
 export interface DurationConstraint {
@@ -12,6 +23,16 @@ export interface RequestedConstraints {
   teamSize?: number;
   weekdaysOnly?: boolean;
   startDate?: string;
+  endDate?: string;
+  allowPastDates?: boolean;
+  dateInterpretations?: DateInterpretation[];
+  projectType?: string;
+  priority?: string;
+  deliverables?: string[];
+  needsQa?: boolean;
+  needsReview?: boolean;
+  needsBuffer?: boolean;
+  needsWeeklyTracking?: boolean;
 }
 
 export interface PlanningDefaults {
@@ -25,6 +46,7 @@ export interface PlanningDefaults {
 
 export interface ResolvedPlanningSettings {
   startDate: string;
+  endDate?: string;
   duration: DurationConstraint;
   totalHours: number;
   teamSize: number;
@@ -32,9 +54,11 @@ export interface ResolvedPlanningSettings {
 }
 
 function toIsoDate(value: string): string | undefined {
+  if (isIsoDate(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return undefined;
-  return date.toISOString().slice(0, 10);
+  const iso = date.toISOString().slice(0, 10);
+  return isIsoDate(iso) ? iso : undefined;
 }
 
 function positive(value: number | undefined, fallback: number, name: string): number {
@@ -45,21 +69,52 @@ function positive(value: number | undefined, fallback: number, name: string): nu
   return resolved;
 }
 
-export function extractRequestedConstraints(description: string): RequestedConstraints {
-  const durationMatch = description.match(/\b(\d+)\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b/i);
+function inferProjectType(description: string): string | undefined {
+  if (/\bonboarding|new hires?|employees?\b/i.test(description)) return "onboarding";
+  if (/\bannotat(?:e|ion|ors?)|label(?:ing|lers?)\b/i.test(description)) return "annotation";
+  if (/\bdata\s+encoding|encode|encoder\b/i.test(description)) return "data encoding";
+  if (/\bresearch|study|survey\b/i.test(description)) return "research";
+  if (/\bvalidation|validate|verification\b/i.test(description)) return "validation";
+  return undefined;
+}
+
+function inferDefaultWeekdaysOnly(description: string): boolean {
+  return /\b(?:office|company|team|employee|employees|staff|people|annotators?|workers?|agents?|members?|onboarding|encoding|validation|production|work)\b/i
+    .test(description);
+}
+
+function extractDeliverables(description: string): string[] {
+  const requested = [
+    ["QA", /\bqa|quality\s+assurance|quality\s+checks?\b/i],
+    ["Review", /\breview|sign-?off|approval\b/i],
+    ["Buffer", /\bbuffer|contingency\b/i],
+    ["Weekly progress tracking", /\bweekly\s+(?:progress\s+)?tracking|weekly\s+summary|weekly\s+report\b/i],
+    ["Milestones", /\bmilestones?\b/i],
+  ] as const;
+  return requested.filter(([, pattern]) => pattern.test(description)).map(([label]) => label);
+}
+
+export function extractRequestedConstraints(
+  description: string,
+  currentDate = new Date().toISOString().slice(0, 10),
+): RequestedConstraints {
+  const durationMatch =
+    description.match(/\b(?:within|for|over|during)?\s*(\d+)\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b/i) ??
+    description.match(/\bnext\s+(\d+)\s+(weekdays?|business\s+days?)\b/i);
+  const weekdayDurationMatch = description.match(/\b(?:for\s+)?(?:the\s+)?next\s+(\d+)\s+(weekdays?|business\s+days?)\b/i) ??
+    description.match(/\bfor\s+(\d+)\s+(weekdays?|business\s+days?)\b/i);
   const hoursMatch = description.match(/\b(\d+(?:\.\d+)?)\s+(?:total\s+)?hours?\b/i);
   const teamMatch =
     description.match(/\b(?:class|team|group|crew)\s+of\s+(\d+)\b/i) ??
-    description.match(/\b(\d+)\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?)\b/i);
-  const isoStart = description.match(
-    /\b(?:starting|starts?|from)\s+(\d{4}-\d{2}-\d{2})\b/i,
-  )?.[1];
-  const namedStart = description.match(
-    /\b(?:starting|starts?|from)\s+((?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:,)?\s+\d{4})\b/i,
-  )?.[1];
+    description.match(/\b(\d+)\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?)\b/i);
+  const normalizedDates = extractNormalizedDateConstraints(description, currentDate);
 
   const constraints: RequestedConstraints = {};
-  if (durationMatch) {
+  if (weekdayDurationMatch) {
+    constraints.duration = { value: Number(weekdayDurationMatch[1]), unit: "days" };
+    constraints.durationDays = Number(weekdayDurationMatch[1]);
+    constraints.weekdaysOnly = true;
+  } else if (durationMatch) {
     const unitText = durationMatch[2]!.toLowerCase();
     const unit: DurationUnit = unitText.startsWith("day")
       ? "days"
@@ -71,13 +126,31 @@ export function extractRequestedConstraints(description: string): RequestedConst
   }
   if (hoursMatch) constraints.totalHours = Number(hoursMatch[1]);
   if (teamMatch) constraints.teamSize = Number(teamMatch[1]);
-  if (/\b(?:weekdays?\s+only|business\s+days?|monday\s+(?:through|to|-)\s+friday)\b/i.test(description)) {
+  if (/\b(?:weekdays?\s+only|business\s+days?|monday\s+(?:through|to|-)\s+friday|avoid\s+weekends?|excluding\s+weekends?|no\s+weekends?)\b/i.test(description)) {
     constraints.weekdaysOnly = true;
-  } else if (/\b(?:calendar\s+(?:days?|weeks?|months?)|including\s+weekends?|seven\s+days\s+a\s+week)\b/i.test(description)) {
+  } else if (/\b(?:calendar\s+(?:days?|weeks?|months?)|including\s+weekends?|weekends?\s+included|seven\s+days\s+a\s+week)\b/i.test(description)) {
     constraints.weekdaysOnly = false;
   }
-  const parsedStart = toIsoDate(isoStart ?? namedStart ?? "");
-  if (parsedStart) constraints.startDate = parsedStart;
+  if (normalizedDates.startDate) constraints.startDate = normalizedDates.startDate;
+  if (normalizedDates.endDate) constraints.endDate = normalizedDates.endDate;
+  if (normalizedDates.interpretations.length) {
+    constraints.dateInterpretations = normalizedDates.interpretations;
+  }
+  if (/\b(?:historical|backdated|in the past|past plan)\b/i.test(description)) {
+    constraints.allowPastDates = true;
+  }
+  const projectType = inferProjectType(description);
+  if (projectType) constraints.projectType = projectType;
+  if (/\bhigh\s+priority|urgent|rush\b/i.test(description)) constraints.priority = "high";
+  else if (/\blow\s+priority\b/i.test(description)) constraints.priority = "low";
+  const deliverables = extractDeliverables(description);
+  if (deliverables.length) constraints.deliverables = deliverables;
+  if (/\bqa|quality\s+assurance|quality\s+checks?\b/i.test(description)) constraints.needsQa = true;
+  if (/\breview|sign-?off|approval\b/i.test(description)) constraints.needsReview = true;
+  if (/\bbuffer|contingency\b/i.test(description)) constraints.needsBuffer = true;
+  if (/\bweekly\s+(?:progress\s+)?tracking|weekly\s+summary|weekly\s+report\b/i.test(description)) {
+    constraints.needsWeeklyTracking = true;
+  }
   return constraints;
 }
 
@@ -86,18 +159,27 @@ export function resolvePlanningSettings(
   currentDate: string,
   defaults: PlanningDefaults = {},
 ): ResolvedPlanningSettings {
-  const requested = extractRequestedConstraints(description);
+  const requested = extractRequestedConstraints(description, currentDate);
+  const weekdaysOnly = requested.weekdaysOnly ?? defaults.weekdaysOnly ?? inferDefaultWeekdaysOnly(description);
+  const defaultStartDate = weekdaysOnly ? nextBusinessDay(currentDate) : currentDate;
   const duration = requested.duration ?? {
     value: positive(defaults.durationValue, 30, "durationValue"),
     unit: defaults.durationUnit ?? "days",
   };
   const startsToday = /\b(?:starting|starts?|from)\s+today\b/i.test(description);
-  const startDate = startsToday ? currentDate : requested.startDate ?? defaults.startDate ?? currentDate;
+  const startDate = startsToday ? currentDate : requested.startDate ?? defaultStartDate;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !toIsoDate(startDate)) {
     throw new Error("Planning start date must use YYYY-MM-DD format");
   }
-  if (startDate < currentDate) {
+  if (!requested.allowPastDates && startDate < currentDate) {
     throw new Error(`Planning start date ${startDate} is earlier than ${currentDate}`);
+  }
+  const endDate = requested.endDate;
+  if (endDate !== undefined && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || !toIsoDate(endDate))) {
+    throw new Error("Planning end date must use YYYY-MM-DD format");
+  }
+  if (endDate !== undefined && endDate < startDate) {
+    throw new Error(`Planning end date ${endDate} is earlier than start date ${startDate}`);
   }
   if (!Number.isInteger(duration.value) || duration.value <= 0 || duration.value > 730) {
     throw new Error("Duration must be a whole number between 1 and 730");
@@ -105,25 +187,16 @@ export function resolvePlanningSettings(
 
   return {
     startDate,
+    endDate,
     duration,
     totalHours: positive(requested.totalHours, positive(defaults.totalHours, 160, "totalHours"), "totalHours"),
     teamSize: Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")),
-    weekdaysOnly: requested.weekdaysOnly ?? defaults.weekdaysOnly ?? true,
+    weekdaysOnly,
   };
 }
 
 function parseIso(date: string): Date {
-  return new Date(`${date}T00:00:00Z`);
-}
-
-function formatIso(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: Date, count: number): Date {
-  const result = new Date(date);
-  result.setUTCDate(result.getUTCDate() + count);
-  return result;
+  return parseIsoDate(date);
 }
 
 function addMonthsClamped(date: Date, count: number): Date {
@@ -136,19 +209,23 @@ function addMonthsClamped(date: Date, count: number): Date {
   return firstOfTarget;
 }
 
-function isWeekday(date: Date): boolean {
-  const day = date.getUTCDay();
-  return day !== 0 && day !== 6;
-}
-
 export function buildScheduleDates(settings: ResolvedPlanningSettings): string[] {
   const start = parseIso(settings.startDate);
   const dates: string[] = [];
 
+  if (settings.endDate) {
+    const end = parseIso(settings.endDate);
+    for (let candidate = start; candidate <= end; candidate = addDays(candidate, 1)) {
+      if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
+    }
+    if (dates.length === 0) throw new Error("The requested period contains no scheduled workdays");
+    return dates;
+  }
+
   if (settings.duration.unit === "days") {
     let candidate = start;
     while (dates.length < settings.duration.value) {
-      if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIso(candidate));
+      if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
       candidate = addDays(candidate, 1);
     }
     return dates;
@@ -158,7 +235,7 @@ export function buildScheduleDates(settings: ResolvedPlanningSettings): string[]
     ? addDays(start, settings.duration.value * 7)
     : addMonthsClamped(start, settings.duration.value);
   for (let candidate = start; candidate < end; candidate = addDays(candidate, 1)) {
-    if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIso(candidate));
+    if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
   }
   if (dates.length === 0) throw new Error("The requested period contains no scheduled workdays");
   return dates;

@@ -16,6 +16,7 @@ import {
   type ProductionPlanInput,
   type ProductionPlanOutput,
 } from "./productionPrompt.js";
+import { extractRequestedConstraints } from "./services/planningConstraintsService.js";
 
 export interface PlannerResult {
   success: boolean;
@@ -26,7 +27,18 @@ export interface PlannerResult {
   workbookSignedUrl?: string;
   workbookStoragePath?: string;
   workbookSignedUrlExpiresInSeconds?: number;
+  dateInterpretations?: string[];
   error?: string;
+}
+
+function buildFriendlyFailure(errorMessage: string): string {
+  if (/date|YYYY-MM-DD|start date|end date/i.test(errorMessage)) {
+    return "I understood your request, but I could not validate the planning date. Please use a clearer date like 2026-07-13, or say \"next Monday\".";
+  }
+  if (/hours|teamSize|duration|greater than zero|whole number/i.test(errorMessage)) {
+    return "I understood your request, but the planning numbers did not validate. Please include a positive duration, team/resource count, and total hours.";
+  }
+  return "I understood your request, but I could not generate a valid production plan. Please try adding a clearer duration, team size, total hours, and start date.";
 }
 
 export async function generateProductionPlan(
@@ -40,6 +52,10 @@ export async function generateProductionPlan(
 
   try {
     const currentDate = new Date().toISOString().slice(0, 10);
+    const requestedConstraints = extractRequestedConstraints(input.projectDescription, currentDate);
+    const dateInterpretations = (requestedConstraints.dateInterpretations ?? []).map(
+      (item) => `I interpreted "${item.source}" as ${item.normalized}.`,
+    );
     const templateDefinition = mode === "template"
       ? await templateService.loadDefinition()
       : undefined;
@@ -119,14 +135,14 @@ export async function generateProductionPlan(
 
     const whatsappSummary = buildWhatsAppSummary(plan);
     console.log("========== PLAN GENERATION COMPLETE ==========\n");
-    return { success: true, planId, whatsappSummary, plan, workbookPath, workbookSignedUrl, workbookStoragePath, workbookSignedUrlExpiresInSeconds };
+    return { success: true, planId, whatsappSummary, plan, workbookPath, workbookSignedUrl, workbookStoragePath, workbookSignedUrlExpiresInSeconds, dateInterpretations };
   } catch (error) {
     const errorMessage = (error as Error).message;
     console.error("[plannerService] FAILED:", errorMessage);
     return {
       success: false,
       error: errorMessage,
-      whatsappSummary: `Production plan generation failed.\n\nError: ${errorMessage}\n\nPlease try again or contact support.`,
+      whatsappSummary: `${buildFriendlyFailure(errorMessage)}\n\nPlease revise the request and try again.`,
     };
   }
 }

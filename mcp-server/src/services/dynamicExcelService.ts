@@ -46,6 +46,34 @@ function setWidths(sheet: ExcelJS.Worksheet, widths: number[]): void {
   widths.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
 }
 
+function writeGenericSheet(workbook: ExcelJS.Workbook, sheetDefinition: {
+  sheetName: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+}): void {
+  const sheet = workbook.addWorksheet(sheetDefinition.sheetName, {
+    views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  sheet.addRow(sheetDefinition.columns);
+  sheetDefinition.rows.forEach((row) => {
+    sheet.addRow(sheetDefinition.columns.map((column) => row[column] ?? ""));
+  });
+  sectionHeader(sheet.getRow(1));
+  sheet.autoFilter = {
+    from: "A1",
+    to: `${sheet.getColumn(sheetDefinition.columns.length).letter}1`,
+  };
+  sheetDefinition.columns.forEach((column, index) => {
+    const maxContentWidth = Math.max(
+      column.length,
+      ...sheetDefinition.rows.map((row) => String(row[column] ?? "").length),
+    );
+    sheet.getColumn(index + 1).width = Math.min(Math.max(maxContentWidth + 2, 14), 45);
+    sheet.getColumn(index + 1).alignment = { wrapText: true, vertical: "top" };
+  });
+}
+
 export class DynamicExcelService {
   constructor(private readonly outputDirectory = path.resolve("outputs")) {}
 
@@ -59,14 +87,16 @@ export class DynamicExcelService {
     workbook.calcProperties.fullCalcOnLoad = true;
 
     const { plan, settings, phases, risks } = result;
-    const planRows = plan.workbook.sheets[0]!.rows;
+    const productionSheet = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+    if (!productionSheet) throw new Error("Dynamic plan is missing the Production Plan sheet");
+    const planRows = productionSheet.rows;
     const lastPlanRow = planRows.length + 1;
 
-    const summary = workbook.addWorksheet("Executive Summary", {
+    const summary = workbook.addWorksheet("Overview", {
       views: [{ showGridLines: false }],
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
     });
-    title(summary, "A1:H2", "Production Plan | Executive Summary");
+    title(summary, "A1:H2", "Production Plan | Overview");
     summary.getCell("A4").value = "Project";
     summary.mergeCells("B4:D4");
     summary.getCell("B4").value = plan.project.projectName;
@@ -130,7 +160,7 @@ export class DynamicExcelService {
       views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
     });
-    production.addRow(plan.workbook.sheets[0]!.columns);
+    production.addRow(productionSheet.columns);
     planRows.forEach((source, index) => {
       const excelRow = index + 2;
       const date = new Date(`${String(source.Date)}T00:00:00Z`);
@@ -185,6 +215,11 @@ export class DynamicExcelService {
       ],
     });
     setWidths(production, [7, 13, 14, 10, 18, 18, 22, 18, 18, 22, 14, 14, 14, 16, 15, 28]);
+
+    for (const sheet of plan.workbook.sheets) {
+      if (sheet.sheetName === "Production Plan") continue;
+      writeGenericSheet(workbook, sheet);
+    }
 
     const monthly = workbook.addWorksheet("Monthly Summary", { views: [{ state: "frozen", ySplit: 1, showGridLines: false }] });
     monthly.addRow(["Month", "Planned Hours", "Actual Hours", "Variance", "Completion Rate"]);

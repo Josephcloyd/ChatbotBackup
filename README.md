@@ -66,8 +66,18 @@ Node does not automatically load `.env` in every runtime. Either export the vari
 | `OLLAMA_TIMEOUT_MS` | `600000` | Generation timeout |
 | `SUPABASE_URL` | none | Optional Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | none | Optional server-only database key |
+| `SUPABASE_WORKBOOK_BUCKET` | none | Optional Supabase Storage bucket for generated workbooks |
+| `SUPABASE_SIGNED_URL_EXPIRES_IN_SECONDS` | `3600` | Optional workbook signed URL lifetime |
 
 Never place `SUPABASE_SERVICE_ROLE_KEY` in browser code or commit a real `.env` file.
+
+Dashboard-only variables belong in `next-jsdashboard/.env.local`:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PLANNER_API_URL` | `http://127.0.0.1:3001` | Backend API URL used by Next.js routes |
+| `FLOWBOARD_ACCESS_PASSWORD` | none | Password accepted by the dashboard login page |
+| `FLOWBOARD_SESSION_SECRET` | none | At least 16 characters; signs the dashboard session cookie |
 
 ## Supabase
 

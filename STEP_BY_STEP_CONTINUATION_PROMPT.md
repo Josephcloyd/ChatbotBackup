@@ -29,7 +29,7 @@ You are my patient senior full-stack development guide. Help me continue my loca
 
 ## Project location
 
-`C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl`
+`C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup`
 
 The project has two applications:
 
@@ -74,7 +74,7 @@ The project has two applications:
 
 ### Current blocker
 
-Supabase credentials are not configured locally. The dashboard correctly displays `Supabase not configured`.
+The current local flow has moved beyond the original Supabase blocker. Before starting new work, re-verify backend health, dashboard login, Supabase history, WhatsApp group restriction, mention-based `ping`, simple social/math replies, production-plan generation, and WhatsApp workbook attachment as `ProductionFile.xlsx`.
 
 ## Immediate objective
 
@@ -132,13 +132,20 @@ npm.cmd run dev
 
 ## Work after Supabase is verified
 
-Do not start these until Supabase is working and I approve the next objective:
+Do not start these until the current end-to-end flow is re-verified and I approve the next objective:
 
-- Add authenticated production access.
-- Upload workbooks to object storage with expiring signed URLs.
-- Add file-retention cleanup.
-- Add domain-aware planning for examples such as students and subjects, departments and projects, or products and production lines.
-- Implement WhatsApp only after I choose a provider.
+- Upgrade WhatsApp access control from group display name to stable group ID, and optionally add sender allowlists.
+- Add production-grade WhatsApp provider support only after I choose Meta WhatsApp Cloud API, Twilio, or local-only `whatsapp-web.js`.
+- Keep sending `ProductionFile.xlsx` as a WhatsApp document, but add a signed URL fallback if attachment delivery fails.
+- Add commands: `help`, `status`, `recent plans`, `download latest`, and eventually `cancel`.
+- Add generation job tracking with `queued`, `generating`, `completed`, and `failed` states.
+- Add Flowboard history search, filters, plan detail view, and status badges for Ollama, Supabase, and WhatsApp.
+- Add domain-aware planning presets for students and subjects, departments and projects, product lines, QA annotation, and event staffing.
+- Improve workbook output with a cover sheet, status dropdowns, conditional formatting, and printable summary.
+- Add backend authentication, rate limits, request IDs, structured/redacted logs, and generation concurrency controls.
+- Add file-retention cleanup for local outputs and Supabase Storage.
+- Add stronger tests for WhatsApp access rules, mocked Ollama, mocked Supabase, concurrent generation, and workbook attachment behavior.
+- Add deployment documentation separating local WhatsApp demo mode from production provider mode.
 
 ## Important project rules
 

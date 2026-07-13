@@ -24,6 +24,8 @@ Open `http://localhost:3000`.
 
 The browser calls same-origin Next.js API routes. Those routes proxy to the backend URL in `PLANNER_API_URL`, so backend credentials are never exposed to browser JavaScript.
 
+Set `FLOWBOARD_ACCESS_PASSWORD` and a `FLOWBOARD_SESSION_SECRET` of at least 16 characters in `next-jsdashboard/.env.local`; the dashboard login flow requires both.
+
 ## Supabase history
 
 Apply the migration at `mcp-server/supabase/migrations/001_create_production_plans.sql`, then set these values in `mcp-server/.env`:
