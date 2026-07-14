@@ -33,10 +33,17 @@ const groupAccessConfig: GroupAccessConfig = normalizeGroupAccessConfig({
 const logFullGroupId = (process.env.WHATSAPP_LOG_FULL_GROUP_ID ?? "").trim() === "1";
 const productionWorkbookFilename = "ProductionPlan.xlsx";
 const whatsAppClientId = "production-planner-demo";
+const botMentionDisplayName = (process.env.WHATSAPP_BOT_MENTION_NAME ?? "wil alt").trim();
+const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter((id) => id.length > 0);
 const chromeExecutablePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const readyWarningTimeoutMs = 90_000;
 let readyWarningTimer: NodeJS.Timeout | undefined;
 let puppeteerDiagnosticsAttached = false;
+const knownBotContactIds = new Set<string>();
+type WhatsAppMessage = import("whatsapp-web.js").Message;
 
 const client = new Client({
   authStrategy: new LocalAuth({
@@ -112,8 +119,125 @@ function clearReadyWarningTimer(): void {
   }
 }
 
+function normalizeWhatsAppId(id: string): string {
+  return id.trim().toLocaleLowerCase();
+}
+
+function addKnownBotContactId(id: string | undefined): void {
+  if (!id?.trim()) {
+    return;
+  }
+
+  knownBotContactIds.add(normalizeWhatsAppId(id));
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createMentionNamePattern(displayName: string): RegExp | null {
+  const normalizedName = displayName.replace(/^~/, "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const escapedNamePattern = normalizedName
+    .split(/\s+/)
+    .map(escapeRegExp)
+    .join("\\s+");
+
+  return new RegExp(`@~?\\s*${escapedNamePattern}\\b`, "i");
+}
+
+function hasBotMentionDisplayName(text: string): boolean {
+  const mentionPattern = createMentionNamePattern(botMentionDisplayName);
+  const searchableText = text.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  return mentionPattern ? mentionPattern.test(searchableText) : false;
+}
+
+function stripBotMentionDisplayName(text: string): string {
+  const mentionPattern = createMentionNamePattern(botMentionDisplayName);
+  if (!mentionPattern) {
+    return text;
+  }
+
+  return text
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(new RegExp(mentionPattern.source, "gi"), " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCurrentBotContactIds(): Set<string> {
+  const ids = [
+    client.info?.wid?._serialized,
+    client.info?.me?._serialized,
+  ].filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+
+  for (const id of ids) {
+    addKnownBotContactId(id);
+  }
+
+  for (const id of configuredBotMentionIds) {
+    addKnownBotContactId(id);
+  }
+
+  return new Set(knownBotContactIds);
+}
+
+async function refreshKnownBotContactIds(): Promise<void> {
+  const phoneId = client.info?.wid?._serialized ?? client.info?.me?._serialized;
+  addKnownBotContactId(phoneId);
+
+  if (!phoneId) {
+    return;
+  }
+
+  try {
+    // WhatsApp group mentions may use a @lid identifier even when client.info exposes @c.us.
+    const contactMappings = await client.getContactLidAndPhone([phoneId]);
+    for (const mapping of contactMappings) {
+      addKnownBotContactId(mapping.lid);
+      addKnownBotContactId(mapping.pn);
+    }
+  } catch (error) {
+    console.warn(
+      "[whatsappBot] Could not map bot phone ID to LID mention ID:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+async function isMessageMentioningBot(message: WhatsAppMessage): Promise<boolean> {
+  if (hasBotMentionDisplayName(message.body)) {
+    return true;
+  }
+
+  const botContactIds = getCurrentBotContactIds();
+
+  if (botContactIds.size === 0) {
+    console.warn("[whatsappBot] Could not determine bot contact ID; ignoring message because mention-only mode is enabled.");
+    return false;
+  }
+
+  if (message.mentionedIds.some((mentionedId) => botContactIds.has(normalizeWhatsAppId(mentionedId)))) {
+    return true;
+  }
+
+  await refreshKnownBotContactIds();
+  const refreshedBotContactIds = getCurrentBotContactIds();
+  return message.mentionedIds.some((mentionedId) => refreshedBotContactIds.has(normalizeWhatsAppId(mentionedId)));
+}
+
+function logIgnoredUnmentionedMessage(chatIdentity: ChatIdentity): void {
+  console.log(
+    `[whatsappBot] Ignored authorized group message because the bot was not mentioned. chatId=${maskWhatsAppGroupId(chatIdentity.id)}, chatName="${chatIdentity.name}"`,
+  );
+}
+
 console.log("[whatsappBot] Starting WhatsApp QR demo bot.");
 console.log(`[whatsappBot] LocalAuth clientId: ${whatsAppClientId}`);
+console.log(`[whatsappBot] Mention display name: @${botMentionDisplayName}`);
 console.log(`[whatsappBot] Chrome executable: ${chromeExecutablePath}`);
 logAccessMode();
 startReadyWarningTimer();
@@ -129,9 +253,10 @@ client.on("qr", (qr: string) => {
 client.on("ready", () => {
   clearReadyWarningTimer();
   attachPuppeteerDiagnostics();
+  void refreshKnownBotContactIds();
   console.log("[whatsappBot] WhatsApp QR demo bot is ready.");
-  console.log("[whatsappBot] Send 'ping' to test replies.");
-  console.log(`[whatsappBot] ${productionPlanCommandHelp}`);
+  console.log("[whatsappBot] Mention the bot in the allowed group, then send 'ping' to test replies.");
+  console.log(`[whatsappBot] Mention the bot with a command. ${productionPlanCommandHelp}`);
   logAccessMode();
 });
 
@@ -179,10 +304,16 @@ client.on("message", async (message) => {
 
   logApprovedFallbackGroup(chatIdentity);
 
-  const text = message.body.trim();
-  const normalizedText = normalizeBotMessageText(text);
+  if (!(await isMessageMentioningBot(message))) {
+    logIgnoredUnmentionedMessage(chatIdentity);
+    return;
+  }
 
-  console.log("[whatsappBot] Authorized message received.");
+  const text = message.body.trim();
+  const commandText = stripBotMentionDisplayName(text);
+  const normalizedText = normalizeBotMessageText(commandText);
+
+  console.log("[whatsappBot] Authorized mentioned message received.");
 
   if (normalizedText.toLowerCase() === "ping") {
     await message.reply(
@@ -191,19 +322,19 @@ client.on("message", async (message) => {
     return;
   }
 
-  const socialReply = getSocialReply(text);
+  const socialReply = getSocialReply(commandText);
   if (socialReply) {
     await message.reply(socialReply);
     return;
   }
 
-  const mathReply = getSimpleMathReply(text);
+  const mathReply = getSimpleMathReply(commandText);
   if (mathReply) {
     await message.reply(mathReply);
     return;
   }
 
-  const command = parseProductionPlanCommand(text);
+  const command = parseProductionPlanCommand(commandText);
   if (command) {
     const { projectDescription } = command;
 

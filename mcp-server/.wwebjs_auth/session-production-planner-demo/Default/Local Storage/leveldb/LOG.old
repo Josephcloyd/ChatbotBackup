@@ -1,6 +1,0 @@
-2026/07/13-14:32:14.176 5f68 Creating DB C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\Local Storage\leveldb since it was missing.
-2026/07/13-14:32:14.224 5f68 Reusing MANIFEST C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\Local Storage\leveldb/MANIFEST-000001
-2026/07/13-14:32:14.226 5f68 Recovering log #17
-2026/07/13-14:32:14.233 5f68 Reusing old log C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\Local Storage\leveldb/000017.log 
-2026/07/13-14:32:14.235 5f68 Delete type=2 #15
-2026/07/13-14:32:14.235 5f68 Delete type=2 #18

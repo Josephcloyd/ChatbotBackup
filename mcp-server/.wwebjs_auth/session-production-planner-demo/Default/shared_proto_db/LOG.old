@@ -1,4 +1,0 @@
-2026/07/13-14:32:14.188 5634 Creating DB C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\shared_proto_db since it was missing.
-2026/07/13-14:32:14.200 5634 Reusing MANIFEST C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\shared_proto_db/MANIFEST-000001
-2026/07/13-14:32:14.201 5634 Recovering log #3
-2026/07/13-14:32:14.202 5634 Reusing old log C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\shared_proto_db/000003.log 

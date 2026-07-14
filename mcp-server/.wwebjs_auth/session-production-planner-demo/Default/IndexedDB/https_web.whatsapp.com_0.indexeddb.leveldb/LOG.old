@@ -1,9 +1,0 @@
-2026/07/13-14:32:15.907 6464 Creating DB C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
-2026/07/13-14:32:15.916 6464 Reusing MANIFEST C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/07/13-14:32:15.917 6464 Recovering log #271
-2026/07/13-14:32:15.933 6464 Reusing old log C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup\mcp-server\.wwebjs_auth\session-production-planner-demo\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000271.log 
-2026/07/13-14:32:15.934 6464 Delete type=2 #270
-2026/07/13-14:32:15.934 6464 Delete type=2 #273
-2026/07/13-14:32:37.132 6464 Level-0 table #273: started
-2026/07/13-14:32:37.205 6464 Level-0 table #273: 1068077 bytes OK
-2026/07/13-14:32:37.208 6464 Delete type=0 #271
