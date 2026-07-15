@@ -1,4 +1,4 @@
-﻿/**
+/**
  * supabaseService.ts
  *
  * Handles all Supabase operations for the production planner.
@@ -65,11 +65,11 @@ export function buildPlanRecord(
   };
 }
 
-// â”€â”€â”€ Supabase client (lazy singleton) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ——— Supabase client (lazy singleton) ———————————————————————————————————————————
 
 let _client: SupabaseClient | null = null;
 
-function getClient(): SupabaseClient {
+export function getClient(): SupabaseClient {
   if (_client) return _client;
 
   const url = process.env.SUPABASE_URL;
@@ -93,7 +93,25 @@ function getClient(): SupabaseClient {
   return _client;
 }
 
-// â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function createServiceRoleClient(): SupabaseClient {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables."
+    );
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────────
 
 /**
  * Save a production plan to the `production_plans` table.
@@ -117,6 +135,10 @@ export async function savePlan(
     .single();
 
   if (error) {
+    try {
+      const fs = await import("node:fs");
+      fs.appendFileSync("c:/Users/User/Documents/College Files/Software Development 2/Github/ChatbotBackup/mcp-server/debug_save_error.log", `[${new Date().toISOString()}] ERROR: ${error.message} (${error.code})\nRecord: ${JSON.stringify(record, null, 2)}\n\n`);
+    } catch (e) {}
     throw new Error(`Supabase insert failed: ${error.message} (${error.code})`);
   }
 
@@ -226,7 +248,9 @@ export async function uploadWorkbookAndCreateSignedUrl(
 
   const { data, error: signedUrlError } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(objectPath, expiresInSeconds);
+    .createSignedUrl(objectPath, expiresInSeconds, {
+      download: filename,
+    });
 
   if (signedUrlError || !data?.signedUrl) {
     throw new Error(
@@ -241,3 +265,59 @@ export async function uploadWorkbookAndCreateSignedUrl(
     expiresInSeconds,
   };
 }
+
+export async function getPlanById(planId: string): Promise<PlanRecord | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("production_plans")
+    .select("*")
+    .eq("id", planId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Supabase query failed: ${error.message}`);
+  }
+
+  return data as PlanRecord | null;
+}
+
+export async function deletePlan(planId: string): Promise<void> {
+  const supabase = getClient();
+  const { error } = await supabase
+    .from("production_plans")
+    .delete()
+    .eq("id", planId);
+
+  if (error) {
+    throw new Error(`Failed to delete plan ${planId} from Supabase: ${error.message}`);
+  }
+}
+
+export async function updatePlan(planId: string, updates: Partial<PlanRecord>): Promise<PlanRecord> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("production_plans")
+    .update(updates)
+    .eq("id", planId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update plan ${planId} in Supabase: ${error.message}`);
+  }
+
+  return data as PlanRecord;
+}
+
+export async function reassignPlans(fromUsername: string, toUsername: string): Promise<void> {
+  const supabase = getClient();
+  const { error } = await supabase
+    .from("production_plans")
+    .update({ whatsapp_user_id: toUsername })
+    .eq("whatsapp_user_id", fromUsername);
+
+  if (error) {
+    throw new Error(`Failed to reassign plans from ${fromUsername} to ${toUsername}: ${error.message}`);
+  }
+}
+

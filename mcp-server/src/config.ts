@@ -1,3 +1,24 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+// Manually parse .env file if present to guarantee env variables reload in watch mode
+try {
+  const envPath = path.resolve(".env");
+  const envContent = readFileSync(envPath, "utf8");
+  for (const line of envContent.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf("=");
+    if (index > 0) {
+      const key = trimmed.slice(0, index).trim();
+      const val = trimmed.slice(index + 1).trim();
+      process.env[key] = val;
+    }
+  }
+} catch (e) {
+  // Ignore if .env doesn't exist
+}
+
 function positiveNumber(name: string, value: string | undefined, fallback: number): number {
   const parsed = Number(value ?? fallback);
   if (!Number.isFinite(parsed) || parsed <= 0) {
