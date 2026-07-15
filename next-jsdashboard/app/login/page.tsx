@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
@@ -42,75 +43,120 @@ export default function LoginPage() {
       display: "grid",
       placeItems: "center",
       padding: "24px",
-      background: "#0f172a",
-      color: "#e5e7eb",
-      fontFamily: "Arial, sans-serif",
+      background: "#f5eedb", // Lifewood beige paper
+      color: "#133020", // Lifewood Dark Serpent
+      fontFamily: "system-ui, -apple-system, sans-serif",
     }}>
       <form onSubmit={handleSubmit} style={{
         width: "100%",
         maxWidth: "420px",
-        padding: "28px",
+        padding: "36px 30px",
         borderRadius: "20px",
-        background: "#111827",
-        border: "1px solid rgba(255,255,255,0.12)",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+        background: "#ffffff",
+        border: "1px solid #d3cbb6",
+        boxShadow: "0 10px 30px rgba(19, 48, 32, 0.08)",
       }}>
-        <p style={{
-          margin: "0 0 8px",
-          color: "#93c5fd",
-          fontSize: "12px",
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          fontWeight: 700,
-        }}>
-          Protected Access
-        </p>
+        {/* Lifewood Logo Visual Representation */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "26px" }}>
+          <div style={{
+            width: "28px",
+            height: "28px",
+            background: "#FFB347", // Saffron
+            clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)", // Hexagon/Diamond brand mark
+          }} />
+          <span style={{
+            fontSize: "24px",
+            fontWeight: 800,
+            letterSpacing: "-0.5px",
+            color: "#046241", // Castleton Green
+          }}>
+            lifewood
+          </span>
+        </div>
 
-        <h1 style={{ margin: "0 0 10px", fontSize: "28px" }}>
-          Sign in to Flowboard
+        <h1 style={{ margin: "0 0 6px", fontSize: "22px", fontWeight: 800, letterSpacing: "-0.4px" }}>
+          Production Planner
         </h1>
 
-        <p style={{ margin: "0 0 22px", color: "#9ca3af", lineHeight: 1.6 }}>
-          Enter your local Flowboard access password to continue.
+        <p style={{ margin: "0 0 24px", color: "#666666", fontSize: "14px", lineHeight: 1.5 }}>
+          Log in with your operator or administrator credentials to manage schedules.
         </p>
 
-        <label htmlFor="password" style={{
-          display: "block",
-          marginBottom: "8px",
-          fontSize: "14px",
-          fontWeight: 700,
-        }}>
-          Password
-        </label>
+        <div style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <label htmlFor="username" style={{
+              display: "block",
+              marginBottom: "6px",
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "#666666",
+            }}>
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              placeholder="e.g. operator1"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "11px 12px",
+                borderRadius: "10px",
+                border: "1px solid #d3cbb6",
+                background: "#f9f7f7",
+                color: "#133020",
+                outline: "none",
+                fontSize: "14px",
+              }}
+            />
+          </div>
 
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "13px 14px",
-            borderRadius: "12px",
-            border: "1px solid rgba(255,255,255,0.16)",
-            background: "#020617",
-            color: "#f9fafb",
-            outline: "none",
-            fontSize: "16px",
-          }}
-        />
+          <div>
+            <label htmlFor="password" style={{
+              display: "block",
+              marginBottom: "6px",
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "#666666",
+            }}>
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+              placeholder="••••••••"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "11px 12px",
+                borderRadius: "10px",
+                border: "1px solid #d3cbb6",
+                background: "#f9f7f7",
+                color: "#133020",
+                outline: "none",
+                fontSize: "14px",
+              }}
+            />
+          </div>
+        </div>
 
         {error && (
           <div role="alert" style={{
-            marginTop: "14px",
+            marginTop: "16px",
             padding: "12px",
-            borderRadius: "12px",
-            background: "rgba(239,68,68,0.12)",
-            color: "#fecaca",
-            border: "1px solid rgba(248,113,113,0.35)",
+            borderRadius: "10px",
+            background: "rgba(239,68,68,0.06)",
+            color: "#b91c1c",
+            border: "1px solid rgba(239,68,68,0.2)",
+            fontSize: "13px",
+            lineHeight: 1.45,
           }}>
             {error}
           </div>
@@ -118,20 +164,23 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={loading || password.trim().length === 0}
+          disabled={loading || username.trim().length === 0 || password.trim().length === 0}
           style={{
             width: "100%",
-            marginTop: "18px",
-            padding: "13px 16px",
-            borderRadius: "12px",
+            marginTop: "24px",
+            padding: "12px 16px",
+            borderRadius: "10px",
             border: 0,
-            background: loading ? "#475569" : "#2563eb",
+            background: loading ? "#708e7c" : "#046241", // Castleton Green
             color: "white",
-            fontWeight: 800,
+            fontWeight: 700,
+            fontSize: "14px",
             cursor: loading ? "not-allowed" : "pointer",
+            boxShadow: "0 4px 12px rgba(4, 98, 65, 0.15)",
+            transition: "background 0.2s",
           }}
         >
-          {loading ? "Checking..." : "Continue"}
+          {loading ? "Signing in..." : "Sign In"}
         </button>
       </form>
     </main>
