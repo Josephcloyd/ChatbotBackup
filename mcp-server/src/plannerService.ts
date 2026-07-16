@@ -1,4 +1,4 @@
-﻿import { generateWithOllama, parseOllamaJson } from "./ollamaService.js";
+import { generateWithOllama, parseOllamaJson } from "./ollamaService.js";
 import { savePlan, uploadWorkbookAndCreateSignedUrl } from "./supabaseService.js";
 import { excelService } from "./services/excelService.js";
 import { templateService } from "./services/templateService.js";
@@ -56,6 +56,24 @@ export async function generateProductionPlan(
     const dateInterpretations = (requestedConstraints.dateInterpretations ?? []).map(
       (item) => `I interpreted "${item.source}" as ${item.normalized}.`,
     );
+
+    // Mixed-metric prompt: both hours and a quantity unit detected — ask the user to clarify.
+    if (requestedConstraints.totalHours !== undefined && requestedConstraints.totalQuantity !== undefined) {
+      const unit = requestedConstraints.unitOfMeasure ?? "items";
+      const qty = requestedConstraints.totalQuantity.toLocaleString();
+      const hrs = requestedConstraints.totalHours;
+      return {
+        success: false,
+        error: "Please clarify your request.",
+        whatsappSummary:
+          `Your request mentions both *${hrs} hours* and *${qty} ${unit}*.\n\n` +
+          `Please clarify which metric the plan should track:\n` +
+          `• To track *${unit}*: remove the hours from your request.\n` +
+          `• To track *hours*: remove the quantity from your request.\n\n` +
+          `Example: _"Image collection, 350,000 images, 6 months, April 3 2026"_`,
+        dateInterpretations,
+      };
+    }
     const templateDefinition = mode === "template"
       ? await templateService.loadDefinition()
       : undefined;

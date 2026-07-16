@@ -42,9 +42,14 @@ export interface DynamicPlanResult {
   settings: ResolvedPlanningSettings;
   phases: DynamicPhase[];
   risks: DynamicRisk[];
+  /** Capitalized unit label when quantity profile is active (e.g. "Images"). Undefined for hour plans. */
+  unitLabel?: string;
+  /** Total planned quantity for quantity-profile plans. */
+  totalQuantity?: number;
 }
 
-const DYNAMIC_COLUMNS = [
+// Hour-based column profile (default — unchanged from original).
+const HOUR_COLUMNS = [
   "No.",
   "Date",
   "Month",
@@ -62,6 +67,49 @@ const DYNAMIC_COLUMNS = [
   "Status",
   "Notes",
 ];
+
+/** Quantity-based column profile (images, records, etc.).
+ *  Positions 6-10 use the named unit; positions 11-12 keep hours for capacity reference. */
+function buildQuantityColumns(unitLabel: string): string[] {
+  return [
+    "No.", "Date", "Month", "Day",
+    "Target Active Annotators",
+    `Target ${unitLabel}`,
+    `Target ${unitLabel} per Annotator`,
+    "Actual Active Annotators",
+    `Actual ${unitLabel}`,
+    `Actual ${unitLabel} per Annotator`,
+    "Target Hours",   // capacity reference — kept for Excel formula compat
+    "Actual Hours",
+    "Total Variance",
+    "Completion Rate (%)",
+    "Status",
+    "Notes",
+  ];
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Returns the column list and metadata for the active profile. */
+function selectColumnProfile(
+  unitOfMeasure: string | undefined,
+): { columns: string[]; isQuantity: boolean; unitLabel: string } {
+  if (unitOfMeasure && unitOfMeasure !== "hours") {
+    const unitLabel = capitalize(unitOfMeasure);
+    return { columns: buildQuantityColumns(unitLabel), isQuantity: true, unitLabel };
+  }
+  return { columns: HOUR_COLUMNS, isQuantity: false, unitLabel: "Hours" };
+}
+
+/** Distribute an integer quantity evenly across N days. Sum is exact. */
+function distributeQuantity(total: number, count: number): number[] {
+  const rounded = Math.round(total);
+  const base = Math.floor(rounded / count);
+  const extra = rounded - base * count;
+  return Array.from({ length: count }, (_, i) => base + (i < extra ? 1 : 0));
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -279,16 +327,20 @@ function taskFor(kind: string, phase: DynamicPhase, requested: RequestedConstrai
   return `${phase.name} work package`;
 }
 
-function groupWeeks(rows: ProductionPlanRow[]): ProductionPlanRow[] {
+function groupWeeks(
+  rows: ProductionPlanRow[],
+  targetColumn = "Target Total Hours",
+  volumeKey = "Planned Hours",
+): ProductionPlanRow[] {
   const weeks: ProductionPlanRow[] = [];
   for (let index = 0; index < rows.length; index += 5) {
     const chunk = rows.slice(index, index + 5);
-    const plannedHours = chunk.reduce((sum, row) => sum + Number(row["Target Total Hours"]), 0);
+    const plannedVolume = chunk.reduce((sum, row) => sum + Number(row[targetColumn] ?? 0), 0);
     weeks.push({
       Week: weeks.length + 1,
       "Start Date": String(chunk[0]?.Date ?? ""),
       "End Date": String(chunk.at(-1)?.Date ?? ""),
-      "Planned Hours": Number(plannedHours.toFixed(2)),
+      [volumeKey]: Number(plannedVolume.toFixed(2)),
       Focus: String(chunk[0]?.Notes ?? "Production"),
       "Review Checkpoint": weeks.length % 2 === 1 ? "Progress review and issue clearing" : "Team lead check-in",
     });
@@ -303,8 +355,15 @@ function buildSupportSheets(
   settings: ResolvedPlanningSettings,
   requested: RequestedConstraints,
   kind: string,
+  unitLabel = "Hours",
+  totalQuantity?: number,
 ): Array<{ sheetName: string; columns: string[]; rows: ProductionPlanRow[] }> {
-  const weeklyRows = groupWeeks(planRows);
+  const isQuantity = unitLabel !== "Hours";
+  const targetColumn = isQuantity ? `Target ${unitLabel}` : "Target Total Hours";
+  const volumeKey = isQuantity ? `Planned ${unitLabel}` : "Planned Hours";
+  const actualVolumeKey = isQuantity ? `Actual ${unitLabel}` : "Actual Hours";
+
+  const weeklyRows = groupWeeks(planRows, targetColumn, volumeKey);
   const perResourceHours = Number((settings.totalHours / settings.teamSize).toFixed(2));
   const resources = Array.from({ length: settings.teamSize }, (_, index) => ({
     Resource: `Resource ${index + 1}`,
@@ -347,15 +406,27 @@ function buildSupportSheets(
     {
       Type: "Assumption",
       Item: settings.weekdaysOnly ? "Weekends excluded" : "Weekend work allowed",
-      Impact: "Controls available workdays and daily target hours",
+      Impact: `Controls available workdays and daily target ${unitLabel.toLowerCase()}`,
       "Mitigation / Note": "Schedule generated from normalized planning constraints.",
     },
   ];
 
+  const summaryRows: ProductionPlanRow[] = [
+    { Metric: "Project type", Value: kind },
+    { Metric: "Start date", Value: settings.startDate },
+    { Metric: "End date", Value: String(planRows.at(-1)?.Date ?? "") },
+    { Metric: "Total planned hours", Value: settings.totalHours },
+    { Metric: "Team size", Value: settings.teamSize },
+    { Metric: "Schedule mode", Value: settings.weekdaysOnly ? "Weekdays only" : "Calendar days" },
+  ];
+  if (isQuantity && totalQuantity != null) {
+    summaryRows.push({ Metric: `Total planned ${unitLabel.toLowerCase()}`, Value: totalQuantity });
+  }
+
   return [
     {
       sheetName: "Weekly Schedule",
-      columns: ["Week", "Start Date", "End Date", "Planned Hours", "Focus", "Review Checkpoint"],
+      columns: ["Week", "Start Date", "End Date", volumeKey, "Focus", "Review Checkpoint"],
       rows: weeklyRows,
     },
     {
@@ -380,11 +451,11 @@ function buildSupportSheets(
     },
     {
       sheetName: "Progress Tracker",
-      columns: ["Period", "Planned Hours", "Actual Hours", "Variance", "Completion %", "Status", "Notes"],
+      columns: ["Period", volumeKey, actualVolumeKey, "Variance", "Completion %", "Status", "Notes"],
       rows: weeklyRows.map((row) => ({
         Period: `Week ${row.Week}`,
-        "Planned Hours": row["Planned Hours"],
-        "Actual Hours": "",
+        [volumeKey]: row[volumeKey],
+        [actualVolumeKey]: "",
         Variance: "",
         "Completion %": "",
         Status: "Not Started",
@@ -394,14 +465,7 @@ function buildSupportSheets(
     {
       sheetName: "Summary",
       columns: ["Metric", "Value"],
-      rows: [
-        { Metric: "Project type", Value: kind },
-        { Metric: "Start date", Value: settings.startDate },
-        { Metric: "End date", Value: String(planRows.at(-1)?.Date ?? "") },
-        { Metric: "Total planned hours", Value: settings.totalHours },
-        { Metric: "Team size", Value: settings.teamSize },
-        { Metric: "Schedule mode", Value: settings.weekdaysOnly ? "Weekdays only" : "Calendar days" },
-      ],
+      rows: summaryRows,
     },
   ];
 }
@@ -417,34 +481,62 @@ export function buildDynamicPlan(
   const requested = extractRequestedConstraints(input.projectDescription, currentDate);
   const kind = projectKind(input.projectDescription, requested);
   const phases = choosePhases(input.projectDescription, proposal.phases, requested);
-  const rows: ProductionPlanRow[] = dates.map((date, index) => ({
-    "No.": index + 1,
-    Date: date,
-    Month: monthName(date),
-    Day: new Date(`${date}T00:00:00Z`).toLocaleString("en-US", { weekday: "short", timeZone: "UTC" }),
-    "Target Active Annotators": settings.teamSize,
-    "Target Total Hours": hours[index]!,
-    "Target Total Hours per Annotator": Number((hours[index]! / settings.teamSize).toFixed(2)),
-    "Actual Active Annotators": "",
-    "Actual Total Hours": "",
-    "Actual Total Hours per Annotator": "",
-    "Target Hours": hours[index]!,
-    "Actual Hours": "",
-    "Total Variance": "",
-    "Completion Rate (%)": "",
-    Status: "Not Started",
-    Notes: taskFor(kind, phaseForIndex(phases, index, dates.length), requested),
-  }));
+
+  // Select column profile based on detected unit of measure.
+  const { columns: planColumns, isQuantity, unitLabel } = selectColumnProfile(requested.unitOfMeasure);
+
+  // For quantity plans distribute the total quantity; for hour plans use hours.
+  const quantities = isQuantity && requested.totalQuantity != null
+    ? distributeQuantity(requested.totalQuantity, dates.length)
+    : null;
+
+  // Pre-compute dynamic column key names for the active profile.
+  const targetKey = isQuantity ? `Target ${unitLabel}` : "Target Total Hours";
+  const targetPerAnnotKey = isQuantity ? `Target ${unitLabel} per Annotator` : "Target Total Hours per Annotator";
+  const actualKey = isQuantity ? `Actual ${unitLabel}` : "Actual Total Hours";
+  const actualPerAnnotKey = isQuantity ? `Actual ${unitLabel} per Annotator` : "Actual Total Hours per Annotator";
+
+  const rows: ProductionPlanRow[] = dates.map((date, index) => {
+    const targetVal = quantities != null ? quantities[index]! : hours[index]!;
+    const perAnnotVal = quantities != null
+      ? Math.round(quantities[index]! / settings.teamSize)
+      : Number((hours[index]! / settings.teamSize).toFixed(2));
+    return {
+      "No.": index + 1,
+      Date: date,
+      Month: monthName(date),
+      Day: new Date(`${date}T00:00:00Z`).toLocaleString("en-US", { weekday: "short", timeZone: "UTC" }),
+      "Target Active Annotators": settings.teamSize,
+      [targetKey]: targetVal,
+      [targetPerAnnotKey]: perAnnotVal,
+      "Actual Active Annotators": "",
+      [actualKey]: "",
+      [actualPerAnnotKey]: "",
+      "Target Hours": hours[index]!,   // capacity reference — always present
+      "Actual Hours": "",
+      "Total Variance": "",
+      "Completion Rate (%)": "",
+      Status: "Not Started",
+      Notes: taskFor(kind, phaseForIndex(phases, index, dates.length), requested),
+    };
+  });
+
+  const distributionNote = isQuantity && requested.totalQuantity != null
+    ? `${requested.totalQuantity.toLocaleString()} ${unitLabel.toLowerCase()} distributed across ${dates.length} scheduled days.`
+    : `Total target hours are distributed across ${dates.length} scheduled days.`;
 
   const assumptions = [
     ...proposal.assumptions,
     `${settings.weekdaysOnly ? "Weekdays only" : "Calendar days"} scheduling was used.`,
-    `Total target hours are distributed across ${dates.length} scheduled days.`,
+    distributionNote,
     ...((requested.dateInterpretations ?? []).map(
       (item) => `Interpreted "${item.source}" as ${item.normalized}.`,
     )),
   ];
-  const supportSheets = buildSupportSheets(rows, phases, proposal.risks, settings, requested, kind);
+  const supportSheets = buildSupportSheets(
+    rows, phases, proposal.risks, settings, requested, kind,
+    unitLabel, requested.totalQuantity,
+  );
   const plan: ProductionPlan = {
     project: {
       projectName: proposal.projectName,
@@ -457,11 +549,15 @@ export function buildDynamicPlan(
     },
     workbook: {
       sheets: [
-        { sheetName: "Production Plan", columns: DYNAMIC_COLUMNS, rows },
+        { sheetName: "Production Plan", columns: planColumns, rows },
         ...supportSheets,
       ],
     },
     summary: proposal.summary,
   };
-  return { plan, settings, phases, risks: proposal.risks };
+  return {
+    plan, settings, phases, risks: proposal.risks,
+    unitLabel: isQuantity ? unitLabel : undefined,
+    totalQuantity: isQuantity ? requested.totalQuantity : undefined,
+  };
 }

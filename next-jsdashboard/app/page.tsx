@@ -190,22 +190,37 @@ export default function Dashboard() {
   );
 
   const metrics = useMemo(() => {
-    const totalHours = rows.reduce((sum, row) => sum + numberValue(row["Target Total Hours"]), 0);
+    // Detect the primary target column: position 6 (index 5) in the Production Plan.
+    // For hour plans: "Target Total Hours". For quantity plans: "Target Images", etc.
+    const planSheet = plan?.workbook.sheets.find((s) => s.sheetName === "Production Plan");
+    const firstRow = planSheet?.rows[0];
+    const targetCol = firstRow
+      ? (Object.keys(firstRow).find((k) => k.startsWith("Target ") && !k.includes("Annotators")) ?? "Target Total Hours")
+      : "Target Total Hours";
+    const perAnnotCol = firstRow
+      ? (Object.keys(firstRow).find((k) => k.startsWith("Target ") && k.includes("per Annotator")) ?? "Target Total Hours per Annotator")
+      : "Target Total Hours per Annotator";
+    const totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[targetCol]), 0);
     const teamSize = rows.reduce((largest, row) => Math.max(largest, numberValue(row["Target Active Annotators"])), 0);
     const monthly = new Map<string, number>();
     rows.forEach((row) => {
       const month = String(row.Month ?? "Unscheduled");
-      monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row["Target Total Hours"]));
+      monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[targetCol]));
     });
+    // Determine unit label from the column name, e.g. "Images" from "Target Images"
+    const unitLabel = targetCol === "Target Total Hours" ? "hours" : targetCol.replace("Target ", "").toLowerCase();
     return {
-      totalHours,
+      totalPlanned,
       teamSize,
       scheduledDays: rows.length,
-      monthly: [...monthly.entries()].map(([month, hours]) => ({ month, hours })),
+      monthly: [...monthly.entries()].map(([month, value]) => ({ month, value })),
+      targetCol,
+      perAnnotCol,
+      unitLabel,
     };
-  }, [rows]);
+  }, [rows, plan]);
 
-  const maxMonth = Math.max(...metrics.monthly.map((item) => item.hours), 1);
+  const maxMonth = Math.max(...metrics.monthly.map((item) => item.value), 1);
 
   // 3. User operations (Sign out, Generate)
   async function logout() {
@@ -469,7 +484,7 @@ export default function Dashboard() {
                   </section>
 
                   <section className="kpi-grid">
-                    <article><span className="kpi-icon blue"><Icon name="hours" /></span><div><small>Planned hours</small><strong>{metrics.totalHours.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong><em>allocated exactly</em></div></article>
+                    <article><span className="kpi-icon blue"><Icon name="hours" /></span><div><small>Planned {metrics.unitLabel}</small><strong>{metrics.totalPlanned.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong><em>allocated exactly</em></div></article>
                     <article><span className="kpi-icon green"><Icon name="team" /></span><div><small>Active team</small><strong>{metrics.teamSize}</strong><em>maximum scheduled</em></div></article>
                     <article><span className="kpi-icon amber"><Icon name="clock" /></span><div><small>Scheduled days</small><strong>{metrics.scheduledDays}</strong><em>{mode === "dynamic" ? "generated dynamically" : "from template"}</em></div></article>
                     <article><span className="kpi-icon violet"><Icon name="grid" /></span><div><small>Workbook mode</small><strong className="word-value">{mode}</strong><em>{plan.workbook.sheets.length} plan sheet</em></div></article>
@@ -477,12 +492,12 @@ export default function Dashboard() {
 
                   <section className="content-grid">
                     <article className="chart-card">
-                      <div className="card-heading"><div><span className="eyebrow">CAPACITY CURVE</span><h3>Hours by month</h3></div><span className="legend"><i /> Planned</span></div>
+                      <div className="card-heading"><div><span className="eyebrow">CAPACITY CURVE</span><h3>{metrics.unitLabel.charAt(0).toUpperCase() + metrics.unitLabel.slice(1)} by month</h3></div><span className="legend"><i /> Planned</span></div>
                       <div className="bar-chart">
                         {metrics.monthly.map((item) => (
                           <div className="bar-column" key={item.month}>
-                            <div className="bar-value">{item.hours.toFixed(1)}</div>
-                            <div className="bar-track"><div style={{ height: `${Math.max((item.hours / maxMonth) * 100, 3)}%` }} /></div>
+                            <div className="bar-value">{item.value.toLocaleString()}</div>
+                            <div className="bar-track"><div style={{ height: `${Math.max((item.value / maxMonth) * 100, 3)}%` }} /></div>
                             <span>{item.month}</span>
                           </div>
                         ))}
@@ -497,8 +512,8 @@ export default function Dashboard() {
 
                   <section className="schedule-card">
                     <div className="card-heading"><div><span className="eyebrow">SCHEDULE PREVIEW</span><h3>First production days</h3></div><span className="rows-count">{rows.length} total rows</span></div>
-                    <div className="table-scroll"><table><thead><tr><th>Date</th><th>Day</th><th>Team</th><th>Target hours</th><th>Per person</th><th>Status</th></tr></thead>
-                      <tbody>{rows.slice(0, 7).map((row, index) => <tr key={`${String(row.Date)}-${index}`}><td>{String(row.Date)}</td><td>{String(row.Day ?? "—")}</td><td>{String(row["Target Active Annotators"] ?? "—")}</td><td>{numberValue(row["Target Total Hours"]).toFixed(2)}</td><td>{numberValue(row["Target Total Hours per Annotator"]).toFixed(2)}</td><td><span className="status-badge">{String(row.Status ?? "Not Started")}</span></td></tr>)}</tbody>
+                    <div className="table-scroll"><table><thead><tr><th>Date</th><th>Day</th><th>Team</th><th>Target {metrics.unitLabel}</th><th>Per person</th><th>Status</th></tr></thead>
+                      <tbody>{rows.slice(0, 7).map((row, index) => <tr key={`${String(row.Date)}-${index}`}><td>{String(row.Date)}</td><td>{String(row.Day ?? "—")}</td><td>{String(row["Target Active Annotators"] ?? "—")}</td><td>{numberValue(row[metrics.targetCol]).toLocaleString()}</td><td>{numberValue(row[metrics.perAnnotCol]).toLocaleString()}</td><td><span className="status-badge">{String(row.Status ?? "Not Started")}</span></td></tr>)}</tbody>
                     </table></div>
                   </section>
                 </>
