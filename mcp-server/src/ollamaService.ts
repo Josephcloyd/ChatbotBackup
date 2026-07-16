@@ -76,16 +76,40 @@ export function extractOllamaText(payloads: OllamaResponse[]): string {
 }
 
 /**
+ * Fetch available models from Ollama and select the preferred or first available one.
+ */
+export async function getAvailableOllamaModel(): Promise<string> {
+  const configuredModel = config.ollamaModel;
+  try {
+    const response = await fetch(`${config.ollamaBaseUrl}/api/tags`);
+    if (!response.ok) return configuredModel;
+    const data = await response.json() as { models?: { name: string }[] };
+    const availableModels = data.models?.map(m => m.name) || [];
+    
+    if (availableModels.length === 0) return configuredModel;
+    if (availableModels.includes(configuredModel)) return configuredModel;
+    
+    console.warn(`[ollamaService] Configured model ${configuredModel} not found. Falling back to ${availableModels[0]}`);
+    return availableModels[0];
+  } catch (error) {
+    console.error("[ollamaService] Failed to fetch Ollama tags:", error);
+    return configuredModel;
+  }
+}
+
+/**
  * Send a prompt to Ollama and return the completed text response.
  * Uses non-streaming (stream: false) for simplicity.
  */
 export async function generateWithOllama(prompt: string): Promise<string> {
   const url = `${config.ollamaBaseUrl}/api/generate`;
 
-  console.log(`[ollamaService] Sending prompt to ${config.ollamaModel}...`);
+  const modelToUse = await getAvailableOllamaModel();
+
+  console.log(`[ollamaService] Sending prompt to ${modelToUse}...`);
 
   const body = JSON.stringify({
-    model: config.ollamaModel,
+    model: modelToUse,
     prompt,
     format: "json",
     think: false,

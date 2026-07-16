@@ -45,6 +45,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, user: { username: validUser, role } });
   } catch (err) {
+    console.error("Auth Login Error:", err);
     return NextResponse.json(
       { success: false, error: "Authentication service unavailable." },
       { status: 503 },
