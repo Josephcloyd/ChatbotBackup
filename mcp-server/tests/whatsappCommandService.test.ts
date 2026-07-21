@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getSimpleMathReply,
   getSocialReply,
+  isProductionPlanningRequest,
   normalizeBotMessageText,
   parseProductionPlanCommand,
 } from "../src/services/whatsappCommandService.js";
@@ -35,7 +36,7 @@ test("normalizes bot mentions before parsing commands", () => {
 
 test("returns social replies for simple bot questions", () => {
   assert.match(getSocialReply("@Flowboard who are you?") ?? "", /Flowboard production-planning assistant/);
-  assert.match(getSocialReply("help") ?? "", /Send a message starting/);
+  assert.match(getSocialReply("help") ?? "", /Mention me with a project description/);
 });
 
 test("answers simple math prompts", () => {
@@ -43,6 +44,19 @@ test("answers simple math prompts", () => {
   assert.equal(getSimpleMathReply("20 divided by 5"), "20 divided by 5 = 4");
   assert.equal(getSimpleMathReply("10 / 0"), "I cannot divide by zero.");
   assert.equal(getSimpleMathReply("what is the plan today?"), null);
+});
+
+test("detects production-planning intent without accepting general questions", () => {
+  assert.equal(isProductionPlanningRequest("what's the weather today?"), false);
+  assert.equal(isProductionPlanningRequest("tell me the weather forecast"), false);
+  assert.equal(
+    isProductionPlanningRequest("We need to collect 350000 images in 6 months starting today."),
+    true,
+  );
+  assert.equal(
+    isProductionPlanningRequest("Create a production plan about our text capture collection."),
+    true,
+  );
 });
 
 test("returns an empty description when the command has no request body", () => {
