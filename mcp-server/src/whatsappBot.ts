@@ -40,6 +40,11 @@ const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
   .map((id) => id.trim())
   .filter((id) => id.length > 0);
 const chromeExecutablePath = findChromeExecutablePath();
+const whatsAppHeadless = (process.env.WHATSAPP_HEADLESS ?? "0").trim() === "1";
+const whatsAppAuthTimeoutMs = readPositiveIntegerEnv("WHATSAPP_AUTH_TIMEOUT_MS", 120_000);
+const whatsAppUserAgent =
+  readNonEmptyEnv("WHATSAPP_USER_AGENT") ??
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const readyWarningTimeoutMs = 90_000;
 let readyWarningTimer: NodeJS.Timeout | undefined;
 let puppeteerDiagnosticsAttached = false;
@@ -52,16 +57,39 @@ const client = new Client({
     clientId: whatsAppClientId,
     rmMaxRetries: 20,
   }),
+  authTimeoutMs: whatsAppAuthTimeoutMs,
+  takeoverOnConflict: true,
+  takeoverTimeoutMs: 5_000,
+  userAgent: whatsAppUserAgent,
   puppeteer: {
     ...(chromeExecutablePath ? { executablePath: chromeExecutablePath } : {}),
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: whatsAppHeadless,
+    defaultViewport: null,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-extensions",
+    ],
   },
 });
 
 function readNonEmptyEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
+}
+
+function readPositiveIntegerEnv(name: string, defaultValue: number): number {
+  const rawValue = readNonEmptyEnv(name);
+  if (!rawValue) {
+    return defaultValue;
+  }
+
+  const parsedValue = Number(rawValue);
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
 }
 
 function hasLocalAuthSession(clientId: string): boolean {
@@ -388,6 +416,8 @@ console.log("[whatsappBot] Starting WhatsApp QR demo bot.");
 console.log(`[whatsappBot] LocalAuth clientId: ${whatsAppClientId}`);
 console.log(`[whatsappBot] Mention display name: @${botMentionDisplayName}`);
 console.log(`[whatsappBot] Chrome executable: ${chromeExecutablePath ?? "(auto/default)"}`);
+console.log(`[whatsappBot] Chrome mode: ${whatsAppHeadless ? "headless" : "visible"}`);
+console.log(`[whatsappBot] Auth timeout: ${whatsAppAuthTimeoutMs}ms`);
 logAccessMode();
 startReadyWarningTimer();
 
