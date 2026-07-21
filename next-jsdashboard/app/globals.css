@@ -178,6 +178,23 @@ a {
   color: var(--ink);
 }
 
+/* Skeleton Loading Animation */
+.skeleton-atom {
+  background: linear-gradient(90deg, rgba(200,200,200,0.15) 25%, rgba(200,200,200,0.3) 50%, rgba(200,200,200,0.15) 75%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease-in-out infinite;
+}
+
+[data-theme="dark"] .skeleton-atom {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 400% 100%;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
 .error-box {
   padding: 11px;
   border: 1px solid rgba(255, 123, 123, .22);
@@ -1441,6 +1458,14 @@ td {
   border: 1px solid var(--line);
 }
 
+[data-theme="dark"] .completion-ring {
+  background: conic-gradient(var(--green) 0deg, rgba(255, 255, 255, 0.05) 0);
+}
+
+[data-theme="dark"] .completion-ring:after {
+  background: var(--panel);
+}
+
 [data-theme="dark"] th {
   background: rgba(255, 255, 255, .05);
   color: #a4bba8;
@@ -1518,3 +1543,60 @@ td {
 [data-theme="dark"] .download-button:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* --- UI/UX Enhancements --- */
+
+/* 1. Card Hover Effects */
+.metric-card, .chart-card, .assumptions-card, .schedule-card, .history-card, .history-list button, .user-card, .model-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover, .chart-card:hover, .assumptions-card:hover, .schedule-card:hover, .history-card:hover, .history-list button:hover, .user-card:hover, .model-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(31, 55, 80, 0.08);
+}
+
+[data-theme="dark"] .metric-card:hover, 
+[data-theme="dark"] .chart-card:hover, 
+[data-theme="dark"] .assumptions-card:hover, 
+[data-theme="dark"] .schedule-card:hover, 
+[data-theme="dark"] .history-card:hover,
+[data-theme="dark"] .history-list button:hover,
+[data-theme="dark"] .user-card:hover,
+[data-theme="dark"] .model-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); 
+}
+
+/* 2. Pulse Animations */
+@keyframes pulse-orange {
+  0% { box-shadow: 0 0 0 0 rgba(255, 179, 71, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 179, 71, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 179, 71, 0); }
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 0 0 rgba(4, 98, 65, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(4, 98, 65, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(4, 98, 65, 0); }
+}
+
+.status-dot.online {
+  animation: pulse-orange 2s infinite;
+}
+
+.connection-pill.connected span {
+  animation: pulse-green 2s infinite;
+}
+
+/* 3. Smooth Content Mounting */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.summary-strip { animation: fade-in-up 0.4s ease-out both; }
+.kpi-grid { animation: fade-in-up 0.5s ease-out both; }
+.content-grid { animation: fade-in-up 0.6s ease-out both; }
+.schedule-card { animation: fade-in-up 0.7s ease-out both; }
+.history-card { animation: fade-in-up 0.8s ease-out both; }
+.welcome-card { animation: fade-in-up 0.4s ease-out both; }

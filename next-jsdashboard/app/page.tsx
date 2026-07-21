@@ -12,6 +12,7 @@ import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel
 import { EditPlanModal, DeleteOperatorModal } from "../components/organisms/AdminModals";
 import { Icon } from "../components/atoms/Icon";
 import { ThemeToggle } from "../components/atoms/ThemeToggle";
+import { DashboardSkeleton } from "../components/organisms/DashboardSkeleton";
 
 type CellValue = string | number | boolean | null;
 type PlanRow = Record<string, CellValue>;
@@ -375,7 +376,9 @@ export default function Dashboard() {
       <div className="board">
         {user.role === "operator" ? (
           <>
-            {!plan ? (
+            {loading ? (
+              <DashboardSkeleton />
+            ) : !plan ? (
               <section className="welcome-card">
                 <div className="welcome-orbit">
                   <span />
