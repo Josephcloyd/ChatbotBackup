@@ -10,6 +10,11 @@ export interface ProductionPlanProject {
   deadline: string;
   totalAssets: number;
   assumptions: string[];
+  projectCategory?: string;
+  productionUnit?: string;
+  feasibilityStatus?: string;
+  requiredDailyOutput?: number;
+  utilizationPercent?: number;
 }
 
 export interface ProductionPlanSheet {

@@ -49,6 +49,13 @@ function setWidths(sheet: ExcelJS.Worksheet, widths: number[]): void {
   widths.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
 }
 
+function safeCellValue(value: unknown): unknown {
+  if (typeof value === "string" && /^[=+\-@]/.test(value.trim())) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 function writeGenericSheet(workbook: ExcelJS.Workbook, sheetDefinition: {
   sheetName: string;
   columns: string[];
@@ -60,7 +67,7 @@ function writeGenericSheet(workbook: ExcelJS.Workbook, sheetDefinition: {
   });
   sheet.addRow(sheetDefinition.columns);
   sheetDefinition.rows.forEach((row) => {
-    sheet.addRow(sheetDefinition.columns.map((column) => row[column] ?? ""));
+    sheet.addRow(sheetDefinition.columns.map((column) => safeCellValue(row[column] ?? "")));
   });
   sectionHeader(sheet.getRow(1));
   sheet.autoFilter = {
@@ -94,6 +101,8 @@ export class DynamicExcelService {
     if (!productionSheet) throw new Error("Dynamic plan is missing the Production Plan sheet");
     const planRows = productionSheet.rows;
     const lastPlanRow = planRows.length + 1;
+    const primaryTargetColumn = productionSheet.columns[5] ?? "Target Total Hours";
+    const primaryActualColumn = productionSheet.columns[8] ?? "Actual Total Hours";
 
     const summary = workbook.addWorksheet("Overview", {
       views: [{ showGridLines: false }],
@@ -172,7 +181,8 @@ export class DynamicExcelService {
     planRows.forEach((source, index) => {
       const excelRow = index + 2;
       const date = new Date(`${String(source.Date)}T00:00:00Z`);
-      const targetHours = Number(source["Target Total Hours"]);
+      const targetValue = Number(source[primaryTargetColumn]);
+      const targetHours = Number(source["Target Hours"] ?? targetValue);
       const teamSize = Number(source["Target Active Annotators"]);
       const row = production.addRow([
         index + 1,
@@ -180,17 +190,17 @@ export class DynamicExcelService {
         { formula: `TEXT(B${excelRow},"mmm yyyy")`, result: String(source.Month) },
         { formula: `TEXT(B${excelRow},"ddd")`, result: String(source.Day) },
         teamSize,
-        targetHours,
-        { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetHours / teamSize).toFixed(2)) },
+        targetValue,
+        { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetValue / teamSize).toFixed(2)) },
         null,
         null,
         { formula: `IF(OR(H${excelRow}="",I${excelRow}=""),"",I${excelRow}/H${excelRow})`, result: "" },
-        { formula: `F${excelRow}`, result: targetHours },
+        targetHours,
         { formula: `IF(I${excelRow}="","",I${excelRow})`, result: "" },
         { formula: `IF(I${excelRow}="","",I${excelRow}-F${excelRow})`, result: "" },
         { formula: `IF(I${excelRow}="","",IFERROR(I${excelRow}/F${excelRow},""))`, result: "" },
         { formula: `IF(I${excelRow}="","Not Started",IF(I${excelRow}>=F${excelRow},"Complete","In Progress"))`, result: "Not Started" },
-        null,
+        safeCellValue(source.Notes ?? ""),
       ]);
       row.height = 20;
       for (const column of [5, 6, 7, 11]) {
@@ -212,7 +222,7 @@ export class DynamicExcelService {
       };
       production.getCell(row, 9).dataValidation = {
         type: "decimal", operator: "greaterThanOrEqual", formulae: [0], allowBlank: true,
-        showErrorMessage: true, errorTitle: "Invalid hours", error: "Actual hours cannot be negative.",
+        showErrorMessage: true, errorTitle: "Invalid value", error: `${primaryActualColumn} cannot be negative.`,
       };
     }
     production.addConditionalFormatting({

@@ -40,6 +40,14 @@ function isoDate(value: unknown): string | null {
     : candidate;
 }
 
+function splitIds(value: unknown): string[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  return value
+    .split(/[,;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export class PlanRulesService {
   validate(plan: ProductionPlan, options: PlanRuleOptions): ProductionPlan {
     const sheet = plan.workbook.sheets.find((item) => item.sheetName === "Production Plan");
@@ -63,6 +71,9 @@ export class PlanRulesService {
       }
       if (constraints.weekdaysOnly === true && !isWeekday(parseIsoDate(date))) {
         throw new Error(`Production Plan row ${rowNumber} schedules weekend date ${date}`);
+      }
+      if (constraints.workingDays?.length && !constraints.workingDays.includes(parseIsoDate(date).getUTCDay())) {
+        throw new Error(`Production Plan row ${rowNumber} is outside the requested custom working days`);
       }
       if (seenDates.has(date)) throw new Error(`Production Plan contains duplicate date ${date}`);
       seenDates.add(date);
@@ -120,6 +131,56 @@ export class PlanRulesService {
       throw new Error(
         `Requested ${constraints.totalHours} total hours but Production Plan targets sum to ${totalTargetHours}`,
       );
+    }
+
+    const sheetNames = new Set(plan.workbook.sheets.map((item) => item.sheetName));
+    const taskSheet = plan.workbook.sheets.find((item) => item.sheetName === "Task Breakdown");
+    if (taskSheet) {
+      const taskIds = new Set<string>();
+      for (const [index, row] of taskSheet.rows.entries()) {
+        const taskId = typeof row["Task ID"] === "string" ? row["Task ID"].trim() : "";
+        if (!taskId) throw new Error(`Task Breakdown row ${index + 1} is missing Task ID`);
+        if (taskIds.has(taskId)) throw new Error(`Task Breakdown contains duplicate Task ID ${taskId}`);
+        taskIds.add(taskId);
+      }
+
+      for (const [index, row] of taskSheet.rows.entries()) {
+        const rowNumber = index + 1;
+        const start = isoDate(row["Planned Start"]);
+        const end = isoDate(row["Planned End"]);
+        if (!start || !end) {
+          throw new Error(`Task Breakdown row ${rowNumber} must use YYYY-MM-DD planned start/end dates`);
+        }
+        if (end < start) throw new Error(`Task Breakdown row ${rowNumber} ends before it starts`);
+        if (start < String(plan.project.startDate) || end > String(plan.project.deadline)) {
+          throw new Error(`Task Breakdown row ${rowNumber} is outside the project period`);
+        }
+        if (constraints.weekdaysOnly === true && (!isWeekday(parseIsoDate(start)) || !isWeekday(parseIsoDate(end)))) {
+          throw new Error(`Task Breakdown row ${rowNumber} schedules weekend work in a weekdays-only plan`);
+        }
+        if (
+          constraints.workingDays?.length &&
+          (!constraints.workingDays.includes(parseIsoDate(start).getUTCDay()) ||
+            !constraints.workingDays.includes(parseIsoDate(end).getUTCDay()))
+        ) {
+          throw new Error(`Task Breakdown row ${rowNumber} is outside the requested custom working days`);
+        }
+        for (const dependencyId of splitIds(row.Dependencies)) {
+          if (!taskIds.has(dependencyId)) {
+            throw new Error(`Task Breakdown row ${rowNumber} references unknown dependency ${dependencyId}`);
+          }
+        }
+      }
+    }
+
+    const chartSheet = plan.workbook.sheets.find((item) => item.sheetName === "Chart Specs");
+    if (chartSheet) {
+      chartSheet.rows.forEach((row, index) => {
+        const source = typeof row["Source Worksheet"] === "string" ? row["Source Worksheet"].trim() : "";
+        if (!source || !sheetNames.has(source)) {
+          throw new Error(`Chart Specs row ${index + 1} references unknown source worksheet "${source}"`);
+        }
+      });
     }
 
     return plan;

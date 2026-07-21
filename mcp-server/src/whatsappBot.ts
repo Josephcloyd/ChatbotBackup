@@ -4,6 +4,7 @@ import { generateProductionPlan } from "./plannerService.js";
 import {
   getSimpleMathReply,
   getSocialReply,
+  isProductionPlanningRequest,
   normalizeBotMessageText,
   parseProductionPlanCommand,
   productionPlanCommandExample,
@@ -40,7 +41,7 @@ const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
   .map((id) => id.trim())
   .filter((id) => id.length > 0);
 const chromeExecutablePath = findChromeExecutablePath();
-const whatsAppHeadless = (process.env.WHATSAPP_HEADLESS ?? "0").trim() === "1";
+const whatsAppHeadless = readBooleanEnv("WHATSAPP_HEADLESS", true);
 const whatsAppAuthTimeoutMs = readPositiveIntegerEnv("WHATSAPP_AUTH_TIMEOUT_MS", 120_000);
 const whatsAppUserAgent =
   readNonEmptyEnv("WHATSAPP_USER_AGENT") ??
@@ -90,6 +91,23 @@ function readPositiveIntegerEnv(name: string, defaultValue: number): number {
 
   const parsedValue = Number(rawValue);
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
+}
+
+function readBooleanEnv(name: string, defaultValue: boolean): boolean {
+  const rawValue = readNonEmptyEnv(name);
+  if (!rawValue) {
+    return defaultValue;
+  }
+
+  const normalizedValue = rawValue.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalizedValue)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalizedValue)) {
+    return false;
+  }
+
+  return defaultValue;
 }
 
 function hasLocalAuthSession(clientId: string): boolean {
@@ -331,6 +349,67 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
+async function sendWhatsAppChatState(chatId: string, state: "typing" | "stop"): Promise<boolean> {
+  if (!client.pupPage) {
+    return false;
+  }
+
+  return client.pupPage.evaluate((targetChatId, targetState) => {
+    const webWindow = window as unknown as {
+      WWebJS?: { sendChatstate?: (chatState: string, chatId: string) => void };
+    };
+
+    if (!webWindow.WWebJS?.sendChatstate) {
+      return false;
+    }
+
+    webWindow.WWebJS.sendChatstate(targetState, targetChatId);
+    return true;
+  }, chatId, state);
+}
+
+function startTypingIndicator(chatId: string): { stop: () => Promise<void> } {
+  let stopped = false;
+  let warningLogged = false;
+  const sendTyping = async (): Promise<void> => {
+    if (stopped) {
+      return;
+    }
+
+    try {
+      await sendWhatsAppChatState(chatId, "typing");
+    } catch (error) {
+      if (!warningLogged) {
+        warningLogged = true;
+        console.warn("[whatsappBot] Could not send WhatsApp typing state:", describeError(error));
+      }
+    }
+  };
+
+  void sendTyping();
+  const timer = setInterval(() => {
+    void sendTyping();
+  }, 20_000);
+
+  return {
+    stop: async () => {
+      if (stopped) {
+        return;
+      }
+
+      stopped = true;
+      clearInterval(timer);
+      try {
+        await sendWhatsAppChatState(chatId, "stop");
+      } catch (error) {
+        if (!warningLogged) {
+          console.warn("[whatsappBot] Could not clear WhatsApp typing state:", describeError(error));
+        }
+      }
+    },
+  };
+}
+
 function isExpectedLogoutCleanupError(reason: unknown): boolean {
   const errorText = describeError(reason);
   return (
@@ -512,26 +591,27 @@ client.on("message", async (message) => {
     }
 
     const command = parseProductionPlanCommand(commandText);
-    if (command) {
-      const { projectDescription } = command;
+    const projectDescription = normalizeBotMessageText(command?.projectDescription ?? commandText);
+    if (command && !projectDescription) {
+      await message.reply(
+        `Please include your project description after the command. Example:\n\n${productionPlanCommandExample}`,
+      );
+      return;
+    }
 
-      if (!projectDescription) {
-        await message.reply(
-          `Please include your project description after the command. Example:\n\n${productionPlanCommandExample}`,
-        );
-        return;
-      }
-
+    if (projectDescription.length >= 10 && isProductionPlanningRequest(projectDescription)) {
       await message.reply(
         "Got it. I'm generating your production plan now...",
       );
 
+      const typingIndicator = startTypingIndicator(message.from);
       try {
         const result = await generateProductionPlan({
           whatsappUserId: message.from,
           workbookMode: "dynamic",
           projectDescription,
         });
+        await typingIndicator.stop();
 
         if (!result.success) {
           await message.reply(result.whatsappSummary);
@@ -561,16 +641,24 @@ client.on("message", async (message) => {
         });
         return;
       } catch (error) {
+        await typingIndicator.stop();
         console.error("[whatsappBot] Planner generation failed:", error);
         await message.reply(
-          "I understood your request, but I could not generate a valid production plan. Please try a clearer duration, total hours, team size, or date such as 2026-07-13 or next Monday.",
+          "I understood your request, but I could not generate a valid production plan. Please try a clearer target quantity/unit, duration, team size, productivity rate, or date such as 2026-07-21.",
         );
         return;
       }
     }
 
+    if (/\b(?:weather|forecast|temperature|rain|sunny|cloudy)\b/i.test(projectDescription)) {
+      await message.reply(
+        "I cannot check live weather from this WhatsApp bot yet. I can help when you mention me with a production-planning request, target workload, deadline, resources, or schedule.",
+      );
+      return;
+    }
+
     await message.reply(
-      "Demo bot received your message. Send 'ping', ask 'who are you?', try simple math like '12 x 4', or start a production plan request with 'plan:', 'production plan:', or 'create a production plan'.",
+      "I'm here. Mention me with a project description and I will generate a dynamic production plan. You can also send 'ping', ask 'who are you?', or try simple math like '12 x 4'.",
     );
   } catch (error) {
     console.error(

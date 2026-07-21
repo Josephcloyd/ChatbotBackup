@@ -44,7 +44,7 @@ function buildFriendlyFailure(errorMessage: string): string {
 export async function generateProductionPlan(
   input: ProductionPlanInput,
 ): Promise<PlannerResult> {
-  const mode = input.workbookMode ?? "template";
+  const mode = input.workbookMode ?? "dynamic";
   console.log("\n========== PLAN GENERATION STARTED ==========");
   console.log("whatsappUserId:", input.whatsappUserId);
   console.log("projectDescription:", input.projectDescription);

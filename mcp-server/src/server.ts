@@ -36,14 +36,14 @@ export function createMcpServer() {
       inputSchema: {
         whatsappUserId: z.string(),
         projectDescription: z.string(),
-        workbookMode: z.enum(["template", "dynamic"]).optional()
+        workbookMode: z.enum(["template", "dynamic"]).default("dynamic").optional()
       }
     },
     async ({ whatsappUserId, projectDescription, workbookMode }) => {
       console.log("========== TOOL INVOKED ==========");
       console.log("whatsappUserId:", whatsappUserId);
       console.log("projectDescription:", projectDescription);
-      console.log("workbookMode:", workbookMode ?? "template");
+      console.log("workbookMode:", workbookMode ?? "dynamic");
 
       const result = await generateProductionPlan({ whatsappUserId, projectDescription, workbookMode });
 

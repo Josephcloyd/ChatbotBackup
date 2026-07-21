@@ -33,10 +33,13 @@ export interface RequestedConstraints {
   needsReview?: boolean;
   needsBuffer?: boolean;
   needsWeeklyTracking?: boolean;
+  workingDays?: number[];
   /** Unit of measure extracted from the prompt (e.g. "images", "records"). */
   unitOfMeasure?: string;
   /** Total quantity of units extracted from the prompt (e.g. 350000). */
   totalQuantity?: number;
+  /** Named planning model or operating model requested by the user (e.g. "LPB Model"). */
+  planningModel?: string;
 }
 
 export interface PlanningDefaults {
@@ -46,6 +49,9 @@ export interface PlanningDefaults {
   totalHours?: number;
   teamSize?: number;
   weekdaysOnly?: boolean;
+  workingDays?: number[];
+  unitOfMeasure?: string;
+  totalQuantity?: number;
 }
 
 export interface ResolvedPlanningSettings {
@@ -55,6 +61,9 @@ export interface ResolvedPlanningSettings {
   totalHours: number;
   teamSize: number;
   weekdaysOnly: boolean;
+  workingDays?: number[];
+  unitOfMeasure?: string;
+  totalQuantity?: number;
 }
 
 function toIsoDate(value: string): string | undefined {
@@ -74,16 +83,24 @@ function positive(value: number | undefined, fallback: number, name: string): nu
 }
 
 function inferProjectType(description: string): string | undefined {
+  if (/\b(?:capture|collection|collect|text\s+capture|data\s+collection)\b/i.test(description)) return "data collection";
+  if (/\b(?:software|app|application|dashboard|website|web\s+site|web\s+development|hris|system|feature|module|developers?)\b/i.test(description)) return "software development";
+  if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing)\b/i.test(description)) return "document processing";
+  if (/\b(?:manufactur(?:e|ing)|machines?|factory|assembly|units?|production\s+line)\b/i.test(description)) return "manufacturing";
+  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|media\s+production)\b/i.test(description)) return "content production";
+  if (/\b(?:customer\s+support|tickets?|service\s+desk|helpdesk|calls?|cases?)\b/i.test(description)) return "customer support";
+  if (/\b(?:training|workshop|participants?|learners?|curriculum)\b/i.test(description)) return "training";
+  if (/\b(?:event|venue|logistics|inventory|shipments?|stock|batches?)\b/i.test(description)) return "operations";
   if (/\bonboarding|new hires?|employees?\b/i.test(description)) return "onboarding";
   if (/\bannotat(?:e|ion|ors?)|label(?:ing|lers?)\b/i.test(description)) return "annotation";
-  if (/\bdata\s+encoding|encode|encoder\b/i.test(description)) return "data encoding";
+  if (/\bdata\s+encoding|encode|encoder|enrollment\s+records?\b/i.test(description)) return "data encoding";
   if (/\bresearch|study|survey\b/i.test(description)) return "research";
   if (/\bvalidation|validate|verification\b/i.test(description)) return "validation";
   return undefined;
 }
 
 function inferDefaultWeekdaysOnly(description: string): boolean {
-  return /\b(?:office|company|team|employee|employees|staff|people|annotators?|workers?|agents?|members?|onboarding|encoding|validation|production|work)\b/i
+  return /\b(?:office|company|team|employee|employees|staff|people|annotators?|workers?|agents?|members?|onboarding|encoding|encode|records?|validation|production|work|software|developers?|manufacturing|machines?|documents?|receipts?)\b/i
     .test(description);
 }
 
@@ -98,25 +115,79 @@ function extractDeliverables(description: string): string[] {
   return requested.filter(([, pattern]) => pattern.test(description)).map(([label]) => label);
 }
 
+function extractWorkingDays(description: string): number[] | undefined {
+  const days = [
+    ["sunday", 0],
+    ["monday", 1],
+    ["tuesday", 2],
+    ["wednesday", 3],
+    ["thursday", 4],
+    ["friday", 5],
+    ["saturday", 6],
+  ] as const;
+  if (
+    !/\b(?:on|only|every)\s+(?:mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?|sundays?)\b/i.test(description) &&
+    !/\b(?:working|work)\s+days?\s+(?:are|:)\b/i.test(description)
+  ) {
+    return undefined;
+  }
+  const matched = days
+    .filter(([name]) => new RegExp(`\\b${name}s?\\b`, "i").test(description))
+    .map(([, value]) => value);
+  return matched.length ? [...new Set(matched)].sort((a, b) => a - b) : undefined;
+}
+
+const productionUnitPattern =
+  /(images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?)/i;
+
+function normalizeQuantity(rawNumber: string, suffix: string | undefined): number {
+  const raw = Number(rawNumber.replace(/,/g, ""));
+  const normalizedSuffix = (suffix ?? "").toLowerCase();
+  const multiplier = normalizedSuffix === "k" ? 1_000 : normalizedSuffix === "m" ? 1_000_000 : 1;
+  return Math.round(raw * multiplier);
+}
+
 export function extractRequestedConstraints(
   description: string,
   currentDate = new Date().toISOString().slice(0, 10),
 ): RequestedConstraints {
+  const numberWordMap: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+  };
+  const numberToken = String.raw`(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)`;
+  const tokenNumber = (value: string | undefined): number | undefined => {
+    if (!value) return undefined;
+    const normalized = value.toLowerCase();
+    return numberWordMap[normalized] ?? Number(normalized);
+  };
   const durationMatch =
-    description.match(/\b(?:within|for|over|during)?\s*(\d+)\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b/i) ??
-    description.match(/\bnext\s+(\d+)\s+(weekdays?|business\s+days?)\b/i);
-  const weekdayDurationMatch = description.match(/\b(?:for\s+)?(?:the\s+)?next\s+(\d+)\s+(weekdays?|business\s+days?)\b/i) ??
-    description.match(/\bfor\s+(\d+)\s+(weekdays?|business\s+days?)\b/i);
-  const hoursMatch = description.match(/\b(\d+(?:\.\d+)?)\s+(?:total\s+)?hours?\b/i);
+    description.match(new RegExp(String.raw`\b(?:within|for|over|during)?\s*${numberToken}\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b`, "i")) ??
+    description.match(new RegExp(String.raw`\bnext\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
+  const weekdayDurationMatch = description.match(new RegExp(String.raw`\b(?:for\s+)?(?:the\s+)?next\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i")) ??
+    description.match(new RegExp(String.raw`\bfor\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
+  const hoursMatch = description.match(new RegExp(String.raw`\b${numberToken}\s+(?:total\s+|working\s+|productive\s+)?hours?\b`, "i"));
   const teamMatch =
-    description.match(/\b(?:class|team|group|crew)\s+of\s+(\d+)\b/i) ??
-    description.match(/\b(\d+)\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?)\b/i);
+    description.match(new RegExp(String.raw`\b(?:class|team|group|crew)\s+of\s+${numberToken}\b`, "i")) ??
+    description.match(new RegExp(String.raw`\b${numberToken}\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?|developers?|engineers?|testers?|reviewers?|designers?|writers?|editors?|machines?|operators?)\b`, "i"));
   const normalizedDates = extractNormalizedDateConstraints(description, currentDate);
+  const workingDays = extractWorkingDays(description);
 
   const constraints: RequestedConstraints = {};
   if (weekdayDurationMatch) {
-    constraints.duration = { value: Number(weekdayDurationMatch[1]), unit: "days" };
-    constraints.durationDays = Number(weekdayDurationMatch[1]);
+    const value = tokenNumber(weekdayDurationMatch[1]) ?? 1;
+    constraints.duration = { value, unit: "days" };
+    constraints.durationDays = value;
     constraints.weekdaysOnly = true;
   } else if (durationMatch) {
     const unitText = durationMatch[2]!.toLowerCase();
@@ -125,17 +196,30 @@ export function extractRequestedConstraints(
       : unitText.startsWith("week")
         ? "weeks"
         : "months";
-    constraints.duration = { value: Number(durationMatch[1]), unit };
-    if (unit === "days") constraints.durationDays = Number(durationMatch[1]);
+    const value = tokenNumber(durationMatch[1]) ?? 1;
+    constraints.duration = { value, unit };
+    if (unit === "days") constraints.durationDays = value;
   }
-  if (hoursMatch) constraints.totalHours = Number(hoursMatch[1]);
-  if (teamMatch) constraints.teamSize = Number(teamMatch[1]);
+  if (hoursMatch) {
+    const tail = description.slice((hoursMatch.index ?? 0) + hoursMatch[0].length, (hoursMatch.index ?? 0) + hoursMatch[0].length + 24);
+    if (!/^\s*(?:per|\/)\s*(?:weekday|day|worker|resource|person|machine|shift)/i.test(tail)) {
+      constraints.totalHours = tokenNumber(hoursMatch[1]);
+    }
+  }
+  if (teamMatch) constraints.teamSize = tokenNumber(teamMatch[1]);
   if (/\b(?:weekdays?\s+only|business\s+days?|monday\s+(?:through|to|-)\s+friday|avoid\s+weekends?|excluding\s+weekends?|no\s+weekends?)\b/i.test(description)) {
     constraints.weekdaysOnly = true;
   } else if (/\b(?:calendar\s+(?:days?|weeks?|months?)|including\s+weekends?|weekends?\s+included|seven\s+days\s+a\s+week)\b/i.test(description)) {
     constraints.weekdaysOnly = false;
   }
+  if (workingDays) {
+    constraints.workingDays = workingDays;
+    constraints.weekdaysOnly = workingDays.every((day) => day >= 1 && day <= 5);
+  }
   if (normalizedDates.startDate) constraints.startDate = normalizedDates.startDate;
+  else if (/\b(?:starting|starts?|from)(?:\s+date\s+of)?\s+today\b/i.test(description)) {
+    constraints.startDate = currentDate;
+  }
   if (normalizedDates.endDate) constraints.endDate = normalizedDates.endDate;
   if (normalizedDates.interpretations.length) {
     constraints.dateInterpretations = normalizedDates.interpretations;
@@ -155,16 +239,32 @@ export function extractRequestedConstraints(
   if (/\bweekly\s+(?:progress\s+)?tracking|weekly\s+summary|weekly\s+report\b/i.test(description)) {
     constraints.needsWeeklyTracking = true;
   }
-  // Extract unit of measure and total quantity (e.g. "350,000 images", "1M records", "5k documents")
-  const quantityRegex =
-    /\b([\d,]+)(?:\s*([kKmM]))?\s+(images?|records?|documents?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?)\b/i;
+  const modelMatch = description.match(/\b(?:apply|use|using|under)\s+([A-Z][A-Z0-9]{1,12})\s+model\b/i) ??
+    description.match(/\b([A-Z][A-Z0-9]{1,12})\s+model\b/i);
+  if (modelMatch) constraints.planningModel = `${modelMatch[1]!.toUpperCase()} Model`;
+
+  // Extract unit of measure and total quantity.
+  const quantityRegex = new RegExp(String.raw`\b([\d,]+(?:\.\d+)?)(?:\s*([kKmM]))?\s+${productionUnitPattern.source}\b`, "i");
   const quantityMatch = description.match(quantityRegex);
   if (quantityMatch) {
-    const raw = Number(quantityMatch[1]!.replace(/,/g, ""));
-    const suffix = (quantityMatch[2] ?? "").toLowerCase();
-    const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : 1;
-    constraints.totalQuantity = Math.round(raw * multiplier);
+    constraints.totalQuantity = normalizeQuantity(quantityMatch[1]!, quantityMatch[2]);
     constraints.unitOfMeasure = quantityMatch[3]!.toLowerCase();
+  }
+  const targetUnitQuantityMatch = description.match(
+    new RegExp(
+      String.raw`\b(?:target|total|planned|required|goal)\s+${productionUnitPattern.source}\b(?:\s+(?:to\s+be\s+)?(?:collected|captured|processed|produced|handled|required|needed))?\s*(?:is|are|=|:)?\s*([\d,]+(?:\.\d+)?)(?:\s*([kKmM]))?\b`,
+      "i",
+    ),
+  );
+  if (!constraints.totalQuantity && targetUnitQuantityMatch) {
+    constraints.unitOfMeasure = targetUnitQuantityMatch[1]!.toLowerCase();
+    constraints.totalQuantity = normalizeQuantity(targetUnitQuantityMatch[2]!, targetUnitQuantityMatch[3]);
+  }
+  const unitOnlyMatch = description.match(
+    new RegExp(String.raw`\b(?:main\s+)?unit\s+of\s+measure\s+(?:for\s+production\s+)?(?:is|are)\s+${productionUnitPattern.source}\b`, "i"),
+  );
+  if (!constraints.unitOfMeasure && unitOnlyMatch) {
+    constraints.unitOfMeasure = unitOnlyMatch[1]!.toLowerCase();
   }
   return constraints;
 }
@@ -176,6 +276,7 @@ export function resolvePlanningSettings(
 ): ResolvedPlanningSettings {
   const requested = extractRequestedConstraints(description, currentDate);
   const weekdaysOnly = requested.weekdaysOnly ?? defaults.weekdaysOnly ?? inferDefaultWeekdaysOnly(description);
+  const workingDays = requested.workingDays ?? defaults.workingDays;
   const defaultStartDate = weekdaysOnly ? nextBusinessDay(currentDate) : currentDate;
   const duration = requested.duration ?? {
     value: positive(defaults.durationValue, 30, "durationValue"),
@@ -207,6 +308,9 @@ export function resolvePlanningSettings(
     totalHours: positive(requested.totalHours, positive(defaults.totalHours, 160, "totalHours"), "totalHours"),
     teamSize: Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")),
     weekdaysOnly,
+    workingDays,
+    unitOfMeasure: requested.unitOfMeasure ?? defaults.unitOfMeasure,
+    totalQuantity: requested.totalQuantity ?? defaults.totalQuantity,
   };
 }
 
@@ -227,11 +331,15 @@ function addMonthsClamped(date: Date, count: number): Date {
 export function buildScheduleDates(settings: ResolvedPlanningSettings): string[] {
   const start = parseIso(settings.startDate);
   const dates: string[] = [];
+  const isScheduledDay = (date: Date): boolean => {
+    if (settings.workingDays?.length) return settings.workingDays.includes(date.getUTCDay());
+    return !settings.weekdaysOnly || isWeekday(date);
+  };
 
   if (settings.endDate) {
     const end = parseIso(settings.endDate);
     for (let candidate = start; candidate <= end; candidate = addDays(candidate, 1)) {
-      if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
+      if (isScheduledDay(candidate)) dates.push(formatIsoDate(candidate));
     }
     if (dates.length === 0) throw new Error("The requested period contains no scheduled workdays");
     return dates;
@@ -240,7 +348,7 @@ export function buildScheduleDates(settings: ResolvedPlanningSettings): string[]
   if (settings.duration.unit === "days") {
     let candidate = start;
     while (dates.length < settings.duration.value) {
-      if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
+      if (isScheduledDay(candidate)) dates.push(formatIsoDate(candidate));
       candidate = addDays(candidate, 1);
     }
     return dates;
@@ -250,7 +358,7 @@ export function buildScheduleDates(settings: ResolvedPlanningSettings): string[]
     ? addDays(start, settings.duration.value * 7)
     : addMonthsClamped(start, settings.duration.value);
   for (let candidate = start; candidate < end; candidate = addDays(candidate, 1)) {
-    if (!settings.weekdaysOnly || isWeekday(candidate)) dates.push(formatIsoDate(candidate));
+    if (isScheduledDay(candidate)) dates.push(formatIsoDate(candidate));
   }
   if (dates.length === 0) throw new Error("The requested period contains no scheduled workdays");
   return dates;
