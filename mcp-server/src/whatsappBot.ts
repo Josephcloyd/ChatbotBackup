@@ -1,4 +1,5 @@
-import { createRequire } from "node:module";
+﻿import { createRequire } from "node:module";
+import { existsSync } from "node:fs";
 import { generateProductionPlan } from "./plannerService.js";
 import {
   getSimpleMathReply,
@@ -32,13 +33,13 @@ const groupAccessConfig: GroupAccessConfig = normalizeGroupAccessConfig({
 });
 const logFullGroupId = (process.env.WHATSAPP_LOG_FULL_GROUP_ID ?? "").trim() === "1";
 const productionWorkbookFilename = "ProductionPlan.xlsx";
-const whatsAppClientId = "production-planner-demo";
+const whatsAppClientId = (process.env.WHATSAPP_CLIENT_ID ?? "production-planner-v2").trim();
 const botMentionDisplayName = (process.env.WHATSAPP_BOT_MENTION_NAME ?? "wil alt").trim();
 const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
   .split(",")
   .map((id) => id.trim())
   .filter((id) => id.length > 0);
-const chromeExecutablePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const chromeExecutablePath = findChromeExecutablePath();
 const readyWarningTimeoutMs = 90_000;
 let readyWarningTimer: NodeJS.Timeout | undefined;
 let puppeteerDiagnosticsAttached = false;
@@ -49,13 +50,42 @@ type WhatsAppChat = import("whatsapp-web.js").Chat;
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: whatsAppClientId,
+    rmMaxRetries: 20,
   }),
   puppeteer: {
-    executablePath: chromeExecutablePath,
+    ...(chromeExecutablePath ? { executablePath: chromeExecutablePath } : {}),
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   },
 });
+
+function readNonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+function findChromeExecutablePath(): string | undefined {
+  const configuredPath = readNonEmptyEnv("WHATSAPP_CHROME_PATH");
+  if (configuredPath) {
+    return configuredPath;
+  }
+
+  const candidatePaths = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA
+      ? `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`
+      : undefined,
+    process.env.PROGRAMFILES
+      ? `${process.env.PROGRAMFILES}\\Google\\Chrome\\Application\\chrome.exe`
+      : undefined,
+    process.env["PROGRAMFILES(X86)"]
+      ? `${process.env["PROGRAMFILES(X86)"]}\\Google\\Chrome\\Application\\chrome.exe`
+      : undefined,
+  ].filter((path): path is string => Boolean(path));
+
+  return candidatePaths.find((path) => existsSync(path));
+}
 
 function logAccessMode(): void {
   if (groupAccessConfig.allowedGroupId) {
@@ -248,6 +278,22 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
+function isExpectedLogoutCleanupError(reason: unknown): boolean {
+  const errorText = describeError(reason);
+  return (
+    errorText.includes("Execution context was destroyed") ||
+    errorText.includes("EBUSY: resource busy or locked") ||
+    errorText.includes("first_party_sets.db")
+  );
+}
+
+function logWhatsAppSessionResetHelp(): void {
+  console.warn(
+    `[whatsappBot] To recover, close this bot and any Chrome/WhatsApp Web windows, then delete ".wwebjs_auth\\session-${whatsAppClientId}" and ".wwebjs_cache" from mcp-server before starting again.`,
+  );
+  console.warn("[whatsappBot] If WhatsApp shows this linked device as logged out, remove it from WhatsApp -> Linked devices, then scan the QR again.");
+}
+
 function getMessagePreview(message: WhatsAppMessage): string {
   const normalizedBody = message.body.replace(/\s+/g, " ").trim();
   if (normalizedBody.length <= 120) {
@@ -316,7 +362,7 @@ async function getAuthorizedMessageContext(
 console.log("[whatsappBot] Starting WhatsApp QR demo bot.");
 console.log(`[whatsappBot] LocalAuth clientId: ${whatsAppClientId}`);
 console.log(`[whatsappBot] Mention display name: @${botMentionDisplayName}`);
-console.log(`[whatsappBot] Chrome executable: ${chromeExecutablePath}`);
+console.log(`[whatsappBot] Chrome executable: ${chromeExecutablePath ?? "(auto/default)"}`);
 logAccessMode();
 startReadyWarningTimer();
 
@@ -359,6 +405,10 @@ client.on("change_state", (state: string) => {
 client.on("disconnected", (reason: string) => {
   clearReadyWarningTimer();
   console.error("[whatsappBot] WhatsApp client disconnected:", reason);
+  if (reason === "LOGOUT") {
+    console.warn("[whatsappBot] WhatsApp logged out this LocalAuth session.");
+    logWhatsAppSessionResetHelp();
+  }
 });
 
 client.on("message", async (message) => {
@@ -488,6 +538,12 @@ client.initialize().catch((error: unknown) => {
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
+  if (isExpectedLogoutCleanupError(reason)) {
+    console.warn("[whatsappBot] WhatsApp Web cleanup warning after logout:", describeError(reason));
+    logWhatsAppSessionResetHelp();
+    return;
+  }
+
   console.error("[whatsappBot] Unhandled rejection:", reason);
 });
 

@@ -7,7 +7,7 @@ It supports two workbook modes:
 - `template` preserves and fills the official company workbook.
 - `dynamic` needs no external template and creates a professional workbook with an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation.
 
-The repository now includes the Flowboard Next.js dashboard. No live WhatsApp provider integration exists yet.
+The repository now includes the Flowboard Next.js dashboard and a local WhatsApp Web demo bot.
 
 ## Current architecture
 
@@ -42,7 +42,10 @@ In template mode, the official workbook at `mcp-server/src/templates/ProductionP
 From PowerShell:
 
 ```powershell
-cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\mcp-server"
+git clone <your-main-repository-url>
+cd Chatbot2ProPl
+
+cd mcp-server
 npm.cmd install
 Copy-Item .env.example .env
 ollama pull qwen3:4b
@@ -54,7 +57,7 @@ The MCP endpoint is `http://127.0.0.1:3001/mcp`. Health information is available
 Start the dashboard in a second PowerShell window:
 
 ```powershell
-cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\next-jsdashboard"
+cd path\to\Chatbot2ProPl\next-jsdashboard
 Copy-Item .env.example .env.local
 npm.cmd install
 npm.cmd run dev
@@ -77,6 +80,11 @@ Node does not automatically load `.env` in every runtime. Either export the vari
 | `SUPABASE_SERVICE_ROLE_KEY` | none | Optional server-only database key |
 | `SUPABASE_WORKBOOK_BUCKET` | none | Optional Supabase Storage bucket for generated workbooks |
 | `SUPABASE_SIGNED_URL_EXPIRES_IN_SECONDS` | `3600` | Optional workbook signed URL lifetime |
+| `WHATSAPP_ALLOWED_GROUP_ID` | none | Optional exact WhatsApp group ID to allow |
+| `WHATSAPP_ALLOWED_GROUP_NAME` | `test bot` | Temporary group-name fallback before the group ID is known |
+| `WHATSAPP_BOT_MENTION_NAME` | `wil alt` | Display-name mention the bot responds to |
+| `WHATSAPP_BOT_MENTION_ID` | none | Optional comma-separated mention IDs for the bot |
+| `WHATSAPP_LOG_FULL_GROUP_ID` | `1` in example | Prints full group IDs during first-run setup |
 
 Never place `SUPABASE_SERVICE_ROLE_KEY` in browser code or commit a real `.env` file.
 
@@ -88,9 +96,48 @@ Dashboard-only variables belong in `next-jsdashboard/.env.local`:
 | `FLOWBOARD_ACCESS_PASSWORD` | none | Password accepted by the dashboard login page |
 | `FLOWBOARD_SESSION_SECRET` | none | At least 16 characters; signs the dashboard session cookie |
 
+## Collaborator Quick Check
+
+After copying the example env files, collaborators can run the repo check from the repository root:
+
+```powershell
+.\check-everything.ps1 -Install
+```
+
+To start both apps during the check:
+
+```powershell
+.\check-everything.ps1 -Install -StartApps -KeepAppsRunning
+```
+
 ## Supabase
 
 Apply `mcp-server/supabase/migrations/001_create_production_plans.sql` in the Supabase SQL editor or migration workflow. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
+
+## WhatsApp Web Demo Bot
+
+The WhatsApp bot uses `whatsapp-web.js` and Chrome through Puppeteer. It is intended for local/manual testing, not production webhook hosting.
+
+First run:
+
+```powershell
+cd mcp-server
+npm.cmd run whatsapp:dev
+```
+
+Scan the QR code from WhatsApp with `Linked devices -> Link a device`. In the allowed test group, mention the bot:
+
+```text
+@wil alt ping
+```
+
+For the first setup, keep `WHATSAPP_ALLOWED_GROUP_ID` blank and `WHATSAPP_LOG_FULL_GROUP_ID=1` in `mcp-server/.env`. The bot will print the full group ID when it sees the configured fallback group name. Copy that ID into `WHATSAPP_ALLOWED_GROUP_ID`, set `WHATSAPP_LOG_FULL_GROUP_ID=0`, then restart the bot.
+
+Plan generation test:
+
+```text
+@wil alt plan: Create a 1-week production plan for a student enrollment encoding project with 8 total hours.
+```
 
 ## Verification
 
@@ -107,7 +154,7 @@ Tests cover Ollama JSON/NDJSON parsing, both workbook modes, template preservati
 Start the MCP server in one PowerShell window, then run this in a second window:
 
 ```powershell
-cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\mcp-server"
+cd mcp-server
 npm.cmd run smoke
 ```
 
@@ -152,7 +199,7 @@ The demonstration output is written under `mcp-server/outputs/dual-mode-demo`.
 
 ## Known gaps
 
-- There is no actual WhatsApp webhook/provider integration.
+- The WhatsApp integration is a local WhatsApp Web demo bot, not a production webhook/provider integration.
 - Ollama reachability is checked only when generation runs; `/health` reports configuration and template readiness.
 - Authentication, rate limiting, file retention, object storage, and production deployment are not implemented. Workbook URLs are non-guessable local-development links, not a production authorization system.
 - The root `.git` directory is not currently recognized as a valid Git repository; it has deliberately not been modified.
