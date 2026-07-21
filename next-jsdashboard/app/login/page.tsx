@@ -7,11 +7,13 @@ import { Brand } from "../../components/molecules/Brand";
 import { FormGroup } from "../../components/molecules/FormGroup";
 import { Input } from "../../components/atoms/Input";
 import { Button } from "../../components/atoms/Button";
+import { Icon } from "../../components/atoms/Icon";
 
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -62,20 +64,46 @@ export default function LoginPage() {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               required
+              maxLength={50}
               placeholder="e.g. operator1"
             />
           </FormGroup>
 
           <FormGroup label="Password" htmlFor="password">
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-              placeholder="••••••••"
-            />
+            <div style={{ position: "relative" }}>
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+                maxLength={50}
+                placeholder="••••••••"
+                style={{ paddingRight: "3.5rem" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "0.75rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-dim, #6b7280)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                <Icon name={showPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+              </button>
+            </div>
           </FormGroup>
         </div>
 

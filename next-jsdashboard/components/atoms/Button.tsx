@@ -14,9 +14,10 @@ export function Button({ variant = "primary", isLoading, children, className = "
       {...props}
     >
       {isLoading ? (
-        <span className="btn-content-loading">
-          <Spinner /> {children}
-        </span>
+        <>
+          <Spinner />
+          {children}
+        </>
       ) : (
         children
       )}

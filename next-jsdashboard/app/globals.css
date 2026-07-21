@@ -208,7 +208,7 @@ td { padding: 11px 12px; border-bottom: 1px solid #edf1f4; color: #415267; }
 
 /* Modals */
 .modal-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(19,48,32,0.4); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; }
-.modal-content { width: 100%; maxWidth: 500px; padding: 26px; border-radius: 14px; background: white; box-shadow: 0 20px 60px rgba(0,0,0,0.15); border: 1px solid var(--line); }
+.modal-content { width: 100%; max-width: 500px; padding: 26px; border-radius: 14px; background: white; box-shadow: 0 20px 60px rgba(0,0,0,0.15); border: 1px solid var(--line); }
 .modal-title { margin: 0 0 16px; color: #046241; }
 .modal-title.danger { color: var(--danger); }
 .modal-text { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 20px; }
