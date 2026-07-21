@@ -11,6 +11,7 @@ import { AdminPlansPanel } from "../components/organisms/AdminPlansPanel";
 import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel";
 import { EditPlanModal, DeleteOperatorModal } from "../components/organisms/AdminModals";
 import { Icon } from "../components/atoms/Icon";
+import { ThemeToggle } from "../components/atoms/ThemeToggle";
 
 type CellValue = string | number | boolean | null;
 type PlanRow = Record<string, CellValue>;
@@ -359,6 +360,7 @@ export default function Dashboard() {
           <span className={`connection-pill ${history.configured ? "connected" : "pending"}`}>
             <span /> Supabase Auth {history.configured ? "linked" : "offline"}
           </span>
+          <ThemeToggle />
           <button className="download-button" type="button" onClick={logout}>
             Sign out
           </button>
