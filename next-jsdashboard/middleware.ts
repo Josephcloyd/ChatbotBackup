@@ -1,10 +1,11 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import { FLOWBOARD_AUTH_COOKIE, isValidSessionToken } from "@/lib/flowboardAuth";
+import { NextRequest, NextResponse } from "next/server";
+import { FLOWBOARD_AUTH_COOKIE, getSessionPayload } from "@/lib/flowboardAuth";
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(FLOWBOARD_AUTH_COOKIE)?.value;
-  const hasValidSession = await isValidSessionToken(token);
+  const session = await getSessionPayload(token);
+  const hasValidSession = session !== null;
 
   if (pathname === "/login") {
     if (hasValidSession) {
@@ -19,6 +20,17 @@ export async function proxy(request: NextRequest) {
   }
 
   if (hasValidSession) {
+    // Restrict Admin APIs
+    if (
+      (pathname.startsWith("/api/operators") ||
+        (pathname.startsWith("/api/plans") && ["DELETE", "PATCH"].includes(request.method))) &&
+      session.role !== "admin"
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Administrator privileges required." },
+        { status: 403 },
+      );
+    }
     return NextResponse.next();
   }
 
@@ -38,3 +50,4 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
+

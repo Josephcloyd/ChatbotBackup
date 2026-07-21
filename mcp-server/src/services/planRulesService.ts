@@ -67,7 +67,9 @@ export class PlanRulesService {
       if (seenDates.has(date)) throw new Error(`Production Plan contains duplicate date ${date}`);
       seenDates.add(date);
 
-      totalTargetHours += numericValue(row, "Target Total Hours", rowNumber);
+      totalTargetHours += sheet.columns.includes("Target Total Hours")
+        ? numericValue(row, "Target Total Hours", rowNumber)
+        : 0;
 
       for (const column of ACTUAL_COLUMNS) {
         if (!sheet.columns.includes(column)) continue;
@@ -112,6 +114,7 @@ export class PlanRulesService {
     }
     if (
       constraints.totalHours !== undefined &&
+      sheet.columns.includes("Target Total Hours") &&
       Math.abs(totalTargetHours - constraints.totalHours) > 0.01
     ) {
       throw new Error(

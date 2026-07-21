@@ -5,16 +5,19 @@ import { randomUUID } from "node:crypto";
 import type { DynamicPlanResult } from "./dynamicPlanService.js";
 
 const COLORS = {
-  navy: "FF17324D",
-  blue: "FF2563EB",
-  paleBlue: "FFEAF2FF",
-  paleGreen: "FFE8F5E9",
-  paleYellow: "FFFFF7D6",
-  paleRed: "FFFDECEC",
-  white: "FFFFFFFF",
-  gray: "FF64748B",
-  lightGray: "FFF1F5F9",
-  border: "FFD7E0EA",
+  primary:     "FF133020", // Dark Serpent
+  accent:      "FF046241", // Castleton Green
+  accentDark:  "FF034E34", // Castleton Green dark
+  saffron:     "FFFFB347", // Saffron
+  earthYellow: "FFFFC370", // Earth Yellow
+  paper:       "FFF5EEDB", // Paper background
+  paleGreen:   "FFE8F5EE", // Light green tint
+  paleAmber:   "FFFFF8E1", // Light amber tint
+  paleRed:     "FFFDECEC",
+  white:       "FFFFFFFF",
+  sage:        "FF708E7C", // Sage
+  lightGray:   "FFF9F7F7", // Sea Salt
+  border:      "FFD3CBB6", // Warm border
 };
 
 function title(sheet: ExcelJS.Worksheet, range: string, value: string): void {
@@ -22,7 +25,7 @@ function title(sheet: ExcelJS.Worksheet, range: string, value: string): void {
   const cell = sheet.getCell(range.split(":")[0]!);
   cell.value = value;
   cell.font = { name: "Aptos Display", size: 20, bold: true, color: { argb: COLORS.white } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navy } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.primary } };
   cell.alignment = { vertical: "middle", horizontal: "left" };
 }
 
@@ -30,7 +33,7 @@ function sectionHeader(row: ExcelJS.Row): void {
   row.height = 24;
   row.eachCell((cell) => {
     cell.font = { name: "Aptos", bold: true, color: { argb: COLORS.white } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navy } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.primary } };
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = { bottom: { style: "thin", color: { argb: COLORS.border } } };
   });
@@ -110,7 +113,7 @@ export class DynamicExcelService {
     summary.getRow(9).values = ["Schedule", settings.weekdaysOnly ? "Weekdays only" : "Calendar days", "Scheduled Days", planRows.length];
     for (const cellAddress of ["A4", "A5", "A8", "A9", "C8", "C9", "E4"]) {
       const cell = summary.getCell(cellAddress);
-      cell.font = { bold: true, color: { argb: COLORS.gray } };
+      cell.font = { bold: true, color: { argb: COLORS.sage } };
     }
     summary.getCell("B8").numFmt = "yyyy-mm-dd";
     summary.getCell("D8").numFmt = "yyyy-mm-dd";
@@ -119,35 +122,40 @@ export class DynamicExcelService {
     summary.mergeCells("C11:D11");
     summary.mergeCells("E11:F11");
     summary.mergeCells("G11:H11");
-    summary.getCell("A11").value = "PLANNED HOURS";
+    const metricLabel = result.unitLabel ? result.unitLabel.toUpperCase() : "HOURS";
+    summary.getCell("A11").value = `PLANNED ${metricLabel}`;
     summary.getCell("C11").value = "TEAM SIZE";
-    summary.getCell("E11").value = "ACTUAL HOURS";
+    summary.getCell("E11").value = `ACTUAL ${metricLabel}`;
     summary.getCell("G11").value = "COMPLETION";
     for (const address of ["A11", "C11", "E11", "G11"]) {
       const cell = summary.getCell(address);
       cell.font = { bold: true, color: { argb: COLORS.white } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.accent } };
       cell.alignment = { horizontal: "center" };
     }
     summary.mergeCells("A12:B13");
     summary.mergeCells("C12:D13");
     summary.mergeCells("E12:F13");
     summary.mergeCells("G12:H13");
-    summary.getCell("A12").value = { formula: `SUM('Production Plan'!F2:F${lastPlanRow})`, result: settings.totalHours };
+    const plannedResult = result.unitLabel != null && result.totalQuantity != null
+      ? result.totalQuantity
+      : settings.totalHours;
+    const valueFmt = result.unitLabel ? "#,##0" : "#,##0.00";
+    summary.getCell("A12").value = { formula: `SUM('Production Plan'!F2:F${lastPlanRow})`, result: plannedResult };
     summary.getCell("C12").value = { formula: `MAX('Production Plan'!E2:E${lastPlanRow})`, result: settings.teamSize };
     summary.getCell("E12").value = { formula: `SUM('Production Plan'!I2:I${lastPlanRow})`, result: 0 };
     summary.getCell("G12").value = { formula: `IF(COUNT('Production Plan'!I2:I${lastPlanRow})=0,"",IFERROR(E12/A12,""))`, result: "" };
     for (const address of ["A12", "C12", "E12", "G12"]) {
       const cell = summary.getCell(address);
-      cell.font = { size: 20, bold: true, color: { argb: COLORS.navy } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleBlue } };
+      cell.font = { size: 20, bold: true, color: { argb: COLORS.primary } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleAmber } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
     }
-    summary.getCell("A12").numFmt = "#,##0.00";
-    summary.getCell("E12").numFmt = "#,##0.00";
+    summary.getCell("A12").numFmt = valueFmt;
+    summary.getCell("E12").numFmt = valueFmt;
     summary.getCell("G12").numFmt = "0.0%";
     summary.getCell("A16").value = "Plan Summary";
-    summary.getCell("A16").font = { bold: true, size: 12, color: { argb: COLORS.navy } };
+    summary.getCell("A16").font = { bold: true, size: 12, color: { argb: COLORS.primary } };
     summary.mergeCells("A17:H19");
     summary.getCell("A17").value = plan.summary;
     summary.getCell("A17").alignment = { wrapText: true, vertical: "top" };
@@ -189,7 +197,7 @@ export class DynamicExcelService {
         row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleGreen } };
       }
       for (const column of [8, 9, 16]) {
-        row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleYellow } };
+        row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleAmber } };
       }
     });
     sectionHeader(production.getRow(1));
@@ -211,7 +219,7 @@ export class DynamicExcelService {
       ref: `O2:O${lastPlanRow}`,
       rules: [
         { type: "containsText", operator: "containsText", text: "Complete", priority: 1, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleGreen } } } },
-        { type: "containsText", operator: "containsText", text: "In Progress", priority: 2, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleYellow } } } },
+        { type: "containsText", operator: "containsText", text: "In Progress", priority: 2, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleAmber } } } },
       ],
     });
     setWidths(production, [7, 13, 14, 10, 18, 18, 22, 18, 18, 22, 14, 14, 14, 16, 15, 28]);
@@ -226,7 +234,8 @@ export class DynamicExcelService {
     const monthTargets = new Map<string, number>();
     planRows.forEach((row) => {
       const month = String(row.Month);
-      monthTargets.set(month, (monthTargets.get(month) ?? 0) + Number(row["Target Total Hours"]));
+      // Col F (position 6) always holds the primary target metric — hours or quantity.
+      monthTargets.set(month, (monthTargets.get(month) ?? 0) + Number(productionSheet.columns[5] ? row[productionSheet.columns[5]] : 0));
     });
     [...monthTargets.entries()].forEach(([month, target], index) => {
       const row = index + 2;

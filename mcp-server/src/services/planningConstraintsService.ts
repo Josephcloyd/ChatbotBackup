@@ -33,6 +33,10 @@ export interface RequestedConstraints {
   needsReview?: boolean;
   needsBuffer?: boolean;
   needsWeeklyTracking?: boolean;
+  /** Unit of measure extracted from the prompt (e.g. "images", "records"). */
+  unitOfMeasure?: string;
+  /** Total quantity of units extracted from the prompt (e.g. 350000). */
+  totalQuantity?: number;
 }
 
 export interface PlanningDefaults {
@@ -150,6 +154,17 @@ export function extractRequestedConstraints(
   if (/\bbuffer|contingency\b/i.test(description)) constraints.needsBuffer = true;
   if (/\bweekly\s+(?:progress\s+)?tracking|weekly\s+summary|weekly\s+report\b/i.test(description)) {
     constraints.needsWeeklyTracking = true;
+  }
+  // Extract unit of measure and total quantity (e.g. "350,000 images", "1M records", "5k documents")
+  const quantityRegex =
+    /\b([\d,]+)(?:\s*([kKmM]))?\s+(images?|records?|documents?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?)\b/i;
+  const quantityMatch = description.match(quantityRegex);
+  if (quantityMatch) {
+    const raw = Number(quantityMatch[1]!.replace(/,/g, ""));
+    const suffix = (quantityMatch[2] ?? "").toLowerCase();
+    const multiplier = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : 1;
+    constraints.totalQuantity = Math.round(raw * multiplier);
+    constraints.unitOfMeasure = quantityMatch[3]!.toLowerCase();
   }
   return constraints;
 }
