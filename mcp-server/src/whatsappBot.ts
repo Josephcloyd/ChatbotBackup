@@ -33,7 +33,7 @@ const groupAccessConfig: GroupAccessConfig = normalizeGroupAccessConfig({
 });
 const logFullGroupId = (process.env.WHATSAPP_LOG_FULL_GROUP_ID ?? "").trim() === "1";
 const productionWorkbookFilename = "ProductionPlan.xlsx";
-const whatsAppClientId = (process.env.WHATSAPP_CLIENT_ID ?? "production-planner-v2").trim();
+const whatsAppClientId = resolveWhatsAppClientId();
 const botMentionDisplayName = (process.env.WHATSAPP_BOT_MENTION_NAME ?? "wil alt").trim();
 const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
   .split(",")
@@ -62,6 +62,31 @@ const client = new Client({
 function readNonEmptyEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value ? value : undefined;
+}
+
+function hasLocalAuthSession(clientId: string): boolean {
+  return existsSync(`.wwebjs_auth\\session-${clientId}`);
+}
+
+function resolveWhatsAppClientId(): string {
+  const configuredClientId = readNonEmptyEnv("WHATSAPP_CLIENT_ID");
+  const knownClientIds = [
+    configuredClientId,
+    "production-planner-demo",
+    "production-planner-v2",
+  ].filter((clientId): clientId is string => Boolean(clientId));
+
+  const existingClientId = knownClientIds.find((clientId) => hasLocalAuthSession(clientId));
+  if (existingClientId) {
+    if (configuredClientId && configuredClientId !== existingClientId) {
+      console.warn(
+        `[whatsappBot] WHATSAPP_CLIENT_ID is set to "${configuredClientId}", but an existing local WhatsApp session was found for "${existingClientId}". Reusing the existing session to avoid forcing a new QR scan.`,
+      );
+    }
+    return existingClientId;
+  }
+
+  return configuredClientId ?? "production-planner-demo";
 }
 
 function findChromeExecutablePath(): string | undefined {
