@@ -7,14 +7,16 @@ Flowboard is the visualization interface for the production-planner MCP backend.
 Start the backend first:
 
 ```powershell
-cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\mcp-server"
+cd path\to\Chatbot2ProPl\mcp-server
+Copy-Item .env.example .env
+npm.cmd install
 npm.cmd start
 ```
 
 Then start the dashboard in another PowerShell window:
 
 ```powershell
-cd "C:\Users\Allison rose\Desktop\JC\Chatbot2ProPl\next-jsdashboard"
+cd path\to\Chatbot2ProPl\next-jsdashboard
 Copy-Item .env.example .env.local
 npm.cmd install
 npm.cmd run dev
@@ -25,6 +27,8 @@ Open `http://localhost:3000`.
 The browser calls same-origin Next.js API routes. Those routes proxy to the backend URL in `PLANNER_API_URL`, so backend credentials are never exposed to browser JavaScript.
 
 Set `FLOWBOARD_ACCESS_PASSWORD` and a `FLOWBOARD_SESSION_SECRET` of at least 16 characters in `next-jsdashboard/.env.local`; the dashboard login flow requires both.
+
+Do not put Supabase service-role credentials in `next-jsdashboard/.env.local`. Supabase credentials belong only in `mcp-server/.env`.
 
 ## Supabase history
 
