@@ -1,4 +1,4 @@
-﻿import { createRequire } from "node:module";
+import { createRequire } from "node:module";
 import { generateProductionPlan } from "./plannerService.js";
 import {
   getSimpleMathReply,
@@ -44,6 +44,7 @@ let readyWarningTimer: NodeJS.Timeout | undefined;
 let puppeteerDiagnosticsAttached = false;
 const knownBotContactIds = new Set<string>();
 type WhatsAppMessage = import("whatsapp-web.js").Message;
+type WhatsAppChat = import("whatsapp-web.js").Chat;
 
 const client = new Client({
   authStrategy: new LocalAuth({
@@ -74,7 +75,7 @@ function logApprovedFallbackGroup(chat: ChatIdentity): void {
     return;
   }
 
-  const displayId = logFullGroupId ? chat.id : maskWhatsAppGroupId(chat.id);
+  const displayId = formatWhatsAppIdForLog(chat.id);
   console.log(`[whatsappBot] Group detected: name="${chat.name}", id="${displayId}"`);
 
   if (!logFullGroupId) {
@@ -235,6 +236,83 @@ function logIgnoredUnmentionedMessage(chatIdentity: ChatIdentity): void {
   );
 }
 
+function formatWhatsAppIdForLog(id: string): string {
+  return logFullGroupId ? id : maskWhatsAppGroupId(id);
+}
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  return String(error);
+}
+
+function getMessagePreview(message: WhatsAppMessage): string {
+  const normalizedBody = message.body.replace(/\s+/g, " ").trim();
+  if (normalizedBody.length <= 120) {
+    return normalizedBody;
+  }
+
+  return `${normalizedBody.slice(0, 117)}...`;
+}
+
+async function getAuthorizedMessageContext(
+  message: WhatsAppMessage,
+): Promise<{ chat: WhatsAppChat | null; chatIdentity: ChatIdentity } | null> {
+  if (groupAccessConfig.allowedGroupId) {
+    const chatIdentity: ChatIdentity = {
+      isGroup: message.from.endsWith("@g.us"),
+      id: message.from,
+      name: "(group name lookup skipped; WHATSAPP_ALLOWED_GROUP_ID is configured)",
+    };
+
+    if (!isAllowedWhatsAppGroup(chatIdentity, groupAccessConfig)) {
+      console.log(
+        `[whatsappBot] Ignored message outside allowed group. isGroup=${chatIdentity.isGroup}, chatId=${maskWhatsAppGroupId(chatIdentity.id)}, chatName="${chatIdentity.isGroup ? chatIdentity.name : "private chat"}"`,
+      );
+      return null;
+    }
+
+    return { chat: null, chatIdentity };
+  }
+
+  let chat: WhatsAppChat;
+  try {
+    chat = await message.getChat();
+  } catch (error) {
+    console.error(
+      [
+        "[whatsappBot] Could not load WhatsApp chat for an incoming message.",
+        `from=${formatWhatsAppIdForLog(message.from)}`,
+        `id=${message.id?._serialized ?? "(unknown)"}`,
+        `type=${message.type}`,
+        `body="${getMessagePreview(message)}"`,
+        `error=${describeError(error)}`,
+      ].join(" "),
+    );
+    console.error(
+      "[whatsappBot] This usually comes from WhatsApp Web/Puppeteer chat lookup. Configure WHATSAPP_ALLOWED_GROUP_ID to avoid the fragile group-name lookup path, then restart the bot.",
+    );
+    return null;
+  }
+
+  const chatIdentity: ChatIdentity = {
+    isGroup: chat.isGroup,
+    id: chat.id._serialized,
+    name: chat.name,
+  };
+
+  if (!isAllowedWhatsAppGroup(chatIdentity, groupAccessConfig)) {
+    console.log(
+      `[whatsappBot] Ignored message outside allowed group. isGroup=${chatIdentity.isGroup}, chatId=${maskWhatsAppGroupId(chatIdentity.id)}, chatName="${chatIdentity.isGroup ? chatIdentity.name : "private chat"}"`,
+    );
+    return null;
+  }
+
+  return { chat, chatIdentity };
+}
+
 console.log("[whatsappBot] Starting WhatsApp QR demo bot.");
 console.log(`[whatsappBot] LocalAuth clientId: ${whatsAppClientId}`);
 console.log(`[whatsappBot] Mention display name: @${botMentionDisplayName}`);
@@ -288,113 +366,119 @@ client.on("message", async (message) => {
     return;
   }
 
-  const chat = await message.getChat();
-  const chatIdentity: ChatIdentity = {
-    isGroup: chat.isGroup,
-    id: chat.id._serialized,
-    name: chat.name,
-  };
+  try {
+    const messageContext = await getAuthorizedMessageContext(message);
+    if (!messageContext) {
+      return;
+    }
 
-  if (!isAllowedWhatsAppGroup(chatIdentity, groupAccessConfig)) {
-    console.log(
-      `[whatsappBot] Ignored message outside allowed group. isGroup=${chatIdentity.isGroup}, chatId=${maskWhatsAppGroupId(chatIdentity.id)}, chatName="${chatIdentity.isGroup ? chatIdentity.name : "private chat"}"`,
-    );
-    return;
-  }
+    const { chatIdentity } = messageContext;
 
-  logApprovedFallbackGroup(chatIdentity);
+    logApprovedFallbackGroup(chatIdentity);
 
-  if (!(await isMessageMentioningBot(message))) {
-    logIgnoredUnmentionedMessage(chatIdentity);
-    return;
-  }
+    if (!(await isMessageMentioningBot(message))) {
+      logIgnoredUnmentionedMessage(chatIdentity);
+      return;
+    }
 
-  const text = message.body.trim();
-  const commandText = stripBotMentionDisplayName(text);
-  const normalizedText = normalizeBotMessageText(commandText);
+    const text = message.body.trim();
+    const commandText = stripBotMentionDisplayName(text);
+    const normalizedText = normalizeBotMessageText(commandText);
 
-  console.log("[whatsappBot] Authorized mentioned message received.");
+    console.log("[whatsappBot] Authorized mentioned message received.");
 
-  if (normalizedText.toLowerCase() === "ping") {
-    await message.reply(
-      `Production Planner WhatsApp demo bot is connected. ${productionPlanCommandHelp}`,
-    );
-    return;
-  }
-
-  const socialReply = getSocialReply(commandText);
-  if (socialReply) {
-    await message.reply(socialReply);
-    return;
-  }
-
-  const mathReply = getSimpleMathReply(commandText);
-  if (mathReply) {
-    await message.reply(mathReply);
-    return;
-  }
-
-  const command = parseProductionPlanCommand(commandText);
-  if (command) {
-    const { projectDescription } = command;
-
-    if (!projectDescription) {
+    if (normalizedText.toLowerCase() === "ping") {
       await message.reply(
-        `Please include your project description after the command. Example:\n\n${productionPlanCommandExample}`,
+        `Production Planner WhatsApp demo bot is connected. ${productionPlanCommandHelp}`,
       );
       return;
     }
 
-    await message.reply(
-      "Got it. I'm generating your production plan now...",
-    );
-
-    try {
-      const result = await generateProductionPlan({
-        whatsappUserId: message.from,
-        workbookMode: "dynamic",
-        projectDescription,
-      });
-
-      if (!result.success) {
-        await message.reply(result.whatsappSummary);
-        return;
-      }
-
-      const dateLine = result.dateInterpretations?.length
-        ? `${result.dateInterpretations.join("\n")}\n\n`
-        : "";
-
-      await message.reply(`${dateLine}${result.whatsappSummary}\n\nI'm sending the Excel workbook as a document file now.`);
-
-      if (!result.workbookPath) {
-        await message.reply("The production plan was generated, but I could not find the Excel workbook file to attach.");
-        return;
-      }
-
-      const workbookMedia = MessageMedia.fromFilePath(result.workbookPath);
-      workbookMedia.filename = productionWorkbookFilename;
-      workbookMedia.mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-      await chat.sendMessage(workbookMedia, {
-        caption: productionWorkbookFilename,
-        quotedMessageId: message.id._serialized,
-        sendMediaAsDocument: true,
-        waitUntilMsgSent: true,
-      });
-      return;
-    } catch (error) {
-      console.error("[whatsappBot] Planner generation failed:", error);
-      await message.reply(
-        "I understood your request, but I could not generate a valid production plan. Please try a clearer duration, total hours, team size, or date such as 2026-07-13 or next Monday.",
-      );
+    const socialReply = getSocialReply(commandText);
+    if (socialReply) {
+      await message.reply(socialReply);
       return;
     }
-  }
 
-  await message.reply(
-    "Demo bot received your message. Send 'ping', ask 'who are you?', try simple math like '12 x 4', or start a production plan request with 'plan:', 'production plan:', or 'create a production plan'.",
-  );
+    const mathReply = getSimpleMathReply(commandText);
+    if (mathReply) {
+      await message.reply(mathReply);
+      return;
+    }
+
+    const command = parseProductionPlanCommand(commandText);
+    if (command) {
+      const { projectDescription } = command;
+
+      if (!projectDescription) {
+        await message.reply(
+          `Please include your project description after the command. Example:\n\n${productionPlanCommandExample}`,
+        );
+        return;
+      }
+
+      await message.reply(
+        "Got it. I'm generating your production plan now...",
+      );
+
+      try {
+        const result = await generateProductionPlan({
+          whatsappUserId: message.from,
+          workbookMode: "dynamic",
+          projectDescription,
+        });
+
+        if (!result.success) {
+          await message.reply(result.whatsappSummary);
+          return;
+        }
+
+        const dateLine = result.dateInterpretations?.length
+          ? `${result.dateInterpretations.join("\n")}\n\n`
+          : "";
+
+        await message.reply(`${dateLine}${result.whatsappSummary}\n\nI'm sending the Excel workbook as a document file now.`);
+
+        if (!result.workbookPath) {
+          await message.reply("The production plan was generated, but I could not find the Excel workbook file to attach.");
+          return;
+        }
+
+        const workbookMedia = MessageMedia.fromFilePath(result.workbookPath);
+        workbookMedia.filename = productionWorkbookFilename;
+        workbookMedia.mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+        await client.sendMessage(message.from, workbookMedia, {
+          caption: productionWorkbookFilename,
+          quotedMessageId: message.id._serialized,
+          sendMediaAsDocument: true,
+          waitUntilMsgSent: true,
+        });
+        return;
+      } catch (error) {
+        console.error("[whatsappBot] Planner generation failed:", error);
+        await message.reply(
+          "I understood your request, but I could not generate a valid production plan. Please try a clearer duration, total hours, team size, or date such as 2026-07-13 or next Monday.",
+        );
+        return;
+      }
+    }
+
+    await message.reply(
+      "Demo bot received your message. Send 'ping', ask 'who are you?', try simple math like '12 x 4', or start a production plan request with 'plan:', 'production plan:', or 'create a production plan'.",
+    );
+  } catch (error) {
+    console.error(
+      [
+        "[whatsappBot] Message handler failed.",
+        `from=${formatWhatsAppIdForLog(message.from)}`,
+        `id=${message.id?._serialized ?? "(unknown)"}`,
+        `type=${message.type}`,
+        `body="${getMessagePreview(message)}"`,
+        `error=${describeError(error)}`,
+      ].join(" "),
+    );
+  }
 });
 
 client.initialize().catch((error: unknown) => {
