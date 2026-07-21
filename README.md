@@ -87,7 +87,7 @@ Node does not automatically load `.env` in every runtime. Either export the vari
 | `WHATSAPP_BOT_MENTION_ID` | none | Optional comma-separated mention IDs for the bot |
 | `WHATSAPP_LOG_FULL_GROUP_ID` | `1` in example | Prints full group IDs during first-run setup |
 | `WHATSAPP_CHROME_PATH` | auto-detected | Optional path to Chrome when it is installed somewhere unusual |
-| `WHATSAPP_HEADLESS` | `1` | Keeps Chrome hidden during WhatsApp bot runs; set to `0` only for QR/login troubleshooting |
+| `WHATSAPP_HEADLESS` | `1` | Keeps Chrome hidden during WhatsApp bot runs; set to `0` for QR/login troubleshooting |
 | `WHATSAPP_AUTH_TIMEOUT_MS` | `120000` | Startup wait time for WhatsApp Web internals |
 | `WHATSAPP_USER_AGENT` | modern Windows Chrome | Optional override for WhatsApp Web browser user agent |
 

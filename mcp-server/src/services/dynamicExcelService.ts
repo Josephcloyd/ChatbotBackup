@@ -97,6 +97,8 @@ export class DynamicExcelService {
     workbook.calcProperties.fullCalcOnLoad = true;
 
     const { plan, settings, phases, risks } = result;
+    const isQuantityMode = result.unitLabel !== undefined;
+    const targetColHeader = isQuantityMode ? `Target ${result.unitLabel}` : "Target Total Hours";
     const productionSheet = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
     if (!productionSheet) throw new Error("Dynamic plan is missing the Production Plan sheet");
     const planRows = productionSheet.rows;
@@ -181,8 +183,11 @@ export class DynamicExcelService {
     planRows.forEach((source, index) => {
       const excelRow = index + 2;
       const date = new Date(`${String(source.Date)}T00:00:00Z`);
-      const targetValue = Number(source[primaryTargetColumn]);
-      const targetHours = Number(source["Target Hours"] ?? targetValue);
+      // In quantity mode col F = Target {Unit}; in hour mode col F = Target Total Hours.
+      const targetColValue = Number(source[targetColHeader] ?? source[primaryTargetColumn]);
+      const targetHours = isQuantityMode
+        ? Number(source["Target Hours"] ?? targetColValue)   // capacity reference column K
+        : targetColValue;                                    // in hour mode F and K are the same
       const teamSize = Number(source["Target Active Annotators"]);
       const row = production.addRow([
         index + 1,
@@ -190,18 +195,19 @@ export class DynamicExcelService {
         { formula: `TEXT(B${excelRow},"mmm yyyy")`, result: String(source.Month) },
         { formula: `TEXT(B${excelRow},"ddd")`, result: String(source.Day) },
         teamSize,
-        targetValue,
-        { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetValue / teamSize).toFixed(2)) },
-        null,
-        null,
+        targetColValue,   // col F: Target {Unit} or Target Total Hours
+        { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetColValue / Math.max(teamSize, 1)).toFixed(isQuantityMode ? 0 : 2)) },
+        null,             // col H: Actual Active Annotators (user-filled)
+        null,             // col I: Actual {Unit} or Actual Total Hours (user-filled)
         { formula: `IF(OR(H${excelRow}="",I${excelRow}=""),"",I${excelRow}/H${excelRow})`, result: "" },
-        targetHours,
+        targetHours,      // col K: Target Hours (capacity reference) — written as value, not formula in quantity mode
         { formula: `IF(I${excelRow}="","",I${excelRow})`, result: "" },
         { formula: `IF(I${excelRow}="","",I${excelRow}-F${excelRow})`, result: "" },
         { formula: `IF(I${excelRow}="","",IFERROR(I${excelRow}/F${excelRow},""))`, result: "" },
         { formula: `IF(I${excelRow}="","Not Started",IF(I${excelRow}>=F${excelRow},"Complete","In Progress"))`, result: "Not Started" },
         safeCellValue(source.Notes ?? ""),
       ]);
+
       row.height = 20;
       for (const column of [5, 6, 7, 11]) {
         row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleGreen } };
@@ -213,7 +219,13 @@ export class DynamicExcelService {
     sectionHeader(production.getRow(1));
     production.autoFilter = { from: "A1", to: "P1" };
     production.getColumn(2).numFmt = "yyyy-mm-dd";
-    for (const column of [6, 7, 9, 10, 11, 12, 13]) production.getColumn(column).numFmt = "#,##0.00";
+    if (isQuantityMode) {
+      // Quantity columns (F, G, I, J): integer format; hour reference (K, L): float
+      for (const column of [6, 7, 9, 10]) production.getColumn(column).numFmt = "#,##0";
+      for (const column of [11, 12, 13]) production.getColumn(column).numFmt = "#,##0.00";
+    } else {
+      for (const column of [6, 7, 9, 10, 11, 12, 13]) production.getColumn(column).numFmt = "#,##0.00";
+    }
     production.getColumn(14).numFmt = "0.0%";
     for (let row = 2; row <= lastPlanRow; row += 1) {
       production.getCell(row, 8).dataValidation = {
