@@ -56,6 +56,8 @@ create table if not exists public.user_roles (
   constraint user_roles_role_check check (role in ('user', 'admin'))
 );
 
+alter table public.user_roles add column if not exists active boolean not null default true;
+
 create table if not exists public.plan_files (
   id uuid primary key default gen_random_uuid(),
   plan_id uuid not null references public.production_plans(id) on delete cascade,

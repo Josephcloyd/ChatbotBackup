@@ -52,17 +52,40 @@ async function syncUserRole(userId: string, role: "admin" | "operator", active: 
   if (!config.supabaseConfigured) return;
   try {
     const supabase = getClient();
-    const { error } = await supabase
-      .from("user_roles")
-      .upsert({
-        user_id: userId,
-        role: frontendRoleToDatabase(role),
-        active,
-        updated_at: new Date().toISOString(),
-      });
-    if (error) throw error;
-  } catch (error) {
-    console.error("[userService] Failed to sync public.user_roles:", error instanceof Error ? error.message : String(error));
+    
+    // Default payload using user_id (standard migration schema)
+    let payload: Record<string, unknown> = {
+      user_id: userId,
+      role: frontendRoleToDatabase(role),
+      active,
+      is_active: active,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error } = await supabase.from("user_roles").upsert(payload);
+
+    // If table uses 'id' instead of 'user_id'
+    if (error && error.message?.includes("user_id")) {
+      delete payload.user_id;
+      payload.id = userId;
+      const idTry = await supabase.from("user_roles").upsert(payload);
+      error = idTry.error;
+    }
+
+    // If 'is_active' or 'active' columns are missing in schema cache
+    if (error && (error.message?.includes("is_active") || error.message?.includes("'active'"))) {
+      if (error.message.includes("is_active")) delete payload.is_active;
+      if (error.message.includes("'active'")) delete payload.active;
+      const retry = await supabase.from("user_roles").upsert(payload);
+      error = retry.error;
+    }
+
+    if (error) {
+      console.error("[userService] Failed to sync public.user_roles:", error.message || JSON.stringify(error));
+    }
+  } catch (error: any) {
+    const message = error?.message || (typeof error === "object" ? JSON.stringify(error) : String(error));
+    console.error("[userService] Failed to sync public.user_roles:", message);
   }
 }
 
