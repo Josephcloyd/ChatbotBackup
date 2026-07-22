@@ -9,29 +9,32 @@ import { PlanTable } from "../components/organisms/PlanTable";
 import { PlanHistory } from "../components/organisms/PlanHistory";
 import { AdminPlansPanel } from "../components/organisms/AdminPlansPanel";
 import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel";
-import { EditPlanModal, DeleteOperatorModal } from "../components/organisms/AdminModals";
+import { AdminPlanDetailsPanel } from "../components/organisms/AdminPlanDetailsPanel";
+import { AdminRunsPanel } from "../components/organisms/AdminRunsPanel";
+import {
+  BulkDeletePlansModal,
+  DeleteOperatorModal,
+  DeletePlanModal,
+  EditPlanModal,
+  type EditPlanFormValues,
+} from "../components/organisms/AdminModals";
 import { Icon } from "../components/atoms/Icon";
 import { ThemeToggle } from "../components/atoms/ThemeToggle";
 import { DashboardSkeleton } from "../components/organisms/DashboardSkeleton";
-
-type CellValue = string | number | boolean | null;
-type PlanRow = Record<string, CellValue>;
-
-interface ProductionPlan {
-  project: {
-    projectName: string;
-    projectDescription: string;
-    client: string;
-    startDate: string;
-    deadline: string;
-    assumptions: string[];
-  };
-  workbook: { sheets: Array<{ sheetName: string; rows: PlanRow[] }> };
-  summary: string;
-}
+import type {
+  CellValue,
+  FrontendRole,
+  HistoryRecord,
+  HistoryResponse,
+  OperatorAccount,
+  PlanFileRecord,
+  PlanGenerationRun,
+  ProductionPlan,
+} from "../lib/adminTypes";
 
 interface GenerationResult {
   success: boolean;
+  planId?: string;
   plan?: ProductionPlan;
   downloadUrl?: string;
   filename?: string;
@@ -39,31 +42,7 @@ interface GenerationResult {
   whatsappSummary?: string;
 }
 
-interface HistoryRecord {
-  id: string;
-  whatsapp_user_id: string;
-  project_title: string;
-  summary: string;
-  total_hours_estimate: number;
-  recommended_team_size: number;
-  created_at: string;
-  raw_plan: ProductionPlan;
-}
-
-interface HistoryResponse {
-  configured: boolean;
-  plans: HistoryRecord[];
-  error?: string;
-}
-
-interface OperatorAccount {
-  id: string;
-  username: string;
-  role: "admin" | "operator";
-  createdAt: string;
-}
-
-const starterPrompt = "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
+const PLAN_OVERVIEW_LIMIT = 15;
 
 function numberValue(value: CellValue | undefined): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -80,31 +59,46 @@ export default function Dashboard() {
   const router = useRouter();
 
   // Session & UI States
-  const [user, setUser] = useState<{ username: string; role: "admin" | "operator" } | null>(null);
-  const [adminTab, setAdminTab] = useState<"plans" | "operators">("plans");
+  const [user, setUser] = useState<{ id?: string; username: string; role: FrontendRole } | null>(null);
+  const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
 
   // Core Data States
-  const [prompt, setPrompt] = useState(starterPrompt);
+  const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"dynamic" | "template">("dynamic");
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [history, setHistory] = useState<HistoryResponse>({ configured: false, plans: [] });
   const [operators, setOperators] = useState<OperatorAccount[]>([]);
+  const [planFiles, setPlanFiles] = useState<PlanFileRecord[]>([]);
+  const [planFilesLoading, setPlanFilesLoading] = useState(false);
+  const [planFilesError, setPlanFilesError] = useState("");
+  const [runs, setRuns] = useState<PlanGenerationRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState("");
   const [plannerOnline, setPlannerOnline] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Admin Modal States
-  const [editPlanId, setEditPlanId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editSummary, setEditSummary] = useState("");
+  const [editPlan, setEditPlan] = useState<HistoryRecord | null>(null);
+  const [editValues, setEditValues] = useState<EditPlanFormValues | null>(null);
+  const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditPlanFormValues, string>>>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMessage, setEditMessage] = useState("");
 
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<"admin" | "operator">("operator");
+  const [newRole, setNewRole] = useState<FrontendRole>("operator");
 
   const [deleteOpUser, setDeleteOpUser] = useState<OperatorAccount | null>(null);
   const [reassignTarget, setReassignTarget] = useState("");
+  const [deletePlan, setDeletePlan] = useState<HistoryRecord | null>(null);
+  const [deletePlanSaving, setDeletePlanSaving] = useState(false);
+  const [deletePlanError, setDeletePlanError] = useState("");
+  const [bulkDeletePlans, setBulkDeletePlans] = useState<HistoryRecord[]>([]);
+  const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState("");
 
   // 1. Fetch user authentication profile on mount
   useEffect(() => {
@@ -124,8 +118,9 @@ export default function Dashboard() {
   // 2. Fetch data (Plans & Operators)
   const fetchPlans = useCallback(() => {
     if (!user) return;
-    const filterQuery = user.role === "operator" ? `?userId=${encodeURIComponent(user.username)}` : "";
-    fetch(`/api/planner/plans${filterQuery}`, { cache: "no-store" })
+    const params = new URLSearchParams({ limit: String(PLAN_OVERVIEW_LIMIT) });
+    if (user.role === "operator") params.set("userId", user.username);
+    fetch(`/api/planner/plans?${params.toString()}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data: HistoryResponse) => {
         setHistory(data);
@@ -146,6 +141,44 @@ export default function Dashboard() {
       .catch(() => setOperators([]));
   }, [user]);
 
+  const fetchPlanFiles = useCallback((planId: string | null) => {
+    if (!planId || user?.role !== "admin") {
+      setPlanFiles([]);
+      return;
+    }
+    setPlanFilesLoading(true);
+    setPlanFilesError("");
+    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/files`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error ?? "Failed to load workbook files");
+        setPlanFiles(data.files ?? []);
+      })
+      .catch((caught) => {
+        setPlanFiles([]);
+        setPlanFilesError(caught instanceof Error ? caught.message : "Failed to load workbook files");
+      })
+      .finally(() => setPlanFilesLoading(false));
+  }, [user]);
+
+  const fetchRuns = useCallback((filters: { status?: string; modelName?: string; date?: string; planId?: string } = {}) => {
+    if (user?.role !== "admin") return;
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    setRunsLoading(true);
+    setRunsError("");
+    fetch(`/api/planner/runs?${params.toString()}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error ?? "Failed to load AI runs");
+        setRuns(data.runs ?? []);
+      })
+      .catch((caught) => setRunsError(caught instanceof Error ? caught.message : "Failed to load AI runs"))
+      .finally(() => setRunsLoading(false));
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -157,10 +190,30 @@ export default function Dashboard() {
     checkHealth();
     fetchPlans();
     fetchOperators();
+    const adminDataTimer = window.setTimeout(() => {
+      fetchRuns();
+    }, 0);
 
     const timer = window.setInterval(checkHealth, 15_000);
-    return () => window.clearInterval(timer);
-  }, [user, fetchPlans, fetchOperators]);
+    return () => {
+      window.clearTimeout(adminDataTimer);
+      window.clearInterval(timer);
+    };
+  }, [user, fetchPlans, fetchOperators, fetchRuns]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => fetchPlanFiles(activePlanId), 0);
+    return () => window.clearTimeout(timer);
+  }, [activePlanId, fetchPlanFiles]);
+
+  useEffect(() => {
+    if (!planDetailsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPlanDetailsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [planDetailsOpen]);
 
   // Dynamic values
   const plan = useMemo(() => {
@@ -219,6 +272,7 @@ export default function Dashboard() {
   }, [rows, plan]);
 
   const maxMonth = Math.max(...metrics.monthly.map((item) => item.value), 1);
+  const activePlanRecord = activePlanId ? history.plans.find((item) => item.id === activePlanId) : undefined;
 
   // User actions
   async function logout() {
@@ -241,6 +295,8 @@ export default function Dashboard() {
       const data = (await response.json()) as GenerationResult;
       if (!response.ok || !data.success) throw new Error(data.error ?? data.whatsappSummary ?? "Plan generation failed");
       setResult(data);
+      if (data.planId) setActivePlanId(data.planId);
+      setPlanDetailsOpen(false);
       fetchPlans();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
@@ -249,34 +305,120 @@ export default function Dashboard() {
     }
   }
 
-  async function handleDeletePlan(planId: string) {
-    if (!confirm("Are you sure you want to delete this plan?")) return;
+  function buildEditValues(planRecord: HistoryRecord): EditPlanFormValues {
+    return {
+      project_title: planRecord.project_title ?? "",
+      summary: planRecord.summary ?? "",
+      planning_start_date: planRecord.planning_start_date ?? "",
+      planning_end_date: planRecord.planning_end_date ?? "",
+      actual_start_date: planRecord.actual_start_date ?? "",
+      actual_end_date: planRecord.actual_end_date ?? "",
+      actual_hours: planRecord.actual_hours === null || planRecord.actual_hours === undefined ? "" : String(planRecord.actual_hours),
+      requested_team_size: planRecord.requested_team_size === null || planRecord.requested_team_size === undefined ? "" : String(planRecord.requested_team_size),
+    };
+  }
+
+  function validateEdit(values: EditPlanFormValues): Partial<Record<keyof EditPlanFormValues, string>> {
+    const nextErrors: Partial<Record<keyof EditPlanFormValues, string>> = {};
+    if (!values.project_title.trim()) nextErrors.project_title = "Project title is required.";
+    if (!values.summary.trim()) nextErrors.summary = "Summary is required.";
+    for (const field of ["actual_hours", "requested_team_size"] as const) {
+      if (values[field] !== "" && Number(values[field]) < 0) nextErrors[field] = "Value cannot be negative.";
+    }
+    if (values.planning_start_date && values.planning_end_date && values.planning_end_date < values.planning_start_date) {
+      nextErrors.planning_end_date = "End date cannot be earlier than start date.";
+    }
+    if (values.actual_start_date && values.actual_end_date && values.actual_end_date < values.actual_start_date) {
+      nextErrors.actual_end_date = "End date cannot be earlier than start date.";
+    }
+    return nextErrors;
+  }
+
+  function editPayload(values: EditPlanFormValues) {
+    const nullableDate = (value: string) => value || null;
+    const nullableNumber = (value: string) => value === "" ? null : Number(value);
+    return {
+      project_title: values.project_title.trim(),
+      summary: values.summary.trim(),
+      planning_start_date: nullableDate(values.planning_start_date),
+      planning_end_date: nullableDate(values.planning_end_date),
+      actual_start_date: nullableDate(values.actual_start_date),
+      actual_end_date: nullableDate(values.actual_end_date),
+      actual_hours: nullableNumber(values.actual_hours),
+      requested_team_size: nullableNumber(values.requested_team_size),
+    };
+  }
+
+  async function confirmDeletePlan() {
+    if (!deletePlan) return;
+    setDeletePlanSaving(true);
+    setDeletePlanError("");
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(planId)}`, { method: "DELETE" });
+      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete plan");
-      if (activePlanId === planId) setActivePlanId(null);
+      if (activePlanId === deletePlan.id) {
+        setActivePlanId(null);
+        setPlanDetailsOpen(false);
+      }
+      setDeletePlan(null);
       fetchPlans();
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error deleting plan");
+      setDeletePlanError(caught instanceof Error ? caught.message : "Error deleting plan");
+    } finally {
+      setDeletePlanSaving(false);
+    }
+  }
+
+  async function confirmBulkDeletePlans() {
+    if (bulkDeletePlans.length === 0) return;
+    setBulkDeleteSaving(true);
+    setBulkDeleteError("");
+    try {
+      const deletedIds = new Set<string>();
+      for (const planRecord of bulkDeletePlans) {
+        const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(planRecord.id)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error ?? `Failed to delete ${planRecord.project_title}`);
+        deletedIds.add(planRecord.id);
+      }
+      if (activePlanId && deletedIds.has(activePlanId)) {
+        setActivePlanId(null);
+        setPlanDetailsOpen(false);
+      }
+      setBulkDeletePlans([]);
+      fetchPlans();
+    } catch (caught) {
+      setBulkDeleteError(caught instanceof Error ? caught.message : "Error deleting selected plans");
+    } finally {
+      setBulkDeleteSaving(false);
     }
   }
 
   async function handleUpdatePlan(e: React.FormEvent) {
     e.preventDefault();
-    if (!editPlanId) return;
+    if (!editPlan || !editValues) return;
+    const nextErrors = validateEdit(editValues);
+    setEditErrors(nextErrors);
+    setEditMessage("");
+    if (Object.keys(nextErrors).length > 0) return;
+    setEditSaving(true);
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlanId)}`, {
+      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ project_title: editTitle, summary: editSummary }),
+        body: JSON.stringify(editPayload(editValues)),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan");
-      setEditPlanId(null);
+      setEditMessage("Saved updates successfully.");
       fetchPlans();
+      if (activePlanId === editPlan.id) setActivePlanId(editPlan.id);
+      window.setTimeout(() => setEditPlan(null), 700);
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error updating plan");
+      setEditMessage(caught instanceof Error ? caught.message : "Error updating plan");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -300,8 +442,32 @@ export default function Dashboard() {
     }
   }
 
+  async function handleUpdateOperator(op: OperatorAccount, updates: { role?: FrontendRole; active?: boolean }) {
+    if (!user) return;
+    if (op.username === user.username || op.id === user.id) {
+      alert("You cannot change access for your own active admin account.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/planner/operators?id=${encodeURIComponent(op.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update user");
+      fetchOperators();
+    } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Error updating user");
+    }
+  }
+
   async function handleDeleteOperator() {
     if (!deleteOpUser) return;
+    if (Number(deleteOpUser.planCount ?? 0) > 0 && !reassignTarget) {
+      alert("Reassign this user's plans before deleting the account.");
+      return;
+    }
     try {
       if (reassignTarget) {
         const reassignRes = await fetch("/api/planner/operators/reassign", {
@@ -323,6 +489,20 @@ export default function Dashboard() {
       fetchPlans();
     } catch (caught) {
       alert(caught instanceof Error ? caught.message : "Error deleting user");
+    }
+  }
+
+  async function handleDownloadPlanFile(file: PlanFileRecord) {
+    if (!activePlanId) return;
+    try {
+      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/files/${encodeURIComponent(file.id)}/download`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create download link");
+      window.location.href = data.signedUrl;
+    } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Error downloading workbook");
     }
   }
 
@@ -475,41 +655,103 @@ export default function Dashboard() {
                     setResult(null);
                     setActivePlanId(id);
                   }}
-                  onDeletePlan={handleDeletePlan}
-                  onEditPlan={(id, title, summary) => {
-                    setEditPlanId(id);
-                    setEditTitle(title);
-                    setEditSummary(summary);
+                  onViewPlan={(id) => {
+                    setResult(null);
+                    setActivePlanId(id);
+                    setPlanDetailsOpen(true);
+                  }}
+                  onDeletePlan={(planRecord) => {
+                    setDeletePlan(planRecord);
+                    setDeletePlanError("");
+                  }}
+                  onDeleteSelectedPlans={(planRecords) => {
+                    setBulkDeletePlans(planRecords);
+                    setBulkDeleteError("");
+                  }}
+                  onEditPlan={(planRecord) => {
+                    setEditPlan(planRecord);
+                    setEditValues(buildEditValues(planRecord));
+                    setEditErrors({});
+                    setEditMessage("");
                   }}
                 />
 
-                {plan && (
-                  <div className="mt-8 border-t border-line pt-6">
-                    <h4 className="text-primary mb-2 font-semibold">
-                      Schedules Preview: {plan.project.projectName}
-                    </h4>
-                    <p className="text-muted text-sm mb-4 leading-relaxed">{plan.summary}</p>
-                    <PlanTable rows={rows} metrics={metrics} />
+                {planDetailsOpen && activePlanRecord && (
+                  <div className="modal-overlay" role="presentation">
+                    <div className="modal-content plan-view-modal" role="dialog" aria-modal="true" aria-labelledby="plan-view-title">
+                      <div className="modal-header plan-view-header">
+                        <div>
+                          <span className="eyebrow">PLAN PREVIEW</span>
+                          <h3 id="plan-view-title" className="modal-title">{activePlanRecord.project_title}</h3>
+                          <div className="plan-view-meta" aria-label="Plan metadata">
+                            <span className={`compact-badge status-${activePlanRecord.status ?? "generated"}`}>
+                              {(activePlanRecord.status ?? "generated").replace("_", " ")}
+                            </span>
+                            <span>{activePlanRecord.whatsapp_user_id}</span>
+                            <span>{new Date(activePlanRecord.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="icon-button modal-close-button"
+                          type="button"
+                          onClick={() => setPlanDetailsOpen(false)}
+                          aria-label="Close plan preview"
+                        >
+                          <Icon name="x" />
+                        </button>
+                      </div>
+                      <AdminPlanDetailsPanel
+                        plan={activePlanRecord}
+                        rows={rows}
+                        metrics={metrics}
+                        files={planFiles}
+                        filesLoading={planFilesLoading}
+                        filesError={planFilesError}
+                        onDownloadFile={handleDownloadPlanFile}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {editPlanId && (
+                {editPlan && editValues && (
                   <EditPlanModal
-                    editTitle={editTitle}
-                    setEditTitle={setEditTitle}
-                    editSummary={editSummary}
-                    setEditSummary={setEditSummary}
-                    onClose={() => setEditPlanId(null)}
+                    values={editValues}
+                    errors={editErrors}
+                    message={editMessage}
+                    saving={editSaving}
+                    setValue={(field, value) => setEditValues((current) => current ? { ...current, [field]: value } : current)}
+                    onClose={() => setEditPlan(null)}
                     onSubmit={handleUpdatePlan}
                   />
                 )}
+
+                {deletePlan && (
+                  <DeletePlanModal
+                    plan={deletePlan}
+                    saving={deletePlanSaving}
+                    error={deletePlanError}
+                    onClose={() => setDeletePlan(null)}
+                    onConfirm={confirmDeletePlan}
+                  />
+                )}
+
+                {bulkDeletePlans.length > 0 && (
+                  <BulkDeletePlansModal
+                    plans={bulkDeletePlans}
+                    saving={bulkDeleteSaving}
+                    error={bulkDeleteError}
+                    onClose={() => setBulkDeletePlans([])}
+                    onConfirm={confirmBulkDeletePlans}
+                  />
+                )}
               </>
-            ) : (
+            ) : adminTab === "operators" ? (
               <>
                 <AdminOperatorsPanel
                   operators={operators}
                   currentUser={user}
                   onDeleteOperator={(op) => setDeleteOpUser(op)}
+                  onUpdateOperator={handleUpdateOperator}
                   newUsername={newUsername}
                   setNewUsername={setNewUsername}
                   newPassword={newPassword}
@@ -532,7 +774,16 @@ export default function Dashboard() {
                     onConfirm={handleDeleteOperator}
                   />
                 )}
+
               </>
+            ) : (
+              <AdminRunsPanel
+                runs={runs}
+                plans={history.plans}
+                loading={runsLoading}
+                error={runsError}
+                onRefresh={fetchRuns}
+              />
             )}
           </>
         )}
