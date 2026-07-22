@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ProductionPlan } from "../src/types/productionPlan.js";
-import {
-  extractRequestedConstraints,
-  PlanRulesService,
-} from "../src/services/planRulesService.js";
+import { extractRequestedConstraints } from "../src/services/planningConstraintsService.js";
+import { PlanRulesService } from "../src/services/planRulesService.js";
 
 const columns = [
   "Date",
@@ -91,16 +89,14 @@ test("rejects stale dates and fabricated actual values", () => {
   );
 });
 
-test("rejects incorrect duration and target-hour totals", () => {
+test("auto-expands sample rows and rejects incorrect target-hour totals", () => {
   const rules = new PlanRulesService();
-  assert.throws(
-    () =>
-      rules.validate(makePlan(), {
-        ...options,
-        input: { projectDescription: "Create a 3-day duration plan with 8 total hours" },
-      }),
-    /requires 3 correctly dated rows; received 2/,
-  );
+  const plan = makePlan();
+  const validated = rules.validate(plan, {
+    ...options,
+    input: { projectDescription: "Create a 3-day duration plan with 8 total hours" },
+  });
+  assert.strictEqual(validated.workbook.sheets[0].rows.length, 3);
   assert.throws(
     () => rules.validate(makePlan({ "Target Total Hours": 3 }), options),
     /targets sum to 7/,

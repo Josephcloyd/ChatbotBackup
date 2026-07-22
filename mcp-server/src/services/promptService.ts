@@ -43,6 +43,7 @@ The workbook template above is the sole source of truth for workbook structure.
 - Preserve the provided column order exactly.
 - Each row key must exactly match a column header for that row's sheet.
 - Include every provided column in the sheet's columns array and in every row object.
+- Provide 3 to 7 representative sample rows in the "rows" array. Do not generate every single daily row; the engine will automatically expand the full production schedule.
 - If a value is unknown or not applicable, use an empty string.
 - If a template sheet has no columns, return that sheet with empty columns and rows.
 - Return only the template sheet or sheets relevant to the requested production plan.
@@ -52,7 +53,10 @@ The workbook template above is the sole source of truth for workbook structure.
 - For the Production Plan sheet, create one row per calendar day when the request specifies a duration in days.
 - When the request specifies total hours, the sum of all "Target Total Hours" values must equal that requested total exactly.
 - This is a plan, not a completed report. Leave all future "Actual" fields, variance fields, and completion-rate fields as empty strings.
-- Use YYYY-MM-DD for project and row dates. Make the project start date and deadline agree with the first and last planned rows.
+CRITICAL MANDATORY INSTRUCTIONS:
+- Your response MUST be a complete JSON object containing ALL THREE top-level keys: "project", "workbook", and "summary".
+- Do NOT omit "workbook" or "summary".
+- Inside "workbook", include "sheets" array with the sheet object(s) containing exact column names and populated row data for the plan schedule.
 
 Respond with ONLY valid JSON matching this schema:
 {

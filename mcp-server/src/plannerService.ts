@@ -75,7 +75,7 @@ export async function generateProductionPlan(
       };
     }
     const templateDefinition = mode === "template"
-      ? await templateService.loadDefinition()
+      ? await templateService.loadDefinition(input.selectedTemplate)
       : undefined;
     const prompt = mode === "dynamic"
       ? buildDynamicPrompt(input.projectDescription, currentDate)
@@ -108,6 +108,11 @@ export async function generateProductionPlan(
       );
       plan = planRulesService.validate(structurallyValidPlan, { currentDate, input });
       workbookPath = await excelService.writeProductionPlan(plan, templateDefinition!);
+    }
+
+    if (!plan.summary || !plan.summary.trim()) {
+      const scopeDesc = plan.project.totalAssets > 0 ? `${plan.project.totalAssets.toLocaleString()} units` : "production targets";
+      plan.summary = `${plan.project.projectDescription || "Production plan"} for ${plan.project.projectName || "requested project"}. Scheduled from ${plan.project.startDate} to ${plan.project.deadline} covering ${scopeDesc}.`;
     }
 
     console.log("[plannerService] Plan validated successfully:", plan.project.projectName);
