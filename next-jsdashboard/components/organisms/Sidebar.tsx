@@ -6,6 +6,13 @@ import { Icon } from "../atoms/Icon";
 import { Button } from "../atoms/Button";
 import { Textarea } from "../atoms/Input";
 
+export const TEMPLATE_OPTIONS = [
+  { id: "HourBased_Annotation_Production_Plan_Template.xlsx", name: "Hour-Based Annotation Plan" },
+  { id: "CollectionBased_Production_Plan_Template.xlsx", name: "Collection-Based Plan" },
+  { id: "Drumming_Production_Plan_Template.xlsx", name: "Drumming Production Plan" },
+  { id: "StatusBased_Production_Plan_Template.xlsx", name: "Status-Based Plan" },
+];
+
 interface SidebarProps {
   user: { username: string; role: "admin" | "operator" };
   plannerOnline: boolean;
@@ -13,8 +20,11 @@ interface SidebarProps {
   setAdminTab: (tab: "plans" | "operators") => void;
   mode: "dynamic" | "template";
   setMode: (mode: "dynamic" | "template") => void;
+  selectedTemplate: string;
+  setSelectedTemplate: (template: string) => void;
   prompt: string;
   setPrompt: (prompt: string) => void;
+  placeholder?: string;
   loading: boolean;
   error: string;
   generatePlan: () => void;
@@ -27,8 +37,11 @@ export function Sidebar({
   setAdminTab,
   mode,
   setMode,
+  selectedTemplate,
+  setSelectedTemplate,
   prompt,
   setPrompt,
+  placeholder,
   loading,
   error,
   generatePlan,
@@ -71,13 +84,40 @@ export function Sidebar({
             </p>
           </div>
 
+          {mode === "template" && (
+            <div className="panel-section">
+              <label htmlFor="template-select">Select Template</label>
+              <select
+                id="template-select"
+                value={selectedTemplate}
+                onChange={(e) => setSelectedTemplate(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "0.375rem",
+                  border: "1px solid var(--border-color, #cbd5e1)",
+                  backgroundColor: "var(--bg-surface, #ffffff)",
+                  color: "var(--text-color, #0f172a)",
+                  fontSize: "0.875rem",
+                  marginTop: "0.25rem",
+                }}
+              >
+                {TEMPLATE_OPTIONS.map((tmpl) => (
+                  <option key={tmpl.id} value={tmpl.id}>
+                    {tmpl.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="panel-section grow">
             <label htmlFor="prompt">Describe your production plan</label>
             <Textarea
               id="prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Enter prompt..."
+              placeholder={placeholder || "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today."}
             />
             <div className="prompt-meta">
               <span>Natural language</span>
@@ -93,7 +133,7 @@ export function Sidebar({
           <Button
             className="generate-button"
             onClick={generatePlan}
-            disabled={loading || prompt.trim().length < 10}
+            disabled={loading || (prompt.trim().length > 0 && prompt.trim().length < 10)}
             isLoading={loading}
           >
             {!loading && <Icon name="spark" />} {loading ? "Building your plan..." : "Generate plan"}

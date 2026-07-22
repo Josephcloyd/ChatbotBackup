@@ -2,19 +2,21 @@ import React from "react";
 
 interface PlanTableProps {
   rows: Record<string, string | number | boolean | null>[];
-  metrics: {
-    unitLabel: string;
-    targetCol: string;
-    perAnnotCol: string;
+  metrics?: {
+    unitLabel?: string;
+    targetCol?: string;
+    perAnnotCol?: string;
   };
 }
 
-function numberValue(value: string | number | boolean | null | undefined): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+export function PlanTable({ rows }: PlanTableProps) {
+  const columns = React.useMemo(() => {
+    if (!rows || rows.length === 0) return [];
+    return Object.keys(rows[0]).slice(0, 8);
+  }, [rows]);
 
-export function PlanTable({ rows, metrics }: PlanTableProps) {
+  if (!rows || rows.length === 0) return null;
+
   return (
     <section className="schedule-card">
       <div className="card-heading">
@@ -28,25 +30,35 @@ export function PlanTable({ rows, metrics }: PlanTableProps) {
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Day</th>
-              <th>Team</th>
-              <th>Target {metrics.unitLabel}</th>
-              <th>Per person</th>
-              <th>Status</th>
+              {columns.map((col) => (
+                <th key={col}>{col}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.slice(0, 7).map((row, index) => (
-              <tr key={`${String(row.Date)}-${index}`}>
-                <td>{String(row.Date)}</td>
-                <td>{String(row.Day ?? "—")}</td>
-                <td>{String(row["Target Active Annotators"] ?? "—")}</td>
-                <td>{numberValue(row[metrics.targetCol]).toLocaleString()}</td>
-                <td>{numberValue(row[metrics.perAnnotCol]).toLocaleString()}</td>
-                <td>
-                  <span className="status-badge">{String(row.Status ?? "Not Started")}</span>
-                </td>
+              <tr key={`${String(row.Date ?? index)}-${index}`}>
+                {columns.map((col) => {
+                  const rawVal = row[col];
+                  let displayVal = "—";
+                  if (typeof rawVal === "number") {
+                    displayVal = rawVal.toLocaleString();
+                  } else if (rawVal !== null && rawVal !== undefined && rawVal !== "") {
+                    displayVal = String(rawVal);
+                  } else if (/status/i.test(col)) {
+                    displayVal = "Not Started";
+                  }
+
+                  return (
+                    <td key={col}>
+                      {/status/i.test(col) ? (
+                        <span className="status-badge">{displayVal}</span>
+                      ) : (
+                        displayVal
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
