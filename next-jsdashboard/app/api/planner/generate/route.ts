@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
       cache: "no-store",
+      signal: AbortSignal.timeout(600_000),
     });
     const responsePayload = await response.text();
     return new NextResponse(responsePayload, {
@@ -29,9 +30,15 @@ export async function POST(request: Request) {
       headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Planner service unavailable";
+    const userFriendlyError =
+      message === "fetch failed"
+        ? `Cannot connect to MCP Planner server at ${plannerUrl}. Make sure mcp-server is running.`
+        : message;
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Planner service unavailable" },
+      { success: false, error: userFriendlyError },
       { status: 503 },
     );
   }
 }
+

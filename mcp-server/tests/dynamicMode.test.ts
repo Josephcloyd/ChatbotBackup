@@ -199,3 +199,85 @@ test("writes a styled template-free workbook with formulas and all dynamic sheet
     await rm(directory, { recursive: true, force: true });
   }
 });
+test("derives stored hour and team estimates from production targets", () => {
+  const request = "Create a production plan for 3 members with 120 total hours over 3 weeks, weekdays only.";
+  const constraints = extractRequestedConstraints(request);
+  assert.equal(constraints.totalHours, 120);
+  assert.equal(constraints.teamSize, 3);
+  assert.deepEqual(constraints.duration, { value: 3, unit: "weeks" });
+  assert.equal(constraints.weekdaysOnly, true);
+});
+
+test("flexible quantity regex — pass 3 matches unit-then-number phrasing", () => {
+  // "images" appears before the number — needs Pass 3 of the multi-pass extractor
+  const desc = "Target images to be collected is 350000.";
+  const constraints = extractRequestedConstraints(desc);
+  assert.equal(constraints.unitOfMeasure, "images");
+  assert.equal(constraints.totalQuantity, 350000);
+});
+
+test("flexible quantity regex — user production prompt extracts quantity correctly", () => {
+  const desc = "Create a production plan for Image Text collection. The total number images would equal to 350000 images, with a timeframe of 6 months. The start date is April 3, 2026.";
+  const constraints = extractRequestedConstraints(desc, "2026-04-03");
+  // "350000 images" is adjacent — Pass 1 should catch this
+  assert.equal(constraints.unitOfMeasure, "images");
+  assert.equal(constraints.totalQuantity, 350000);
+  assert.deepEqual(constraints.duration, { value: 6, unit: "months" });
+});
+
+test("throughput extraction — parses explicit images per hour from prompt", () => {
+  const desc = "Collect 350000 images over 6 months at 50 images per hour with a team of 2.";
+  const constraints = extractRequestedConstraints(desc);
+  assert.equal(constraints.totalQuantity, 350000);
+  assert.equal(constraints.unitOfMeasure, "images");
+  assert.equal(constraints.throughputRate, 50);
+  assert.equal(constraints.teamSize, 2);
+});
+
+test("throughput-aware plan — uses Target Images columns, sums exactly to totalQuantity, includes throughput assumption", () => {
+  const request = "Create a production plan for 350000 images over 6 months starting 2026-04-03, team of 1.";
+  const imageProposal: DynamicPlanProposal = {
+    projectName: "Image Text Collection",
+    client: "",
+    totalAssets: 350000,
+    planningSettings: {
+      startDate: "2026-04-03",
+      durationValue: 6,
+      durationUnit: "months",
+      weekdaysOnly: true,
+      totalHours: 1040,
+      teamSize: 1,
+      hoursPerDay: 8,
+      throughputRate: 42,
+    },
+    assumptions: ["Image quality is consistent throughout the project."],
+    phases: [
+      { name: "Collection", objective: "Capture target images at planned daily rate." },
+    ],
+    risks: [
+      { risk: "Equipment failure", impact: "Daily quota missed", mitigation: "Maintain backup equipment." },
+    ],
+    summary: "A 6-month image collection plan targeting 350,000 images.",
+  };
+
+  const result = buildDynamicPlan({ projectDescription: request }, imageProposal, "2026-04-03");
+
+  // Column profile should be quantity-based
+  assert.equal(result.unitLabel, "Images");
+  assert.equal(result.totalQuantity, 350000);
+  assert.ok(result.throughputRate !== undefined, "throughputRate should be set");
+  assert.ok(result.hoursPerDay !== undefined, "hoursPerDay should be set");
+
+  const sheet = result.plan.workbook.sheets.find((s) => s.sheetName === "Production Plan")!;
+  assert.ok(sheet.columns.includes("Target Images"), "should have Target Images column");
+  assert.ok(sheet.columns.includes("Target Hours"), "should have Target Hours capacity reference");
+  assert.ok(!sheet.columns.includes("Target Total Hours"), "should NOT have hour-mode column");
+
+  // Sum of Target Images must equal exactly 350000
+  const total = sheet.rows.reduce((sum, row) => sum + Number(row["Target Images"] ?? 0), 0);
+  assert.equal(total, 350000);
+
+  // Assumptions should include throughput line
+  const hasTP = result.plan.project.assumptions.some((a) => a.includes("Throughput:"));
+  assert.ok(hasTP, "assumptions should include throughput summary");
+});

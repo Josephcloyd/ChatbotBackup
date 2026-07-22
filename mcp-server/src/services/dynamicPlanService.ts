@@ -30,6 +30,10 @@ export interface DynamicPlanProposal {
     weekdaysOnly: boolean;
     totalHours: number;
     teamSize: number;
+    /** Working hours per person per day (default 8). */
+    hoursPerDay?: number;
+    /** AI-proposed throughput in units per person per hour (only for quantity plans). */
+    throughputRate?: number;
   };
   assumptions: string[];
   phases: DynamicPhase[];
@@ -46,6 +50,10 @@ export interface DynamicPlanResult {
   unitLabel?: string;
   /** Total planned quantity for quantity-profile plans. */
   totalQuantity?: number;
+  /** Throughput rate used for quantity plans (units per person per hour). */
+  throughputRate?: number;
+  /** Working hours per person per day used in scheduling. */
+  hoursPerDay?: number;
 }
 
 // Hour-based column profile (default — unchanged from original).
@@ -129,6 +137,14 @@ function stringArray(value: unknown): string[] {
 
 export function buildDynamicPrompt(projectDescription: string, currentDate: string): string {
   const requested = extractRequestedConstraints(projectDescription, currentDate);
+  const isQuantityPlan = requested.unitOfMeasure !== undefined && requested.unitOfMeasure !== "hours";
+
+  // Precompute conditional sections to avoid invalid newlines inside string literals.
+  const quantityRule = isQuantityPlan
+    ? `- This is a QUANTITY-based plan (unit: ${requested.unitOfMeasure}). Propose a realistic throughputRate: the number of ${requested.unitOfMeasure} one person can produce per working hour. Base it on typical industry rates for this kind of work.\n`
+    : "";
+  const throughputField = isQuantityPlan ? ',\n    "throughputRate": 50' : "";
+
   return `/no_think
 You are an expert production-planning consultant and operations analyst. Propose the context for a professional, fully dynamic, template-free production plan. Application code will create the detailed dates, workload allocation, capacity formulas, validation, and Excel formatting.
 
@@ -157,9 +173,12 @@ Rules:
 - durationUnit must be days, weeks, or months.
 - teamSize and durationValue must be positive whole numbers.
 - totalHours must be positive.
+- hoursPerDay is the working hours per person per day (almost always 8).
+- Provide practical phases, risks, mitigations, and assumptions specific to the request.
 - Natural-language dates have already been normalized when possible; use those ISO values.
 - Do not create daily schedule rows. The application creates those deterministically.
 - Return structured JSON only. No markdown, comments, or extra prose.
+${quantityRule}
 
 Return only valid JSON matching this structure:
 {
@@ -172,7 +191,8 @@ Return only valid JSON matching this structure:
     "durationUnit": "days",
     "weekdaysOnly": true,
     "totalHours": 160,
-    "teamSize": 1
+    "teamSize": 1,
+    "hoursPerDay": 8${throughputField}
   },
   "assumptions": ["string"],
   "phases": [{ "name": "string", "objective": "string" }],
@@ -211,6 +231,10 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
       weekdaysOnly: typeof rawSettings.weekdaysOnly === "boolean" ? rawSettings.weekdaysOnly : true,
       totalHours: number(rawSettings.totalHours, 160),
       teamSize: Math.round(number(rawSettings.teamSize, 1)),
+      hoursPerDay: typeof rawSettings.hoursPerDay === "number" && rawSettings.hoursPerDay > 0
+        ? rawSettings.hoursPerDay : undefined,
+      throughputRate: typeof rawSettings.throughputRate === "number" && rawSettings.throughputRate > 0
+        ? rawSettings.throughputRate : undefined,
     },
     assumptions: stringArray(value.assumptions),
     phases: phases.length ? phases : [{ name: "Production", objective: "Complete planned work." }],
@@ -770,7 +794,35 @@ export function buildDynamicPlan(
   // Select column profile based on detected unit of measure.
   const { columns: planColumns, isQuantity, unitLabel } = selectColumnProfile(totalQuantity != null ? unitOfMeasure : undefined);
 
-  // For quantity plans distribute the total quantity; for hour plans use hours.
+  // ── Throughput-aware quantity distribution ───────────────────────────────────
+  const hoursPerDay = Math.max(1, proposal.planningSettings.hoursPerDay ?? 8);
+
+  // Priority order for throughput rate (units per person per hour):
+  //   1. Explicitly stated in prompt ("50 images per hour") — highest confidence
+  //   2. Per-day rate converted to per-hour ("400 images per day" / hoursPerDay)
+  //   3. AI-proposed rate from proposal.planningSettings.throughputRate
+  //   4. Back-calculated from totalQuantity / scheduledDays / hoursPerDay / teamSize (implied)
+  let effectiveThroughputRate: number | undefined;
+  let throughputSource: "explicit" | "perDay" | "proposed" | "implied" | undefined;
+
+  if (isQuantity && totalQuantity != null) {
+    if (requested.throughputRate !== undefined) {
+      effectiveThroughputRate = requested.throughputRate;
+      throughputSource = "explicit";
+    } else if (requested.throughputPerDay !== undefined) {
+      effectiveThroughputRate = requested.throughputPerDay / hoursPerDay;
+      throughputSource = "perDay";
+    } else if (proposal.planningSettings.throughputRate !== undefined) {
+      effectiveThroughputRate = proposal.planningSettings.throughputRate;
+      throughputSource = "proposed";
+    } else {
+      // Option A: back-calculate implied rate from totalQuantity / scheduledDays / hoursPerDay / teamSize
+      effectiveThroughputRate = totalQuantity / (dates.length * hoursPerDay * settings.teamSize);
+      throughputSource = "implied";
+    }
+  }
+
+  // Distribute the total quantity evenly across scheduled days (always exact sum).
   const quantities = isQuantity && totalQuantity != null
     ? distributeQuantity(totalQuantity, dates.length)
     : null;
@@ -813,9 +865,26 @@ export function buildDynamicPlan(
     };
   });
 
+  // ── Assumptions ───────────────────────────────────────────────────────────
   const distributionNote = isQuantity && totalQuantity != null
     ? `${totalQuantity.toLocaleString()} ${unitLabel.toLowerCase()} distributed across ${dates.length} scheduled days.`
     : `Total target hours are distributed across ${dates.length} scheduled days.`;
+
+  const throughputAssumption =
+    isQuantity && effectiveThroughputRate !== undefined
+      ? (() => {
+          const rateStr = effectiveThroughputRate % 1 === 0
+            ? effectiveThroughputRate.toFixed(0)
+            : effectiveThroughputRate.toFixed(1);
+          const dailyTeam = Math.round(settings.teamSize * hoursPerDay * effectiveThroughputRate);
+          const sourceLabel =
+            throughputSource === "explicit" ? "stated in prompt" :
+            throughputSource === "perDay" ? "derived from per-day rate" :
+            throughputSource === "proposed" ? "proposed by AI" :
+            "back-calculated from total quantity";
+          return `Throughput: ${rateStr} ${unitLabel.toLowerCase()}/person/hour (${sourceLabel}). Daily team target: ~${dailyTeam.toLocaleString()} ${unitLabel.toLowerCase()}/day.`;
+        })()
+      : undefined;
 
   const assumptions = [
     ...proposal.assumptions,
@@ -824,6 +893,7 @@ export function buildDynamicPlan(
       ? `Custom working days were used: ${settings.workingDays.join(", ")} where Sunday is 0.`
       : `${settings.weekdaysOnly ? "Weekdays only" : "Calendar days"} scheduling was used.`,
     distributionNote,
+    ...(throughputAssumption ? [throughputAssumption] : []),
     ...((requested.dateInterpretations ?? []).map(
       (item) => `Interpreted "${item.source}" as ${item.normalized}.`,
     )),
@@ -863,5 +933,8 @@ export function buildDynamicPlan(
     plan, settings, phases, risks: effectiveRisks,
     unitLabel: isQuantity ? unitLabel : undefined,
     totalQuantity: isQuantity ? totalQuantity : undefined,
+    throughputRate: isQuantity ? effectiveThroughputRate : undefined,
+    hoursPerDay: isQuantity ? hoursPerDay : undefined,
   };
+
 }

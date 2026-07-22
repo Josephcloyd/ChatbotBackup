@@ -40,6 +40,10 @@ export interface RequestedConstraints {
   totalQuantity?: number;
   /** Named planning model or operating model requested by the user (e.g. "LPB Model"). */
   planningModel?: string;
+  /** Throughput rate in units per person per hour (e.g. 50 for "50 images/hour"). */
+  throughputRate?: number;
+  /** Throughput rate in units per person per day (e.g. 400 for "400 images/day"). */
+  throughputPerDay?: number;
 }
 
 export interface PlanningDefaults {
@@ -138,7 +142,7 @@ function extractWorkingDays(description: string): number[] | undefined {
 }
 
 const productionUnitPattern =
-  /(images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?)/i;
+  /(images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|engagements?|likes?|views?|shares?|impressions?|clicks?|leads?|batches?|participants?|transactions?)/i;
 
 function normalizeQuantity(rawNumber: string, suffix: string | undefined): number {
   const raw = Number(rawNumber.replace(/,/g, ""));
@@ -243,29 +247,57 @@ export function extractRequestedConstraints(
     description.match(/\b([A-Z][A-Z0-9]{1,12})\s+model\b/i);
   if (modelMatch) constraints.planningModel = `${modelMatch[1]!.toUpperCase()} Model`;
 
-  // Extract unit of measure and total quantity.
-  const quantityRegex = new RegExp(String.raw`\b([\d,]+(?:\.\d+)?)(?:\s*([kKmM]))?\s+${productionUnitPattern.source}\b`, "i");
-  const quantityMatch = description.match(quantityRegex);
-  if (quantityMatch) {
-    constraints.totalQuantity = normalizeQuantity(quantityMatch[1]!, quantityMatch[2]);
-    constraints.unitOfMeasure = quantityMatch[3]!.toLowerCase();
+  // ── Quantity extraction (multi-pass) ─────────────────────────────────────────
+  // Matches: "350,000 images", "1M records", "target of 350000 images",
+  //          "images to be collected is 350000", "total number images... 350000", "target number of post engaged is 10000"
+  const UNIT_PAT = "(?:audio\\s+clips?|video\\s+clips?|video\\s+frames?|images?|records?|documents?|receipts?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|frames?|utterances?|segments?|prompts?|queries?|articles?|captions?|audios?|photos?|labels?|annotations?|rows?|posts?|engagements?|likes?|views?|shares?|impressions?|clicks?|leads?|conversions?)";
+  const NUM_PAT = "([\\d,]+)(?:\\s*([kKmM]))?";
+
+  function parseQuantityNum(raw: string, suffix: string | undefined): number {
+    const n = Number(raw.replace(/,/g, ""));
+    const mult = (suffix ?? "").toLowerCase() === "k" ? 1_000 : (suffix ?? "").toLowerCase() === "m" ? 1_000_000 : 1;
+    return Math.round(n * mult);
   }
-  const targetUnitQuantityMatch = description.match(
-    new RegExp(
-      String.raw`\b(?:target|total|planned|required|goal)\s+${productionUnitPattern.source}\b(?:\s+(?:to\s+be\s+)?(?:collected|captured|processed|produced|handled|required|needed))?\s*(?:is|are|=|:)?\s*([\d,]+(?:\.\d+)?)(?:\s*([kKmM]))?\b`,
-      "i",
-    ),
-  );
-  if (!constraints.totalQuantity && targetUnitQuantityMatch) {
-    constraints.unitOfMeasure = targetUnitQuantityMatch[1]!.toLowerCase();
-    constraints.totalQuantity = normalizeQuantity(targetUnitQuantityMatch[2]!, targetUnitQuantityMatch[3]);
+
+  // Pass 1 — NUMBER directly adjacent to UNIT: "350000 images"
+  const p1 = new RegExp(`\\b${NUM_PAT}\\s+(${UNIT_PAT})\\b`, "i").exec(description);
+  if (p1) {
+    constraints.totalQuantity = parseQuantityNum(p1[1]!, p1[2]);
+    constraints.unitOfMeasure = p1[3]!.toLowerCase();
+  } else {
+    // Pass 2 — NUMBER then UNIT (number first, unit within ~80 chars, no sentence boundary between)
+    const p2 = new RegExp(`\\b${NUM_PAT}\\b[^.!?\\n]{0,80}?\\b(${UNIT_PAT})\\b`, "i").exec(description);
+    if (p2) {
+      constraints.totalQuantity = parseQuantityNum(p2[1]!, p2[2]);
+      constraints.unitOfMeasure = p2[3]!.toLowerCase();
+    } else {
+      // Pass 3 — UNIT then NUMBER (unit first, e.g. "images to be collected is 350000")
+      const p3 = new RegExp(`\\b(${UNIT_PAT})\\b[^.!?\\n]{0,80}?\\b${NUM_PAT}\\b`, "i").exec(description);
+      if (p3) {
+        constraints.totalQuantity = parseQuantityNum(p3[2]!, p3[3]);
+        constraints.unitOfMeasure = p3[1]!.toLowerCase();
+      }
+    }
   }
-  const unitOnlyMatch = description.match(
-    new RegExp(String.raw`\b(?:main\s+)?unit\s+of\s+measure\s+(?:for\s+production\s+)?(?:is|are)\s+${productionUnitPattern.source}\b`, "i"),
-  );
-  if (!constraints.unitOfMeasure && unitOnlyMatch) {
-    constraints.unitOfMeasure = unitOnlyMatch[1]!.toLowerCase();
+
+  // Pass 4 — "target number of post engaged is 10000" or "target of 10000"
+  if (!constraints.totalQuantity) {
+    const p4 = new RegExp(String.raw`\btarget\s+(?:number\s+of\s+)?(?:(${UNIT_PAT})\s*(?:engaged|collected|processed|done|annotated)?\s+is\s+)?${NUM_PAT}\b`, "i").exec(description);
+    if (p4 && p4[2]) {
+      constraints.totalQuantity = parseQuantityNum(p4[2]!, p4[3]);
+      constraints.unitOfMeasure = (p4[1] ?? "posts").toLowerCase();
+    }
   }
+
+  // ── Throughput extraction ──────────────────────────────────────────────────────
+  // "50 images per hour", "50 images/hour", "50 images per person per hour"
+  const tpHour = new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s+${UNIT_PAT}\\s*(?:\\/|per)\\s*(?:person\\s*(?:\\/|per)\\s*)?hour`, "i").exec(description);
+  if (tpHour) constraints.throughputRate = Number(tpHour[1]);
+
+  // "400 images per day", "400 images/day", "400 images per person per day"
+  const tpDay = new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s+${UNIT_PAT}\\s*(?:\\/|per)\\s*(?:person\\s*(?:\\/|per)\\s*)?day`, "i").exec(description);
+  if (tpDay) constraints.throughputPerDay = Number(tpDay[1]);
+
   return constraints;
 }
 

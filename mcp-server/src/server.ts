@@ -30,6 +30,7 @@ const generationInputSchema = z.object({
   whatsappUserId: z.string().trim().min(1).max(120),
   projectDescription: z.string().trim().min(10).max(10_000),
   workbookMode: z.enum(["template", "dynamic"]).default("dynamic"),
+  selectedTemplate: z.string().optional(),
   generationSource: z.enum(["whatsapp", "dashboard", "api", "admin"]).default("api"),
 });
 
@@ -84,16 +85,18 @@ export function createMcpServer() {
       inputSchema: {
         whatsappUserId: z.string(),
         projectDescription: z.string(),
-        workbookMode: z.enum(["template", "dynamic"]).default("dynamic").optional()
+        workbookMode: z.enum(["template", "dynamic"]).default("dynamic").optional(),
+        selectedTemplate: z.string().optional()
       }
     },
-    async ({ whatsappUserId, projectDescription, workbookMode }) => {
+    async ({ whatsappUserId, projectDescription, workbookMode, selectedTemplate }) => {
       console.log("========== TOOL INVOKED ==========");
       console.log("whatsappUserId:", whatsappUserId);
       console.log("projectDescription:", projectDescription);
       console.log("workbookMode:", workbookMode ?? "dynamic");
+      console.log("selectedTemplate:", selectedTemplate);
 
-      const result = await generateProductionPlan({ whatsappUserId, projectDescription, workbookMode });
+      const result = await generateProductionPlan({ whatsappUserId, projectDescription, workbookMode, selectedTemplate });
 
       if (!result.success) {
         return {
@@ -149,6 +152,10 @@ export function createApp() {
     });
   });
 
+  app.get(["/api/planner/templates", "/api/templates"], (_req: Request, res: Response) => {
+    res.json({ success: true, templates: listAvailableTemplates() });
+  });
+
   app.post("/api/generate", async (req: Request, res: Response) => {
     const parsed = generationInputSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -173,6 +180,7 @@ export function createApp() {
     res.json({
       ...result,
       workbookMode: parsed.data.workbookMode,
+      selectedTemplate: parsed.data.selectedTemplate,
       filename,
       downloadUrl: result.workbookSignedUrl ?? localDownloadUrl,
       localDownloadUrl,

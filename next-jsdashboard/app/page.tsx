@@ -67,6 +67,7 @@ export default function Dashboard() {
   // Core Data States
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"dynamic" | "template">("dynamic");
+  const [selectedTemplate, setSelectedTemplate] = useState("HourBased_Annotation_Production_Plan_Template.xlsx");
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [history, setHistory] = useState<HistoryResponse>({ configured: false, plans: [] });
   const [operators, setOperators] = useState<OperatorAccount[]>([]);
@@ -241,32 +242,68 @@ export default function Dashboard() {
   const metrics = useMemo(() => {
     const planSheet = plan?.workbook.sheets.find((s) => s.sheetName === "Production Plan");
     const firstRow = planSheet?.rows[0];
-    const targetCol = firstRow
-      ? Object.keys(firstRow).find((k) => k.startsWith("Target ") && !k.includes("Annotators")) ??
-        "Target Total Hours"
-      : "Target Total Hours";
-    const perAnnotCol = firstRow
-      ? Object.keys(firstRow).find((k) => k.startsWith("Target ") && k.includes("per Annotator")) ??
-        "Target Total Hours per Annotator"
-      : "Target Total Hours per Annotator";
-    const totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[targetCol]), 0);
-    const teamSize = rows.reduce(
-      (largest, row) => Math.max(largest, numberValue(row["Target Active Annotators"])),
-      0,
+    const keys = firstRow ? Object.keys(firstRow) : [];
+
+    // 1. Daily target column (e.g., "Plan no. of Posts", "Target Total Hours", "Target Images")
+    const dailyTargetCol = keys.find(
+      (k) =>
+        (/plan|target/i.test(k) || /posts|images|records|documents|units|hours/i.test(k)) &&
+        !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(k),
     );
+
+    // 2. Accumulative running total column (e.g., "Target Accumulative")
+    const accumCol = keys.find((k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k));
+
+    // 3. Team size column
+    const teamCol = keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
+
+    // 4. Per annotator column
+    const perAnnotCol = keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
+
+    let totalPlanned = 0;
     const monthly = new Map<string, number>();
-    rows.forEach((row) => {
-      const month = String(row.Month ?? "Unscheduled");
-      monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[targetCol]));
-    });
-    const unitLabel = targetCol === "Target Total Hours" ? "hours" : targetCol.replace("Target ", "").toLowerCase();
+
+    if (dailyTargetCol) {
+      totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[dailyTargetCol]), 0);
+      rows.forEach((row) => {
+        const month = String(row.Month ?? "Unscheduled");
+        monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[dailyTargetCol]));
+      });
+    } else if (accumCol && rows.length > 0) {
+      // If only accumulative column exists, take the last row's accumulative value as totalPlanned
+      const lastRow = rows[rows.length - 1];
+      totalPlanned = numberValue(lastRow[accumCol]);
+
+      // Compute monthly deltas from cumulative running totals
+      let prevMonthEndAccum = 0;
+      const monthGroups = new Map<string, number>();
+      rows.forEach((row) => {
+        const month = String(row.Month ?? "Unscheduled");
+        monthGroups.set(month, numberValue(row[accumCol]));
+      });
+      monthGroups.forEach((endAccum, month) => {
+        monthly.set(month, endAccum - prevMonthEndAccum);
+        prevMonthEndAccum = endAccum;
+      });
+    } else {
+      totalPlanned = (plan?.project as { totalAssets?: number })?.totalAssets ?? 0;
+    }
+
+    const teamSize = teamCol
+      ? rows.reduce((largest, row) => Math.max(largest, numberValue(row[teamCol])), 0)
+      : 0;
+
+    const chosenTargetCol = dailyTargetCol ?? accumCol ?? "Target Total Hours";
+    const chosenPerAnnotCol = perAnnotCol ?? chosenTargetCol;
+    const unitLabel = chosenTargetCol.replace(/target\s*|plan\s*|no\.\s*of\s*/i, "").trim().toLowerCase() || "units";
+
     return {
       totalPlanned,
       teamSize,
       scheduledDays: rows.length,
       monthly: [...monthly.entries()].map(([month, value]) => ({ month, value })),
-      targetCol,
-      perAnnotCol,
+      targetCol: chosenTargetCol,
+      perAnnotCol: chosenPerAnnotCol,
       unitLabel,
     };
   }, [rows, plan]);
@@ -308,10 +345,16 @@ export default function Dashboard() {
     setResult(null);
     setActivePlanId(null);
     try {
+      const activePrompt = prompt.trim() || starterPrompt;
       const response = await fetch("/api/planner/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ whatsappUserId: user.username, projectDescription: prompt, workbookMode: mode }),
+        body: JSON.stringify({
+          whatsappUserId: user.username,
+          projectDescription: activePrompt,
+          workbookMode: mode,
+          selectedTemplate,
+        }),
       });
       const data = (await response.json()) as GenerationResult;
       if (!response.ok || !data.success) throw new Error(data.error ?? data.whatsappSummary ?? "Plan generation failed");
@@ -378,6 +421,10 @@ export default function Dashboard() {
       const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete plan");
+      if (activePlanId === planId) {
+        setActivePlanId(null);
+        setResult(null);
+      }
       if (activePlanId === deletePlan.id) {
         setActivePlanId(null);
         setPlanDetailsOpen(false);
@@ -416,6 +463,14 @@ export default function Dashboard() {
     }
   }
 
+  async function handleEditPlan(planId: string) {
+    const target = history.plans.find((item) => item.id === planId);
+    if (!target) return;
+    setEditPlanId(target.id);
+    setEditTitle(target.project_title);
+    setEditSummary(target.summary);
+  }
+
   async function handleUpdatePlan(e: React.FormEvent) {
     e.preventDefault();
     if (!editPlan || !editValues) return;
@@ -425,6 +480,15 @@ export default function Dashboard() {
     if (Object.keys(nextErrors).length > 0) return;
     setEditSaving(true);
     try {
+      const res = await fetch("/api/planner/plans", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: editPlanId, title: editTitle, summary: editSummary }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan");
+
+      setEditPlanId(null);
       const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -437,6 +501,7 @@ export default function Dashboard() {
       if (activePlanId === editPlan.id) setActivePlanId(editPlan.id);
       window.setTimeout(() => setEditPlan(null), 700);
     } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Error saving plan edit");
       setEditMessage(caught instanceof Error ? caught.message : "Error updating plan");
     } finally {
       setEditSaving(false);
@@ -446,6 +511,7 @@ export default function Dashboard() {
   async function handleCreateOperator(e: React.FormEvent) {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return;
+
     try {
       const res = await fetch("/api/planner/operators", {
         method: "POST",
@@ -454,6 +520,7 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create operator");
+
       setNewUsername("");
       setNewPassword("");
       setNewRole("operator");
@@ -543,8 +610,11 @@ export default function Dashboard() {
       setAdminTab={setAdminTab}
       mode={mode}
       setMode={setMode}
+      selectedTemplate={selectedTemplate}
+      setSelectedTemplate={setSelectedTemplate}
       prompt={prompt}
       setPrompt={setPrompt}
+      placeholder={starterPrompt}
       loading={loading}
       error={error}
       generatePlan={generatePlan}
@@ -602,7 +672,12 @@ export default function Dashboard() {
                 <section className="summary-strip">
                   <div className="project-summary">
                     <span className="eyebrow">PLAN OVERVIEW</span>
-                    <p>{plan.summary}</p>
+                    <p>
+                      {plan.summary && plan.summary.trim()
+                        ? plan.summary
+                        : plan.project.projectDescription ||
+                          `Production plan for ${plan.project.projectName || "requested project"} scheduled from ${compactDate(plan.project.startDate)} to ${compactDate(plan.project.deadline)}.`}
+                    </p>
                     <div className="date-range">
                       <Icon name="clock" /> {compactDate(plan.project.startDate)} <span>→</span>{" "}
                       {compactDate(plan.project.deadline)}
