@@ -43,6 +43,8 @@ interface GenerationResult {
 }
 
 const PLAN_OVERVIEW_LIMIT = 15;
+const starterPrompt =
+  "Create a 1-week production plan for a student enrollment encoding project with 8 total hours.";
 
 function numberValue(value: CellValue | undefined): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -421,12 +423,9 @@ export default function Dashboard() {
       const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete plan");
-      if (activePlanId === planId) {
-        setActivePlanId(null);
-        setResult(null);
-      }
       if (activePlanId === deletePlan.id) {
         setActivePlanId(null);
+        setResult(null);
         setPlanDetailsOpen(false);
       }
       setDeletePlan(null);
@@ -463,14 +462,6 @@ export default function Dashboard() {
     }
   }
 
-  async function handleEditPlan(planId: string) {
-    const target = history.plans.find((item) => item.id === planId);
-    if (!target) return;
-    setEditPlanId(target.id);
-    setEditTitle(target.project_title);
-    setEditSummary(target.summary);
-  }
-
   async function handleUpdatePlan(e: React.FormEvent) {
     e.preventDefault();
     if (!editPlan || !editValues) return;
@@ -480,15 +471,6 @@ export default function Dashboard() {
     if (Object.keys(nextErrors).length > 0) return;
     setEditSaving(true);
     try {
-      const res = await fetch("/api/planner/plans", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: editPlanId, title: editTitle, summary: editSummary }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan");
-
-      setEditPlanId(null);
       const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
