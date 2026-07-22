@@ -9,7 +9,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { generateProductionPlan } from "./plannerService.js";
 import { config } from "./config.js";
-import { templateService } from "./services/templateService.js";
+import { listAvailableTemplates, templateService } from "./services/templateService.js";
 import {
   getRecentPlans,
   deletePlan,
