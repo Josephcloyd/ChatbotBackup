@@ -1268,6 +1268,7 @@ td {
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .placeholder-copy,
