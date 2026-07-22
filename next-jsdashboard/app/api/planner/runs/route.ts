@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { adminForwardHeaders, requireAdmin } from "@/lib/apiAuth";
+import { requireAdmin } from "@/lib/apiAuth";
 
 const plannerUrl = process.env.PLANNER_API_URL ?? "http://127.0.0.1:3001";
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   try {
     const session = await requireAdmin();
     if (session instanceof NextResponse) return session;
 
-    const body = await request.text();
-    const response = await fetch(`${plannerUrl}/api/operators/reassign`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...adminForwardHeaders(session) },
-      body,
+    const requestUrl = new URL(request.url);
+    const response = await fetch(`${plannerUrl}/api/admin/runs?${requestUrl.searchParams.toString()}`, {
+      cache: "no-store",
     });
     const payload = await response.text();
     return new NextResponse(payload, {

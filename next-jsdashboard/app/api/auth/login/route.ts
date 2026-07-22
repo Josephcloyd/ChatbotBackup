@@ -31,8 +31,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { username: validUser, role } = data.user;
-    const token = await createSessionToken(validUser, role);
+    const { id, username: validUser, role } = data.user;
+    const token = await createSessionToken(validUser, role, id);
     const cookieStore = await cookies();
 
     cookieStore.set(FLOWBOARD_AUTH_COOKIE, token, {

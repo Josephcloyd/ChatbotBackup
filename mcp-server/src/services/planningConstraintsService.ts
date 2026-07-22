@@ -142,7 +142,7 @@ function extractWorkingDays(description: string): number[] | undefined {
 }
 
 const productionUnitPattern =
-  /(images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?)/i;
+  /(images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|engagements?|likes?|views?|shares?|impressions?|clicks?|leads?|batches?|participants?|transactions?)/i;
 
 function normalizeQuantity(rawNumber: string, suffix: string | undefined): number {
   const raw = Number(rawNumber.replace(/,/g, ""));
@@ -249,8 +249,8 @@ export function extractRequestedConstraints(
 
   // ── Quantity extraction (multi-pass) ─────────────────────────────────────────
   // Matches: "350,000 images", "1M records", "target of 350000 images",
-  //          "images to be collected is 350000", "total number images... 350000"
-  const UNIT_PAT = "(?:audio\\s+clips?|video\\s+clips?|video\\s+frames?|images?|records?|documents?|receipts?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|frames?|utterances?|segments?|prompts?|queries?|articles?|captions?|audios?|photos?|labels?|annotations?|rows?)";
+  //          "images to be collected is 350000", "total number images... 350000", "target number of post engaged is 10000"
+  const UNIT_PAT = "(?:audio\\s+clips?|video\\s+clips?|video\\s+frames?|images?|records?|documents?|receipts?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|frames?|utterances?|segments?|prompts?|queries?|articles?|captions?|audios?|photos?|labels?|annotations?|rows?|posts?|engagements?|likes?|views?|shares?|impressions?|clicks?|leads?|conversions?)";
   const NUM_PAT = "([\\d,]+)(?:\\s*([kKmM]))?";
 
   function parseQuantityNum(raw: string, suffix: string | undefined): number {
@@ -277,6 +277,15 @@ export function extractRequestedConstraints(
         constraints.totalQuantity = parseQuantityNum(p3[2]!, p3[3]);
         constraints.unitOfMeasure = p3[1]!.toLowerCase();
       }
+    }
+  }
+
+  // Pass 4 — "target number of post engaged is 10000" or "target of 10000"
+  if (!constraints.totalQuantity) {
+    const p4 = new RegExp(String.raw`\btarget\s+(?:number\s+of\s+)?(?:(${UNIT_PAT})\s*(?:engaged|collected|processed|done|annotated)?\s+is\s+)?${NUM_PAT}\b`, "i").exec(description);
+    if (p4 && p4[2]) {
+      constraints.totalQuantity = parseQuantityNum(p4[2]!, p4[3]);
+      constraints.unitOfMeasure = (p4[1] ?? "posts").toLowerCase();
     }
   }
 

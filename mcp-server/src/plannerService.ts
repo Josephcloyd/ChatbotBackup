@@ -1,5 +1,12 @@
 import { generateWithOllama, parseOllamaJson } from "./ollamaService.js";
-import { savePlan, uploadWorkbookAndCreateSignedUrl } from "./supabaseService.js";
+import {
+  completeGenerationRun,
+  createGenerationRun,
+  recordPlanFile,
+  savePlan,
+  uploadWorkbookAndCreateSignedUrl,
+} from "./supabaseService.js";
+import { config } from "./config.js";
 import { excelService } from "./services/excelService.js";
 import { templateService } from "./services/templateService.js";
 import { validationService } from "./services/validationService.js";
@@ -45,12 +52,21 @@ export async function generateProductionPlan(
   input: ProductionPlanInput,
 ): Promise<PlannerResult> {
   const mode = input.workbookMode ?? "dynamic";
+  const startedAt = Date.now();
+  let runId: string | null = null;
   console.log("\n========== PLAN GENERATION STARTED ==========");
   console.log("whatsappUserId:", input.whatsappUserId);
   console.log("projectDescription:", input.projectDescription);
   console.log("workbookMode:", mode);
 
   try {
+    runId = await createGenerationRun({
+      modelProvider: "ollama",
+      modelName: config.ollamaModel,
+      promptVersion: mode === "dynamic" ? "dynamic-v1" : "template-v1",
+      attemptNumber: 1,
+    });
+
     const currentDate = new Date().toISOString().slice(0, 10);
     const requestedConstraints = extractRequestedConstraints(input.projectDescription, currentDate);
     const dateInterpretations = (requestedConstraints.dateInterpretations ?? []).map(
@@ -75,7 +91,7 @@ export async function generateProductionPlan(
       };
     }
     const templateDefinition = mode === "template"
-      ? await templateService.loadDefinition()
+      ? await templateService.loadDefinition(input.selectedTemplate)
       : undefined;
     const prompt = mode === "dynamic"
       ? buildDynamicPrompt(input.projectDescription, currentDate)
@@ -110,6 +126,11 @@ export async function generateProductionPlan(
       workbookPath = await excelService.writeProductionPlan(plan, templateDefinition!);
     }
 
+    if (!plan.summary || !plan.summary.trim()) {
+      const scopeDesc = plan.project.totalAssets > 0 ? `${plan.project.totalAssets.toLocaleString()} units` : "production targets";
+      plan.summary = `${plan.project.projectDescription || "Production plan"} for ${plan.project.projectName || "requested project"}. Scheduled from ${plan.project.startDate} to ${plan.project.deadline} covering ${scopeDesc}.`;
+    }
+
     console.log("[plannerService] Plan validated successfully:", plan.project.projectName);
     console.log("[plannerService] Workbook written:", workbookPath);
 
@@ -117,9 +138,10 @@ export async function generateProductionPlan(
     let workbookSignedUrl: string | undefined;
     let workbookStoragePath: string | undefined;
     let workbookSignedUrlExpiresInSeconds: number | undefined;
+    let uploadResult: Awaited<ReturnType<typeof uploadWorkbookAndCreateSignedUrl>> = null;
 
     try {
-      const uploadResult = await uploadWorkbookAndCreateSignedUrl(
+      uploadResult = await uploadWorkbookAndCreateSignedUrl(
         workbookPath,
         input.whatsappUserId,
       );
@@ -141,14 +163,36 @@ export async function generateProductionPlan(
         input.whatsappUserId,
         input.projectDescription,
         plan,
+        {
+          workbookMode: mode === "template" ? "official_template" : "dynamic",
+          generationSource: input.generationSource ?? "whatsapp",
+          requestedBy: input.whatsappUserId,
+        },
       );
       planId = savedRecord.id;
+      if (planId && uploadResult) {
+        await recordPlanFile(planId, uploadResult, input.whatsappUserId);
+      }
+      await completeGenerationRun(runId, {
+        status: "completed",
+        plan_id: planId ?? null,
+        project_title: plan.project.projectName,
+        duration_ms: Date.now() - startedAt,
+        validation_error_count: 0,
+      });
       console.log("[plannerService] Saved to Supabase, ID:", planId);
     } catch (dbError) {
       console.error(
         "[plannerService] Supabase save failed (non-fatal):",
         (dbError as Error).message,
       );
+      await completeGenerationRun(runId, {
+        status: "completed",
+        plan_id: null,
+        project_title: plan.project.projectName,
+        duration_ms: Date.now() - startedAt,
+        validation_error_count: 0,
+      });
     }
 
     const whatsappSummary = buildWhatsAppSummary(plan);
@@ -157,6 +201,14 @@ export async function generateProductionPlan(
   } catch (error) {
     const errorMessage = (error as Error).message;
     console.error("[plannerService] FAILED:", errorMessage);
+    await completeGenerationRun(runId, {
+      status: "failed",
+      plan_id: null,
+      duration_ms: Date.now() - startedAt,
+      validation_error_count: 1,
+      validation_errors: [errorMessage],
+      error_message: errorMessage.slice(0, 500),
+    });
     return {
       success: false,
       error: errorMessage,

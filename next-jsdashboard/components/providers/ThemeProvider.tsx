@@ -7,6 +7,7 @@ type Theme = "light" | "dark";
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
+  mounted: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -16,15 +17,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme") as Theme;
-    if (savedTheme === "dark") {
-      setTheme("dark");
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      setTheme("light");
-      document.documentElement.setAttribute("data-theme", "light");
-    }
+    const timer = window.setTimeout(() => {
+      setMounted(true);
+      const savedTheme = localStorage.getItem("theme") as Theme;
+      if (savedTheme === "dark") {
+        setTheme("dark");
+        document.documentElement.setAttribute("data-theme", "dark");
+      } else {
+        setTheme("light");
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const toggleTheme = () => {
@@ -39,7 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // The html tag in layout will default to data-theme="light".
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, mounted } as any}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, mounted }}>
       {children}
     </ThemeContext.Provider>
   );

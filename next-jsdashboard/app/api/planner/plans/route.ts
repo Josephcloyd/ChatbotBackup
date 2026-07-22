@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { adminForwardHeaders, requireAdmin, requireSession } from "@/lib/apiAuth";
 
 const plannerUrl = process.env.PLANNER_API_URL ?? "http://127.0.0.1:3001";
 
 export async function GET(request: Request) {
   try {
+    const session = await requireSession();
+    if (session instanceof NextResponse) return session;
+
     const requestUrl = new URL(request.url);
     const id = requestUrl.searchParams.get("id");
     const download = requestUrl.searchParams.get("download");
@@ -31,8 +35,13 @@ export async function GET(request: Request) {
       });
     }
 
-    const userId = requestUrl.searchParams.get("userId");
-    const query = userId ? `?userId=${encodeURIComponent(userId)}` : "";
+    const requestedUserId = requestUrl.searchParams.get("userId");
+    const requestedLimit = requestUrl.searchParams.get("limit");
+    const userId = session.role === "operator" ? session.username : requestedUserId;
+    const params = new URLSearchParams();
+    if (userId) params.set("userId", userId);
+    if (requestedLimit) params.set("limit", requestedLimit);
+    const query = params.size ? `?${params.toString()}` : "";
     const response = await fetch(`${plannerUrl}/api/plans${query}`, { cache: "no-store" });
     const payload = await response.text();
     return new NextResponse(payload, {
@@ -49,6 +58,9 @@ export async function GET(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const session = await requireAdmin();
+    if (session instanceof NextResponse) return session;
+
     const requestUrl = new URL(request.url);
     const id = requestUrl.searchParams.get("id");
     if (!id) {
@@ -57,6 +69,7 @@ export async function DELETE(request: Request) {
 
     const response = await fetch(`${plannerUrl}/api/plans/${encodeURIComponent(id)}`, {
       method: "DELETE",
+      headers: adminForwardHeaders(session),
     });
 
     const payload = await response.text();
@@ -74,6 +87,9 @@ export async function DELETE(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    const session = await requireAdmin();
+    if (session instanceof NextResponse) return session;
+
     const requestUrl = new URL(request.url);
     const id = requestUrl.searchParams.get("id");
     if (!id) {
@@ -83,7 +99,7 @@ export async function PATCH(request: Request) {
     const body = await request.text();
     const response = await fetch(`${plannerUrl}/api/plans/${encodeURIComponent(id)}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...adminForwardHeaders(session) },
       body,
     });
 

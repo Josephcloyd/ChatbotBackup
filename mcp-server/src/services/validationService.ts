@@ -45,6 +45,22 @@ function validateProject(value: unknown): ProductionPlanProject {
   };
 }
 
+function findMatchingColumnHeader(rawKey: string, columns: string[]): string | undefined {
+  const cleanKey = rawKey.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // 1. Exact clean match
+  let match = columns.find((c) => c.toLowerCase().replace(/[^a-z0-9]/g, "") === cleanKey);
+  if (match) return match;
+
+  // 2. Ignore "of" stopword match (e.g. "Plan no. Posts" vs "Plan no. of Posts")
+  match = columns.find((c) => {
+    const cNoOf = c.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/of/g, "");
+    const kNoOf = cleanKey.replace(/of/g, "");
+    return cNoOf === kNoOf;
+  });
+
+  return match;
+}
+
 function validateSheet(
   value: unknown,
   templateSheet: TemplateSheetDefinition,
@@ -53,36 +69,10 @@ function validateSheet(
   if (value.sheetName !== templateSheet.sheetName) {
     throw new Error(`Unknown sheetName: ${String(value.sheetName)}`);
   }
-  if (!Array.isArray(value.columns)) {
-    throw new Error(`columns must be an array for sheet ${templateSheet.sheetName}`);
-  }
 
-  const columns = value.columns.filter((column): column is string => typeof column === "string");
-  if (columns.length !== value.columns.length) {
-    throw new Error(`All columns must be strings for sheet ${templateSheet.sheetName}`);
-  }
+  // Always use the authoritative template columns order and headers
+  const columns = templateSheet.columns.map((column) => column.header);
 
-  const allowedColumns = new Set(templateSheet.columns.map((column) => column.header));
-  const unknownColumn = columns.find((column) => !allowedColumns.has(column));
-  if (unknownColumn) {
-    throw new Error(`Unknown column "${unknownColumn}" in sheet ${templateSheet.sheetName}`);
-  }
-
-  const requiredColumns = templateSheet.columns
-    .filter((column) => column.required)
-    .map((column) => column.header);
-  const missingColumn = requiredColumns.find((column) => !columns.includes(column));
-  if (missingColumn) {
-    throw new Error(`Required column "${missingColumn}" is missing from sheet ${templateSheet.sheetName}`);
-  }
-
-  if (new Set(columns).size !== columns.length) {
-    throw new Error(`Duplicate columns are not allowed in sheet ${templateSheet.sheetName}`);
-  }
-  const expectedOrder = templateSheet.columns.map((column) => column.header);
-  if (columns.some((column, index) => column !== expectedOrder[index])) {
-    throw new Error(`Columns are not in template order for sheet ${templateSheet.sheetName}`);
-  }
   if (!Array.isArray(value.rows)) {
     throw new Error(`rows must be an array for sheet ${templateSheet.sheetName}`);
   }
@@ -92,14 +82,29 @@ function validateSheet(
       throw new Error(`Row ${rowIndex + 1} in sheet ${templateSheet.sheetName} must be an object`);
     }
 
-    const unknownKey = Object.keys(row).find((key) => !allowedColumns.has(key));
+    const unknownKey = Object.keys(row).find(
+      (k) => !findMatchingColumnHeader(k, columns),
+    );
     if (unknownKey) {
       throw new Error(
         `Unknown row key "${unknownKey}" in row ${rowIndex + 1} of sheet ${templateSheet.sheetName}`,
       );
     }
 
-    return Object.fromEntries(columns.map((column) => [column, cellValue(row[column])]));
+    const rowObj: ProductionPlanRow = {};
+    columns.forEach((colHeader) => {
+      let rawVal = row[colHeader];
+      if (rawVal === undefined) {
+        // Match key flexibly
+        const foundKey = Object.keys(row).find(
+          (k) => findMatchingColumnHeader(k, columns) === colHeader,
+        );
+        if (foundKey) rawVal = row[foundKey];
+      }
+      rowObj[colHeader] = cellValue(rawVal);
+    });
+
+    return rowObj;
   });
 
   return { sheetName: templateSheet.sheetName, columns, rows };
@@ -111,17 +116,23 @@ export class ValidationService {
     templateDefinition: TemplateWorkbookDefinition,
   ): ProductionPlan {
     if (!isRecord(value)) throw new Error("Production plan must be an object");
-    if (!isRecord(value.workbook) || !Array.isArray(value.workbook.sheets)) {
-      throw new Error("workbook.sheets must be an array");
-    }
-    if (value.workbook.sheets.length === 0) {
-      throw new Error("workbook.sheets must contain at least one template sheet");
+
+    let rawSheets: unknown[] = [];
+    if (isRecord(value.workbook) && Array.isArray(value.workbook.sheets) && value.workbook.sheets.length > 0) {
+      rawSheets = value.workbook.sheets;
+    } else {
+      console.warn("[validationService] LLM omitted workbook.sheets, synthesizing template sheet structure.");
+      rawSheets = templateDefinition.sheets.map((ts) => ({
+        sheetName: ts.sheetName,
+        columns: ts.columns.map((col) => col.header),
+        rows: [],
+      }));
     }
 
     const templateByName = new Map(
       templateDefinition.sheets.map((sheet) => [sheet.sheetName, sheet]),
     );
-    const generatedNames = value.workbook.sheets.map((sheet) =>
+    const generatedNames = rawSheets.map((sheet) =>
       isRecord(sheet) ? sheet.sheetName : undefined,
     );
 
@@ -130,7 +141,7 @@ export class ValidationService {
     );
     if (duplicateName) throw new Error(`Duplicate sheetName: ${duplicateName}`);
 
-    const sheets = value.workbook.sheets.map((sheet) => {
+    const sheets = rawSheets.map((sheet) => {
       const sheetName = isRecord(sheet) ? sheet.sheetName : undefined;
       const templateSheet = typeof sheetName === "string" ? templateByName.get(sheetName) : undefined;
       if (!templateSheet) throw new Error(`Unknown sheetName: ${String(sheetName)}`);

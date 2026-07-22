@@ -9,29 +9,32 @@ import { PlanTable } from "../components/organisms/PlanTable";
 import { PlanHistory } from "../components/organisms/PlanHistory";
 import { AdminPlansPanel } from "../components/organisms/AdminPlansPanel";
 import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel";
-import { EditPlanModal, DeleteOperatorModal } from "../components/organisms/AdminModals";
+import { AdminPlanDetailsPanel } from "../components/organisms/AdminPlanDetailsPanel";
+import { AdminRunsPanel } from "../components/organisms/AdminRunsPanel";
+import {
+  BulkDeletePlansModal,
+  DeleteOperatorModal,
+  DeletePlanModal,
+  EditPlanModal,
+  type EditPlanFormValues,
+} from "../components/organisms/AdminModals";
 import { Icon } from "../components/atoms/Icon";
 import { ThemeToggle } from "../components/atoms/ThemeToggle";
 import { DashboardSkeleton } from "../components/organisms/DashboardSkeleton";
-
-type CellValue = string | number | boolean | null;
-type PlanRow = Record<string, CellValue>;
-
-interface ProductionPlan {
-  project: {
-    projectName: string;
-    projectDescription: string;
-    client: string;
-    startDate: string;
-    deadline: string;
-    assumptions: string[];
-  };
-  workbook: { sheets: Array<{ sheetName: string; rows: PlanRow[] }> };
-  summary: string;
-}
+import type {
+  CellValue,
+  FrontendRole,
+  HistoryRecord,
+  HistoryResponse,
+  OperatorAccount,
+  PlanFileRecord,
+  PlanGenerationRun,
+  ProductionPlan,
+} from "../lib/adminTypes";
 
 interface GenerationResult {
   success: boolean;
+  planId?: string;
   plan?: ProductionPlan;
   downloadUrl?: string;
   filename?: string;
@@ -39,31 +42,9 @@ interface GenerationResult {
   whatsappSummary?: string;
 }
 
-interface HistoryRecord {
-  id: string;
-  whatsapp_user_id: string;
-  project_title: string;
-  summary: string;
-  total_hours_estimate: number;
-  recommended_team_size: number;
-  created_at: string;
-  raw_plan: ProductionPlan;
-}
-
-interface HistoryResponse {
-  configured: boolean;
-  plans: HistoryRecord[];
-  error?: string;
-}
-
-interface OperatorAccount {
-  id: string;
-  username: string;
-  role: "admin" | "operator";
-  createdAt: string;
-}
-
-const starterPrompt = "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
+const PLAN_OVERVIEW_LIMIT = 15;
+const starterPrompt =
+  "Create a 1-week production plan for a student enrollment encoding project with 8 total hours.";
 
 function numberValue(value: CellValue | undefined): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -80,31 +61,47 @@ export default function Dashboard() {
   const router = useRouter();
 
   // Session & UI States
-  const [user, setUser] = useState<{ username: string; role: "admin" | "operator" } | null>(null);
-  const [adminTab, setAdminTab] = useState<"plans" | "operators">("plans");
+  const [user, setUser] = useState<{ id?: string; username: string; role: FrontendRole } | null>(null);
+  const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
 
   // Core Data States
-  const [prompt, setPrompt] = useState(starterPrompt);
+  const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"dynamic" | "template">("dynamic");
+  const [selectedTemplate, setSelectedTemplate] = useState("HourBased_Annotation_Production_Plan_Template.xlsx");
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [history, setHistory] = useState<HistoryResponse>({ configured: false, plans: [] });
   const [operators, setOperators] = useState<OperatorAccount[]>([]);
+  const [planFiles, setPlanFiles] = useState<PlanFileRecord[]>([]);
+  const [planFilesLoading, setPlanFilesLoading] = useState(false);
+  const [planFilesError, setPlanFilesError] = useState("");
+  const [runs, setRuns] = useState<PlanGenerationRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState("");
   const [plannerOnline, setPlannerOnline] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   // Admin Modal States
-  const [editPlanId, setEditPlanId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editSummary, setEditSummary] = useState("");
+  const [editPlan, setEditPlan] = useState<HistoryRecord | null>(null);
+  const [editValues, setEditValues] = useState<EditPlanFormValues | null>(null);
+  const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditPlanFormValues, string>>>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMessage, setEditMessage] = useState("");
 
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newRole, setNewRole] = useState<"admin" | "operator">("operator");
+  const [newRole, setNewRole] = useState<FrontendRole>("operator");
 
   const [deleteOpUser, setDeleteOpUser] = useState<OperatorAccount | null>(null);
   const [reassignTarget, setReassignTarget] = useState("");
+  const [deletePlan, setDeletePlan] = useState<HistoryRecord | null>(null);
+  const [deletePlanSaving, setDeletePlanSaving] = useState(false);
+  const [deletePlanError, setDeletePlanError] = useState("");
+  const [bulkDeletePlans, setBulkDeletePlans] = useState<HistoryRecord[]>([]);
+  const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState("");
 
   // 1. Fetch user authentication profile on mount
   useEffect(() => {
@@ -124,8 +121,9 @@ export default function Dashboard() {
   // 2. Fetch data (Plans & Operators)
   const fetchPlans = useCallback(() => {
     if (!user) return;
-    const filterQuery = user.role === "operator" ? `?userId=${encodeURIComponent(user.username)}` : "";
-    fetch(`/api/planner/plans${filterQuery}`, { cache: "no-store" })
+    const params = new URLSearchParams({ limit: String(PLAN_OVERVIEW_LIMIT) });
+    if (user.role === "operator") params.set("userId", user.username);
+    fetch(`/api/planner/plans?${params.toString()}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data: HistoryResponse) => {
         setHistory(data);
@@ -146,6 +144,44 @@ export default function Dashboard() {
       .catch(() => setOperators([]));
   }, [user]);
 
+  const fetchPlanFiles = useCallback((planId: string | null) => {
+    if (!planId || user?.role !== "admin") {
+      setPlanFiles([]);
+      return;
+    }
+    setPlanFilesLoading(true);
+    setPlanFilesError("");
+    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/files`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error ?? "Failed to load workbook files");
+        setPlanFiles(data.files ?? []);
+      })
+      .catch((caught) => {
+        setPlanFiles([]);
+        setPlanFilesError(caught instanceof Error ? caught.message : "Failed to load workbook files");
+      })
+      .finally(() => setPlanFilesLoading(false));
+  }, [user]);
+
+  const fetchRuns = useCallback((filters: { status?: string; modelName?: string; date?: string; planId?: string } = {}) => {
+    if (user?.role !== "admin") return;
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    setRunsLoading(true);
+    setRunsError("");
+    fetch(`/api/planner/runs?${params.toString()}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) throw new Error(data.error ?? "Failed to load AI runs");
+        setRuns(data.runs ?? []);
+      })
+      .catch((caught) => setRunsError(caught instanceof Error ? caught.message : "Failed to load AI runs"))
+      .finally(() => setRunsLoading(false));
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -157,10 +193,30 @@ export default function Dashboard() {
     checkHealth();
     fetchPlans();
     fetchOperators();
+    const adminDataTimer = window.setTimeout(() => {
+      fetchRuns();
+    }, 0);
 
     const timer = window.setInterval(checkHealth, 15_000);
-    return () => window.clearInterval(timer);
-  }, [user, fetchPlans, fetchOperators]);
+    return () => {
+      window.clearTimeout(adminDataTimer);
+      window.clearInterval(timer);
+    };
+  }, [user, fetchPlans, fetchOperators, fetchRuns]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => fetchPlanFiles(activePlanId), 0);
+    return () => window.clearTimeout(timer);
+  }, [activePlanId, fetchPlanFiles]);
+
+  useEffect(() => {
+    if (!planDetailsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPlanDetailsOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [planDetailsOpen]);
 
   // Dynamic values
   const plan = useMemo(() => {
@@ -188,37 +244,95 @@ export default function Dashboard() {
   const metrics = useMemo(() => {
     const planSheet = plan?.workbook.sheets.find((s) => s.sheetName === "Production Plan");
     const firstRow = planSheet?.rows[0];
-    const targetCol = firstRow
-      ? Object.keys(firstRow).find((k) => k.startsWith("Target ") && !k.includes("Annotators")) ??
-        "Target Total Hours"
-      : "Target Total Hours";
-    const perAnnotCol = firstRow
-      ? Object.keys(firstRow).find((k) => k.startsWith("Target ") && k.includes("per Annotator")) ??
-        "Target Total Hours per Annotator"
-      : "Target Total Hours per Annotator";
-    const totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[targetCol]), 0);
-    const teamSize = rows.reduce(
-      (largest, row) => Math.max(largest, numberValue(row["Target Active Annotators"])),
-      0,
+    const keys = firstRow ? Object.keys(firstRow) : [];
+
+    // 1. Daily target column (e.g., "Plan no. of Posts", "Target Total Hours", "Target Images")
+    const dailyTargetCol = keys.find(
+      (k) =>
+        (/plan|target/i.test(k) || /posts|images|records|documents|units|hours/i.test(k)) &&
+        !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(k),
     );
+
+    // 2. Accumulative running total column (e.g., "Target Accumulative")
+    const accumCol = keys.find((k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k));
+
+    // 3. Team size column
+    const teamCol = keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
+
+    // 4. Per annotator column
+    const perAnnotCol = keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
+
+    let totalPlanned = 0;
     const monthly = new Map<string, number>();
-    rows.forEach((row) => {
-      const month = String(row.Month ?? "Unscheduled");
-      monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[targetCol]));
-    });
-    const unitLabel = targetCol === "Target Total Hours" ? "hours" : targetCol.replace("Target ", "").toLowerCase();
+
+    if (dailyTargetCol) {
+      totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[dailyTargetCol]), 0);
+      rows.forEach((row) => {
+        const month = String(row.Month ?? "Unscheduled");
+        monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[dailyTargetCol]));
+      });
+    } else if (accumCol && rows.length > 0) {
+      // If only accumulative column exists, take the last row's accumulative value as totalPlanned
+      const lastRow = rows[rows.length - 1];
+      totalPlanned = numberValue(lastRow[accumCol]);
+
+      // Compute monthly deltas from cumulative running totals
+      let prevMonthEndAccum = 0;
+      const monthGroups = new Map<string, number>();
+      rows.forEach((row) => {
+        const month = String(row.Month ?? "Unscheduled");
+        monthGroups.set(month, numberValue(row[accumCol]));
+      });
+      monthGroups.forEach((endAccum, month) => {
+        monthly.set(month, endAccum - prevMonthEndAccum);
+        prevMonthEndAccum = endAccum;
+      });
+    } else {
+      totalPlanned = (plan?.project as { totalAssets?: number })?.totalAssets ?? 0;
+    }
+
+    const teamSize = teamCol
+      ? rows.reduce((largest, row) => Math.max(largest, numberValue(row[teamCol])), 0)
+      : 0;
+
+    const chosenTargetCol = dailyTargetCol ?? accumCol ?? "Target Total Hours";
+    const chosenPerAnnotCol = perAnnotCol ?? chosenTargetCol;
+    const unitLabel = chosenTargetCol.replace(/target\s*|plan\s*|no\.\s*of\s*/i, "").trim().toLowerCase() || "units";
+
     return {
       totalPlanned,
       teamSize,
       scheduledDays: rows.length,
       monthly: [...monthly.entries()].map(([month, value]) => ({ month, value })),
-      targetCol,
-      perAnnotCol,
+      targetCol: chosenTargetCol,
+      perAnnotCol: chosenPerAnnotCol,
       unitLabel,
     };
   }, [rows, plan]);
 
   const maxMonth = Math.max(...metrics.monthly.map((item) => item.value), 1);
+  const activePlanRecord = activePlanId ? history.plans.find((item) => item.id === activePlanId) : undefined;
+
+  const planToShow = useMemo<HistoryRecord | undefined>(() => {
+    if (activePlanRecord) return activePlanRecord;
+    if (result?.plan) {
+      return {
+        id: result.planId ?? "generated",
+        whatsapp_user_id: user?.username ?? "admin",
+        project_title: result.plan.project.projectName,
+        summary: result.plan.summary,
+        project_description: result.plan.project.projectDescription,
+        total_hours_estimate: metrics.totalPlanned,
+        recommended_team_size: metrics.teamSize,
+        created_at: new Date().toISOString(),
+        raw_plan: result.plan,
+        status: "generated",
+        generation_source: "admin",
+        workbook_mode: mode === "template" ? "official_template" : "dynamic",
+      };
+    }
+    return undefined;
+  }, [activePlanRecord, result, user, metrics, mode]);
 
   // User actions
   async function logout() {
@@ -233,14 +347,22 @@ export default function Dashboard() {
     setResult(null);
     setActivePlanId(null);
     try {
+      const activePrompt = prompt.trim() || starterPrompt;
       const response = await fetch("/api/planner/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ whatsappUserId: user.username, projectDescription: prompt, workbookMode: mode }),
+        body: JSON.stringify({
+          whatsappUserId: user.username,
+          projectDescription: activePrompt,
+          workbookMode: mode,
+          selectedTemplate,
+        }),
       });
       const data = (await response.json()) as GenerationResult;
       if (!response.ok || !data.success) throw new Error(data.error ?? data.whatsappSummary ?? "Plan generation failed");
       setResult(data);
+      if (data.planId) setActivePlanId(data.planId);
+      setPlanDetailsOpen(true);
       fetchPlans();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
@@ -249,40 +371,129 @@ export default function Dashboard() {
     }
   }
 
-  async function handleDeletePlan(planId: string) {
-    if (!confirm("Are you sure you want to delete this plan?")) return;
+  function buildEditValues(planRecord: HistoryRecord): EditPlanFormValues {
+    return {
+      project_title: planRecord.project_title ?? "",
+      summary: planRecord.summary ?? "",
+      planning_start_date: planRecord.planning_start_date ?? "",
+      planning_end_date: planRecord.planning_end_date ?? "",
+      actual_start_date: planRecord.actual_start_date ?? "",
+      actual_end_date: planRecord.actual_end_date ?? "",
+      actual_hours: planRecord.actual_hours === null || planRecord.actual_hours === undefined ? "" : String(planRecord.actual_hours),
+      requested_team_size: planRecord.requested_team_size === null || planRecord.requested_team_size === undefined ? "" : String(planRecord.requested_team_size),
+    };
+  }
+
+  function validateEdit(values: EditPlanFormValues): Partial<Record<keyof EditPlanFormValues, string>> {
+    const nextErrors: Partial<Record<keyof EditPlanFormValues, string>> = {};
+    if (!values.project_title.trim()) nextErrors.project_title = "Project title is required.";
+    if (!values.summary.trim()) nextErrors.summary = "Summary is required.";
+    for (const field of ["actual_hours", "requested_team_size"] as const) {
+      if (values[field] !== "" && Number(values[field]) < 0) nextErrors[field] = "Value cannot be negative.";
+    }
+    if (values.planning_start_date && values.planning_end_date && values.planning_end_date < values.planning_start_date) {
+      nextErrors.planning_end_date = "End date cannot be earlier than start date.";
+    }
+    if (values.actual_start_date && values.actual_end_date && values.actual_end_date < values.actual_start_date) {
+      nextErrors.actual_end_date = "End date cannot be earlier than start date.";
+    }
+    return nextErrors;
+  }
+
+  function editPayload(values: EditPlanFormValues) {
+    const nullableDate = (value: string) => value || null;
+    const nullableNumber = (value: string) => value === "" ? null : Number(value);
+    return {
+      project_title: values.project_title.trim(),
+      summary: values.summary.trim(),
+      planning_start_date: nullableDate(values.planning_start_date),
+      planning_end_date: nullableDate(values.planning_end_date),
+      actual_start_date: nullableDate(values.actual_start_date),
+      actual_end_date: nullableDate(values.actual_end_date),
+      actual_hours: nullableNumber(values.actual_hours),
+      requested_team_size: nullableNumber(values.requested_team_size),
+    };
+  }
+
+  async function confirmDeletePlan() {
+    if (!deletePlan) return;
+    setDeletePlanSaving(true);
+    setDeletePlanError("");
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(planId)}`, { method: "DELETE" });
+      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete plan");
-      if (activePlanId === planId) setActivePlanId(null);
+      if (activePlanId === deletePlan.id) {
+        setActivePlanId(null);
+        setResult(null);
+        setPlanDetailsOpen(false);
+      }
+      setDeletePlan(null);
       fetchPlans();
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error deleting plan");
+      setDeletePlanError(caught instanceof Error ? caught.message : "Error deleting plan");
+    } finally {
+      setDeletePlanSaving(false);
+    }
+  }
+
+  async function confirmBulkDeletePlans() {
+    if (bulkDeletePlans.length === 0) return;
+    setBulkDeleteSaving(true);
+    setBulkDeleteError("");
+    try {
+      const deletedIds = new Set<string>();
+      for (const planRecord of bulkDeletePlans) {
+        const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(planRecord.id)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error ?? `Failed to delete ${planRecord.project_title}`);
+        deletedIds.add(planRecord.id);
+      }
+      if (activePlanId && deletedIds.has(activePlanId)) {
+        setActivePlanId(null);
+        setPlanDetailsOpen(false);
+      }
+      setBulkDeletePlans([]);
+      fetchPlans();
+    } catch (caught) {
+      setBulkDeleteError(caught instanceof Error ? caught.message : "Error deleting selected plans");
+    } finally {
+      setBulkDeleteSaving(false);
     }
   }
 
   async function handleUpdatePlan(e: React.FormEvent) {
     e.preventDefault();
-    if (!editPlanId) return;
+    if (!editPlan || !editValues) return;
+    const nextErrors = validateEdit(editValues);
+    setEditErrors(nextErrors);
+    setEditMessage("");
+    if (Object.keys(nextErrors).length > 0) return;
+    setEditSaving(true);
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlanId)}`, {
+      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ project_title: editTitle, summary: editSummary }),
+        body: JSON.stringify(editPayload(editValues)),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan");
-      setEditPlanId(null);
+      setEditMessage("Saved updates successfully.");
       fetchPlans();
+      if (activePlanId === editPlan.id) setActivePlanId(editPlan.id);
+      window.setTimeout(() => setEditPlan(null), 700);
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error updating plan");
+      alert(caught instanceof Error ? caught.message : "Error saving plan edit");
+      setEditMessage(caught instanceof Error ? caught.message : "Error updating plan");
+    } finally {
+      setEditSaving(false);
     }
   }
 
   async function handleCreateOperator(e: React.FormEvent) {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return;
+
     try {
       const res = await fetch("/api/planner/operators", {
         method: "POST",
@@ -291,6 +502,7 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create operator");
+
       setNewUsername("");
       setNewPassword("");
       setNewRole("operator");
@@ -300,8 +512,32 @@ export default function Dashboard() {
     }
   }
 
+  async function handleUpdateOperator(op: OperatorAccount, updates: { role?: FrontendRole; active?: boolean }) {
+    if (!user) return;
+    if (op.username === user.username || op.id === user.id) {
+      alert("You cannot change access for your own active admin account.");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/planner/operators?id=${encodeURIComponent(op.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update user");
+      fetchOperators();
+    } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Error updating user");
+    }
+  }
+
   async function handleDeleteOperator() {
     if (!deleteOpUser) return;
+    if (Number(deleteOpUser.planCount ?? 0) > 0 && !reassignTarget) {
+      alert("Reassign this user's plans before deleting the account.");
+      return;
+    }
     try {
       if (reassignTarget) {
         const reassignRes = await fetch("/api/planner/operators/reassign", {
@@ -326,6 +562,20 @@ export default function Dashboard() {
     }
   }
 
+  async function handleDownloadPlanFile(file: PlanFileRecord) {
+    if (!activePlanId) return;
+    try {
+      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/files/${encodeURIComponent(file.id)}/download`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create download link");
+      window.location.href = data.signedUrl;
+    } catch (caught) {
+      alert(caught instanceof Error ? caught.message : "Error downloading workbook");
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex-center h-screen bg-canvas text-ink">
@@ -342,8 +592,11 @@ export default function Dashboard() {
       setAdminTab={setAdminTab}
       mode={mode}
       setMode={setMode}
+      selectedTemplate={selectedTemplate}
+      setSelectedTemplate={setSelectedTemplate}
       prompt={prompt}
       setPrompt={setPrompt}
+      placeholder={starterPrompt}
       loading={loading}
       error={error}
       generatePlan={generatePlan}
@@ -365,10 +618,18 @@ export default function Dashboard() {
           <button className="download-button" type="button" onClick={logout}>
             Sign out
           </button>
-          {downloadUrl && (
-            <a className="download-button" href={downloadUrl} download>
-              <Icon name="download" /> Download Excel
-            </a>
+          {user.role === "admin" ? (
+            result && downloadUrl && (
+              <a className="download-button" href={downloadUrl} download>
+                <Icon name="download" /> Download Excel
+              </a>
+            )
+          ) : (
+            downloadUrl && (
+              <a className="download-button" href={downloadUrl} download>
+                <Icon name="download" /> Download Excel
+              </a>
+            )
           )}
         </div>
       </header>
@@ -393,7 +654,12 @@ export default function Dashboard() {
                 <section className="summary-strip">
                   <div className="project-summary">
                     <span className="eyebrow">PLAN OVERVIEW</span>
-                    <p>{plan.summary}</p>
+                    <p>
+                      {plan.summary && plan.summary.trim()
+                        ? plan.summary
+                        : plan.project.projectDescription ||
+                          `Production plan for ${plan.project.projectName || "requested project"} scheduled from ${compactDate(plan.project.startDate)} to ${compactDate(plan.project.deadline)}.`}
+                    </p>
                     <div className="date-range">
                       <Icon name="clock" /> {compactDate(plan.project.startDate)} <span>→</span>{" "}
                       {compactDate(plan.project.deadline)}
@@ -475,41 +741,110 @@ export default function Dashboard() {
                     setResult(null);
                     setActivePlanId(id);
                   }}
-                  onDeletePlan={handleDeletePlan}
-                  onEditPlan={(id, title, summary) => {
-                    setEditPlanId(id);
-                    setEditTitle(title);
-                    setEditSummary(summary);
+                  onViewPlan={(id) => {
+                    setResult(null);
+                    setActivePlanId(id);
+                    setPlanDetailsOpen(true);
+                  }}
+                  onDeletePlan={(planRecord) => {
+                    setDeletePlan(planRecord);
+                    setDeletePlanError("");
+                  }}
+                  onDeleteSelectedPlans={(planRecords) => {
+                    setBulkDeletePlans(planRecords);
+                    setBulkDeleteError("");
+                  }}
+                  onEditPlan={(planRecord) => {
+                    setEditPlan(planRecord);
+                    setEditValues(buildEditValues(planRecord));
+                    setEditErrors({});
+                    setEditMessage("");
                   }}
                 />
 
-                {plan && (
-                  <div className="mt-8 border-t border-line pt-6">
-                    <h4 className="text-primary mb-2 font-semibold">
-                      Schedules Preview: {plan.project.projectName}
-                    </h4>
-                    <p className="text-muted text-sm mb-4 leading-relaxed">{plan.summary}</p>
-                    <PlanTable rows={rows} metrics={metrics} />
+                {planDetailsOpen && planToShow && (
+                  <div className="modal-overlay" role="presentation">
+                    <div className="modal-content plan-view-modal" role="dialog" aria-modal="true" aria-labelledby="plan-view-title">
+                      <div className="modal-header plan-view-header">
+                        <div>
+                          <span className="eyebrow">PLAN PREVIEW</span>
+                          <h3 id="plan-view-title" className="modal-title">{planToShow.project_title}</h3>
+                          <div className="plan-view-meta" aria-label="Plan metadata">
+                            <span className={`compact-badge status-${planToShow.status ?? "generated"}`}>
+                              {(planToShow.status ?? "generated").replace("_", " ")}
+                            </span>
+                            <span>{planToShow.whatsapp_user_id}</span>
+                            <span>{new Date(planToShow.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                          {downloadUrl && (
+                            <a className="download-button" href={downloadUrl} download>
+                              <Icon name="download" /> Download Excel
+                            </a>
+                          )}
+                          <button
+                            className="icon-button modal-close-button"
+                            type="button"
+                            onClick={() => setPlanDetailsOpen(false)}
+                            aria-label="Close plan preview"
+                          >
+                            <Icon name="x" />
+                          </button>
+                        </div>
+                      </div>
+                      <AdminPlanDetailsPanel
+                        plan={planToShow}
+                        rows={rows}
+                        metrics={metrics}
+                        files={planFiles}
+                        filesLoading={planFilesLoading}
+                        filesError={planFilesError}
+                        onDownloadFile={handleDownloadPlanFile}
+                      />
+                    </div>
                   </div>
                 )}
 
-                {editPlanId && (
+                {editPlan && editValues && (
                   <EditPlanModal
-                    editTitle={editTitle}
-                    setEditTitle={setEditTitle}
-                    editSummary={editSummary}
-                    setEditSummary={setEditSummary}
-                    onClose={() => setEditPlanId(null)}
+                    values={editValues}
+                    errors={editErrors}
+                    message={editMessage}
+                    saving={editSaving}
+                    setValue={(field, value) => setEditValues((current) => current ? { ...current, [field]: value } : current)}
+                    onClose={() => setEditPlan(null)}
                     onSubmit={handleUpdatePlan}
                   />
                 )}
+
+                {deletePlan && (
+                  <DeletePlanModal
+                    plan={deletePlan}
+                    saving={deletePlanSaving}
+                    error={deletePlanError}
+                    onClose={() => setDeletePlan(null)}
+                    onConfirm={confirmDeletePlan}
+                  />
+                )}
+
+                {bulkDeletePlans.length > 0 && (
+                  <BulkDeletePlansModal
+                    plans={bulkDeletePlans}
+                    saving={bulkDeleteSaving}
+                    error={bulkDeleteError}
+                    onClose={() => setBulkDeletePlans([])}
+                    onConfirm={confirmBulkDeletePlans}
+                  />
+                )}
               </>
-            ) : (
+            ) : adminTab === "operators" ? (
               <>
                 <AdminOperatorsPanel
                   operators={operators}
                   currentUser={user}
                   onDeleteOperator={(op) => setDeleteOpUser(op)}
+                  onUpdateOperator={handleUpdateOperator}
                   newUsername={newUsername}
                   setNewUsername={setNewUsername}
                   newPassword={newPassword}
@@ -532,7 +867,16 @@ export default function Dashboard() {
                     onConfirm={handleDeleteOperator}
                   />
                 )}
+
               </>
+            ) : (
+              <AdminRunsPanel
+                runs={runs}
+                plans={history.plans}
+                loading={runsLoading}
+                error={runsError}
+                onRefresh={fetchRuns}
+              />
             )}
           </>
         )}
