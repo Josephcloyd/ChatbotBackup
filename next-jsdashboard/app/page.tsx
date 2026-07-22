@@ -274,6 +274,27 @@ export default function Dashboard() {
   const maxMonth = Math.max(...metrics.monthly.map((item) => item.value), 1);
   const activePlanRecord = activePlanId ? history.plans.find((item) => item.id === activePlanId) : undefined;
 
+  const planToShow = useMemo<HistoryRecord | undefined>(() => {
+    if (activePlanRecord) return activePlanRecord;
+    if (result?.plan) {
+      return {
+        id: result.planId ?? "generated",
+        whatsapp_user_id: user?.username ?? "admin",
+        project_title: result.plan.project.projectName,
+        summary: result.plan.summary,
+        project_description: result.plan.project.projectDescription,
+        total_hours_estimate: metrics.totalPlanned,
+        recommended_team_size: metrics.teamSize,
+        created_at: new Date().toISOString(),
+        raw_plan: result.plan,
+        status: "generated",
+        generation_source: "admin",
+        workbook_mode: mode === "template" ? "official_template" : "dynamic",
+      };
+    }
+    return undefined;
+  }, [activePlanRecord, result, user, metrics, mode]);
+
   // User actions
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -296,7 +317,7 @@ export default function Dashboard() {
       if (!response.ok || !data.success) throw new Error(data.error ?? data.whatsappSummary ?? "Plan generation failed");
       setResult(data);
       if (data.planId) setActivePlanId(data.planId);
-      setPlanDetailsOpen(false);
+      setPlanDetailsOpen(true);
       fetchPlans();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
@@ -545,10 +566,18 @@ export default function Dashboard() {
           <button className="download-button" type="button" onClick={logout}>
             Sign out
           </button>
-          {downloadUrl && (
-            <a className="download-button" href={downloadUrl} download>
-              <Icon name="download" /> Download Excel
-            </a>
+          {user.role === "admin" ? (
+            result && downloadUrl && (
+              <a className="download-button" href={downloadUrl} download>
+                <Icon name="download" /> Download Excel
+              </a>
+            )
+          ) : (
+            downloadUrl && (
+              <a className="download-button" href={downloadUrl} download>
+                <Icon name="download" /> Download Excel
+              </a>
+            )
           )}
         </div>
       </header>
@@ -676,32 +705,39 @@ export default function Dashboard() {
                   }}
                 />
 
-                {planDetailsOpen && activePlanRecord && (
+                {planDetailsOpen && planToShow && (
                   <div className="modal-overlay" role="presentation">
                     <div className="modal-content plan-view-modal" role="dialog" aria-modal="true" aria-labelledby="plan-view-title">
                       <div className="modal-header plan-view-header">
                         <div>
                           <span className="eyebrow">PLAN PREVIEW</span>
-                          <h3 id="plan-view-title" className="modal-title">{activePlanRecord.project_title}</h3>
+                          <h3 id="plan-view-title" className="modal-title">{planToShow.project_title}</h3>
                           <div className="plan-view-meta" aria-label="Plan metadata">
-                            <span className={`compact-badge status-${activePlanRecord.status ?? "generated"}`}>
-                              {(activePlanRecord.status ?? "generated").replace("_", " ")}
+                            <span className={`compact-badge status-${planToShow.status ?? "generated"}`}>
+                              {(planToShow.status ?? "generated").replace("_", " ")}
                             </span>
-                            <span>{activePlanRecord.whatsapp_user_id}</span>
-                            <span>{new Date(activePlanRecord.created_at).toLocaleDateString()}</span>
+                            <span>{planToShow.whatsapp_user_id}</span>
+                            <span>{new Date(planToShow.created_at).toLocaleDateString()}</span>
                           </div>
                         </div>
-                        <button
-                          className="icon-button modal-close-button"
-                          type="button"
-                          onClick={() => setPlanDetailsOpen(false)}
-                          aria-label="Close plan preview"
-                        >
-                          <Icon name="x" />
-                        </button>
+                        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                          {downloadUrl && (
+                            <a className="download-button" href={downloadUrl} download>
+                              <Icon name="download" /> Download Excel
+                            </a>
+                          )}
+                          <button
+                            className="icon-button modal-close-button"
+                            type="button"
+                            onClick={() => setPlanDetailsOpen(false)}
+                            aria-label="Close plan preview"
+                          >
+                            <Icon name="x" />
+                          </button>
+                        </div>
                       </div>
                       <AdminPlanDetailsPanel
-                        plan={activePlanRecord}
+                        plan={planToShow}
                         rows={rows}
                         metrics={metrics}
                         files={planFiles}
