@@ -3,8 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "../components/providers/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Flowboard | Production Planner",
-  description: "Ollama-powered production planning and visualization",
+  title: "LifePlan | Powered by Lifewood PH",
+  description: "LifePlan production planning and visualization dashboard",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

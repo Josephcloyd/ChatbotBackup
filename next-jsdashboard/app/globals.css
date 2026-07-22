@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Caveat:wght@400;600&family=Dancing+Script:wght@400;600&family=Great+Vibes&display=swap');
+
 :root {
   --ink: #133020;
   /* Lifewood Dark Serpent */
@@ -218,13 +220,20 @@ a {
 }
 
 .error-box {
-  padding: 11px;
-  border: 1px solid rgba(255, 123, 123, .22);
+  padding: 11px 14px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
   border-radius: 9px;
-  color: #ffc4c4;
-  background: rgba(174, 42, 42, .15);
-  font-size: 12px;
+  color: #991b1b;
+  background: #fef2f2;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.4;
+}
+
+[data-theme="dark"] .error-box {
+  color: #fca5a5;
+  background: rgba(185, 28, 28, 0.2);
+  border-color: rgba(248, 113, 113, 0.3);
 }
 
 .brand {
@@ -234,22 +243,49 @@ a {
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 2.5px solid #256738;
+  outline: 2px solid #e49b24;
+  outline-offset: -5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 4px;
+}
+
+.brand-bar-graph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
 }
 
 .brand-dark .brand-mark {
-  border: 1px solid rgba(255, 179, 71, .4);
-  color: #ffb347;
-  background: rgba(255, 179, 71, .12);
+  background: #ffffff;
+  border: 2.5px solid #256738;
+  outline: 2px solid #e49b24;
+  outline-offset: -5px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(255, 255, 255, 0.15);
 }
 
 .brand-light .brand-mark {
-  border: 1px solid var(--blue);
-  background: var(--blue);
+  background: #ffffff;
+  border: 2.5px solid #256738;
+  outline: 2px solid #e49b24;
+  outline-offset: -5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
 }
 
 .brand-title {
@@ -265,6 +301,46 @@ a {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1.4px;
+}
+
+.powered-by-lifewood {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1;
+}
+
+.powered-by-text {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: #9a9588;
+  text-transform: uppercase;
+}
+
+.lifewood-gem {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  margin: 0 1px;
+}
+
+.lifewood-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: #699b83;
+  letter-spacing: -0.3px;
+  text-transform: lowercase;
+}
+
+.brand-dark .powered-by-text {
+  color: #b0aaa0;
+}
+
+.brand-dark .lifewood-name {
+  color: #70a890;
 }
 
 .metric-card {
