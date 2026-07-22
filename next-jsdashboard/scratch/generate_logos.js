@@ -1,0 +1,82 @@
+const fs = require('fs');
+const path = require('path');
+
+const publicDir = path.join(__dirname, '../public');
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
+// 1. Leaf Mark SVG (Icon only, 100% transparent background)
+const leafMarkSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <g transform="translate(5, 5)">
+    <!-- Amber / Yellow Leaf (Behind, extending right) -->
+    <path d="M 45 92 C 40 85 45 74 54 67 C 68 56 86 58 104 68 C 112 73 114 78 106 82 C 94 88 80 94 65 95 C 54 96 46 95 45 92 Z" fill="#E49B24" />
+    
+    <!-- Amber Leaf Main Vein (Cream/White) -->
+    <path d="M 46 91 C 56 86 72 79 104 71" fill="none" stroke="#FAF7F2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Amber Leaf Side Veins -->
+    <path d="M 64 83 C 70 76 77 71 83 69" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 78 78 C 84 73 91 69 96 68" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 72 84 C 77 88 84 89 89 89" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+
+    <!-- Green Vertical Leaf (In front, pointing up-left) -->
+    <path d="M 46 94 C 42 86 38 72 37 56 C 36 38 48 16 61 10 C 74 30 81 54 77 77 C 74 91 66 102 52 106 C 47 107 43 103 46 94 Z" fill="#256738" />
+    
+    <!-- Green Leaf Main Vein (Cream/White) -->
+    <path d="M 47 101 C 49 84 48 58 60 14" fill="none" stroke="#FAF7F2" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Green Leaf Side Veins (Left side) -->
+    <path d="M 49 76 C 42 70 38 65 37 60" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 52 58 C 45 52 42 45 42 40" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 56 38 C 51 32 49 26 49 22" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <!-- Green Leaf Side Veins (Right side) -->
+    <path d="M 50 72 C 60 67 68 62 72 56" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 53 52 C 62 46 68 40 71 33" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 57 32 C 63 26 67 21 68 16" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+  </g>
+</svg>`;
+
+fs.writeFileSync(path.join(publicDir, 'lifeplan-mark.svg'), leafMarkSvg);
+
+// 2. Full Horizontal Logo (Leaf Icon + "LifePlan" text beside it)
+const fullLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" width="100%" height="100%">
+  <style>
+    .brand-text {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      font-weight: 700;
+      font-size: 42px;
+      fill: #1E293B;
+      letter-spacing: -0.5px;
+    }
+    .brand-text-accent {
+      fill: #256738;
+    }
+  </style>
+  <g transform="translate(10, -5) scale(0.9)">
+    <!-- Amber / Yellow Leaf -->
+    <path d="M 45 92 C 40 85 45 74 54 67 C 68 56 86 58 104 68 C 112 73 114 78 106 82 C 94 88 80 94 65 95 C 54 96 46 95 45 92 Z" fill="#E49B24" />
+    <path d="M 46 91 C 56 86 72 79 104 71" fill="none" stroke="#FAF7F2" stroke-width="2.5" stroke-linecap="round" />
+    <path d="M 64 83 C 70 76 77 71 83 69" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 78 78 C 84 73 91 69 96 68" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 72 84 C 77 88 84 89 89 89" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+
+    <!-- Green Vertical Leaf -->
+    <path d="M 46 94 C 42 86 38 72 37 56 C 36 38 48 16 61 10 C 74 30 81 54 77 77 C 74 91 66 102 52 106 C 47 107 43 103 46 94 Z" fill="#256738" />
+    <path d="M 47 101 C 49 84 48 58 60 14" fill="none" stroke="#FAF7F2" stroke-width="2.8" stroke-linecap="round" />
+    <path d="M 49 76 C 42 70 38 65 37 60" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 52 58 C 45 52 42 45 42 40" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 56 38 C 51 32 49 26 49 22" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 50 72 C 60 67 68 62 72 56" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 53 52 C 62 46 68 40 71 33" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+    <path d="M 57 32 C 63 26 67 21 68 16" fill="none" stroke="#FAF7F2" stroke-width="2" stroke-linecap="round" />
+  </g>
+
+  <text x="115" y="62" class="brand-text">Life<tspan class="brand-text-accent">Plan</tspan></text>
+</svg>`;
+
+fs.writeFileSync(path.join(publicDir, 'lifeplan-logo.svg'), fullLogoSvg);
+
+// 3. Full Horizontal Logo (Dark Mode Variant: White text)
+const fullLogoDarkSvg = fullLogoSvg.replace('#1E293B', '#FFFFFF').replace('#256738', '#4ADE80');
+fs.writeFileSync(path.join(publicDir, 'lifeplan-logo-dark.svg'), fullLogoDarkSvg);
+
+console.log('Successfully generated LifePlan logo SVGs in public/ directory!');

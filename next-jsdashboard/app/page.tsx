@@ -354,7 +354,7 @@ export default function Dashboard() {
     <DashboardLayout sidebarContent={sidebarContent}>
       <header className="topbar">
         <div>
-          <span className="eyebrow">FLOWBOARD DASHBOARD</span>
+          <span className="eyebrow">LIFEPLAN DASHBOARD</span>
           <h1>{plan?.project.projectName ?? "Production planning board"}</h1>
         </div>
         <div className="topbar-actions">
