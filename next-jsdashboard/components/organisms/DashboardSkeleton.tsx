@@ -1,6 +1,8 @@
 import React from "react";
 import { Skeleton } from "../atoms/Skeleton";
 
+const skeletonBarHeights = [64, 38, 78, 52];
+
 export function DashboardSkeleton() {
   return (
     <div className="dashboard-skeleton">
@@ -43,9 +45,9 @@ export function DashboardSkeleton() {
             <Skeleton style={{ width: "60px", height: "12px", borderRadius: "3px" }} />
           </div>
           <div className="bar-chart" style={{ borderBottom: "none" }}>
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bar-column">
-                <Skeleton style={{ width: "100%", height: `${Math.max(20, Math.random() * 80)}%`, borderRadius: "6px 6px 0 0" }} />
+            {skeletonBarHeights.map((height) => (
+              <div key={height} className="bar-column">
+                <Skeleton style={{ width: "100%", height: `${height}%`, borderRadius: "6px 6px 0 0" }} />
                 <Skeleton className="mt-2" style={{ width: "30px", height: "10px", borderRadius: "3px", margin: "8px auto 0" }} />
               </div>
             ))}

@@ -9,9 +9,20 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { generateProductionPlan } from "./plannerService.js";
 import { config } from "./config.js";
-import { templateService, listAvailableTemplates } from "./services/templateService.js";
-import { getRecentPlans, deletePlan, updatePlan, reassignPlans, getPlanById } from "./supabaseService.js";
-import { verifyUser, listUsers, createUser, deleteUser, seedUsers } from "./services/userService.js";
+import { templateService } from "./services/templateService.js";
+import {
+  getRecentPlans,
+  deletePlan,
+  updatePlan,
+  reassignPlans,
+  getPlanById,
+  countPlansForUser,
+  listPlanFiles,
+  createSignedPlanFileDownload,
+  listGenerationRuns,
+  updatePlanReviewStatus,
+} from "./supabaseService.js";
+import { verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
 
@@ -20,7 +31,44 @@ const generationInputSchema = z.object({
   projectDescription: z.string().trim().min(10).max(10_000),
   workbookMode: z.enum(["template", "dynamic"]).default("dynamic"),
   selectedTemplate: z.string().optional(),
+  generationSource: z.enum(["whatsapp", "dashboard", "api", "admin"]).default("api"),
 });
+
+const planPatchSchema = z.object({
+  project_title: z.string().trim().min(1).max(250).optional(),
+  summary: z.string().trim().min(1).max(10_000).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  progress_percentage: z.number().min(0).max(100).optional(),
+  planning_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  planning_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  actual_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  actual_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  actual_hours: z.number().min(0).nullable().optional(),
+  requested_team_size: z.number().min(0).nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (value.planning_start_date && value.planning_end_date && value.planning_end_date < value.planning_start_date) {
+    ctx.addIssue({ code: "custom", path: ["planning_end_date"], message: "Planning end date cannot be earlier than start date." });
+  }
+  if (value.actual_start_date && value.actual_end_date && value.actual_end_date < value.actual_start_date) {
+    ctx.addIssue({ code: "custom", path: ["actual_end_date"], message: "Actual end date cannot be earlier than start date." });
+  }
+});
+
+const reviewSchema = z.object({
+  action: z.enum(["under_review", "approve", "reject", "archive", "restore", "generated", "failed"]),
+  rejectionReason: z.string().trim().max(2000).optional(),
+});
+
+const userPatchSchema = z.object({
+  role: z.enum(["admin", "operator"]).optional(),
+  active: z.boolean().optional(),
+});
+
+function adminContext(req: Request): { id: string } {
+  return {
+    id: String(req.get("x-flowboard-admin-id") ?? "").trim(),
+  };
+}
 
 export function createMcpServer() {
   const server = new McpServer({
@@ -159,7 +207,15 @@ export function createApp() {
 
   app.get("/api/operators", async (_req: Request, res: Response) => {
     try {
-      const operators = await listUsers();
+      const users = await listUsers();
+      const operators = await Promise.all(users.map(async (user) => {
+        if (!config.supabaseConfigured) return user;
+        try {
+          return { ...user, planCount: await countPlansForUser(user.username) };
+        } catch {
+          return { ...user, planCount: 0 };
+        }
+      }));
       res.json({ success: true, operators });
     } catch (error) {
       res.status(500).json({
@@ -183,6 +239,45 @@ export function createApp() {
       res.status(400).json({
         success: false,
         error: error instanceof Error ? error.message : "Failed to create operator",
+      });
+    }
+  });
+
+  app.get("/api/auth/status", async (req: Request, res: Response) => {
+    try {
+      const username = typeof req.query.username === "string" ? req.query.username : "";
+      if (!username) {
+        res.status(400).json({ success: false, error: "Username is required." });
+        return;
+      }
+      const access = await getUserAccessByUsername(username);
+      if (!access) {
+        res.status(404).json({ success: false, error: "User not found." });
+        return;
+      }
+      res.json({ success: true, user: access });
+    } catch (error) {
+      res.status(503).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unable to verify user status",
+      });
+    }
+  });
+
+  app.patch("/api/operators/:id", async (req: Request, res: Response) => {
+    try {
+      const parsed = userPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid user update request" });
+        return;
+      }
+      const userId = req.params.id as string;
+      const updated = await updateUserAccess(userId, parsed.data);
+      res.json({ success: true, user: updated });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update user",
       });
     }
   });
@@ -233,13 +328,68 @@ export function createApp() {
   app.patch("/api/plans/:id", async (req: Request, res: Response) => {
     try {
       const planId = req.params.id as string;
-      const updates = req.body;
-      const updated = await updatePlan(planId, updates);
+      const parsed = planPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid plan update request" });
+        return;
+      }
+      const updated = await updatePlan(planId, parsed.data);
       res.json({ success: true, plan: updated });
     } catch (error) {
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Failed to update plan",
+      });
+    }
+  });
+
+  app.post("/api/plans/:id/review", async (req: Request, res: Response) => {
+    try {
+      const parsed = reviewSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid review action request" });
+        return;
+      }
+      const admin = adminContext(req);
+      if (!admin.id) {
+        res.status(403).json({ success: false, error: "Administrator identity is required." });
+        return;
+      }
+      const planId = req.params.id as string;
+      const updated = await updatePlanReviewStatus(planId, parsed.data.action, admin.id, parsed.data.rejectionReason);
+      res.json({ success: true, plan: updated });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update plan review status",
+      });
+    }
+  });
+
+  app.get("/api/plans/:id/files", async (req: Request, res: Response) => {
+    if (!config.supabaseConfigured) {
+      res.json({ success: true, files: [] });
+      return;
+    }
+    try {
+      const files = await listPlanFiles(req.params.id as string);
+      res.json({ success: true, files });
+    } catch (error) {
+      res.status(502).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to list workbook files",
+      });
+    }
+  });
+
+  app.post("/api/plans/:id/files/:fileId/download", async (req: Request, res: Response) => {
+    try {
+      const download = await createSignedPlanFileDownload(req.params.fileId as string);
+      res.json({ success: true, ...download });
+    } catch (error) {
+      res.status(404).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create workbook download",
       });
     }
   });
@@ -374,7 +524,7 @@ export function createApp() {
 
     try {
       const userId = typeof req.query.userId === "string" ? req.query.userId.trim() : undefined;
-      const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+      const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 15;
       const plans = await getRecentPlans(userId || undefined, limit);
       res.json({ configured: true, plans });
     } catch (error) {
@@ -382,6 +532,27 @@ export function createApp() {
         configured: true,
         plans: [],
         error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  app.get("/api/admin/runs", async (req: Request, res: Response) => {
+    if (!config.supabaseConfigured) {
+      res.json({ success: true, runs: [] });
+      return;
+    }
+    try {
+      const runs = await listGenerationRuns({
+        status: typeof req.query.status === "string" ? req.query.status : undefined,
+        modelName: typeof req.query.modelName === "string" ? req.query.modelName : undefined,
+        planId: typeof req.query.planId === "string" ? req.query.planId : undefined,
+        date: typeof req.query.date === "string" ? req.query.date : undefined,
+      });
+      res.json({ success: true, runs });
+    } catch (error) {
+      res.status(502).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to list AI runs",
       });
     }
   });

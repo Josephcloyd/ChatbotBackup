@@ -36,4 +36,5 @@ export interface ProductionPlanInput {
   projectDescription: string;
   workbookMode?: "template" | "dynamic";
   selectedTemplate?: string;
+  generationSource?: "whatsapp" | "dashboard" | "api" | "admin";
 }

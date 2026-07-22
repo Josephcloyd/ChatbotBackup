@@ -5,7 +5,7 @@ import { useTheme } from "../providers/ThemeProvider";
 import { Icon } from "./Icon";
 
 export function ThemeToggle() {
-  const { theme, toggleTheme, mounted } = useTheme() as any;
+  const { theme, toggleTheme, mounted } = useTheme();
 
   if (!mounted) return <div className="theme-toggle-skeleton"></div>;
 

@@ -21,11 +21,15 @@ export async function middleware(request: NextRequest) {
 
   if (hasValidSession) {
     // Restrict Admin APIs
-    if (
-      (pathname.startsWith("/api/operators") ||
-        (pathname.startsWith("/api/plans") && ["DELETE", "PATCH"].includes(request.method))) &&
-      session.role !== "admin"
-    ) {
+    const isAdminPlannerRoute =
+      pathname.startsWith("/api/planner/operators") ||
+      pathname.startsWith("/api/planner/runs") ||
+      (pathname.startsWith("/api/planner/plans") &&
+        (["DELETE", "PATCH"].includes(request.method) ||
+          pathname.includes("/review") ||
+          pathname.includes("/files")));
+
+    if (isAdminPlannerRoute && session.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Access denied. Administrator privileges required." },
         { status: 403 },

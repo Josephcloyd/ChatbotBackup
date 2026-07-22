@@ -16,8 +16,8 @@ export const TEMPLATE_OPTIONS = [
 interface SidebarProps {
   user: { username: string; role: "admin" | "operator" };
   plannerOnline: boolean;
-  adminTab: "plans" | "operators";
-  setAdminTab: (tab: "plans" | "operators") => void;
+  adminTab: "plans" | "operators" | "runs";
+  setAdminTab: (tab: "plans" | "operators" | "runs") => void;
   mode: "dynamic" | "template";
   setMode: (mode: "dynamic" | "template") => void;
   selectedTemplate: string;
@@ -29,6 +29,8 @@ interface SidebarProps {
   error: string;
   generatePlan: () => void;
 }
+
+const generationPromptPlaceholder = "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
 
 export function Sidebar({
   user,
@@ -117,7 +119,8 @@ export function Sidebar({
               id="prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder={placeholder || "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today."}
+              placeholder={generationPromptPlaceholder}
+              className="generation-prompt-input editable-placeholder-field"
             />
             <div className="prompt-meta">
               <span>Natural language</span>
@@ -141,21 +144,58 @@ export function Sidebar({
           <p className="privacy-note">Runs locally through Ollama. Data saved under your account.</p>
         </>
       ) : (
-        <div className="panel-section grow admin-panel-nav">
-          <label>Administration Panels</label>
-          <button
-            className={`admin-nav-btn ${adminTab === "plans" ? "active" : ""}`}
-            onClick={() => setAdminTab("plans")}
-          >
-            <Icon name="grid" /> Plans Overview
-          </button>
-          <button
-            className={`admin-nav-btn ${adminTab === "operators" ? "active" : ""}`}
-            onClick={() => setAdminTab("operators")}
-          >
-            <Icon name="users" /> Manage Operators
-          </button>
-        </div>
+        <>
+          <div className="panel-section admin-panel-nav grow">
+            <label>Administration Panels</label>
+            <button
+              className={`admin-nav-btn ${adminTab === "plans" ? "active" : ""}`}
+              onClick={() => setAdminTab("plans")}
+            >
+              <Icon name="grid" /> Plans Overview
+            </button>
+            <button
+              className={`admin-nav-btn ${adminTab === "operators" ? "active" : ""}`}
+              onClick={() => setAdminTab("operators")}
+            >
+              <Icon name="users" /> Manage Operators
+            </button>
+            <button
+              className={`admin-nav-btn ${adminTab === "runs" ? "active" : ""}`}
+              onClick={() => setAdminTab("runs")}
+            >
+              <Icon name="clock" /> AI Runs
+            </button>
+          </div>
+
+          <div className="admin-sidebar-composer">
+            <label htmlFor="admin-sidebar-prompt">Describe your production plan</label>
+            <Textarea
+              id="admin-sidebar-prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder={generationPromptPlaceholder}
+              className="generation-prompt-input editable-placeholder-field"
+            />
+            <div className="prompt-meta">
+              <span>Admin prompt</span>
+              <span>{prompt.length} characters</span>
+            </div>
+            {error && (
+              <div className="error-box" role="alert">
+                {error}
+              </div>
+            )}
+            <Button
+              className="generate-button"
+              onClick={generatePlan}
+              disabled={loading || prompt.trim().length < 10}
+              isLoading={loading}
+            >
+              {!loading && <Icon name="spark" />} {loading ? "Building plan..." : "Generate plan"}
+            </Button>
+            <p className="privacy-note">Runs locally through Ollama. Generated plans save under your admin account.</p>
+          </div>
+        </>
       )}
     </>
   );
