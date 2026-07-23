@@ -2,12 +2,8 @@ export type CellValue = string | number | boolean | null;
 export type PlanRow = Record<string, CellValue>;
 
 export type PlanStatus =
-  | "draft"
   | "generating"
   | "generated"
-  | "under_review"
-  | "approved"
-  | "rejected"
   | "archived"
   | "failed";
 
@@ -52,7 +48,10 @@ export interface HistoryRecord {
   actual_end_date?: string | null;
   actual_hours?: number | null;
   requested_team_size?: number | null;
-  progress_percentage?: number;
+  progress_percentage?: number | null;
+  latest_progress_note?: string | null;
+  latest_progress_updated_at?: string | null;
+  latest_progress_updated_by?: string | null;
   priority?: PlanPriority;
   workbook_mode?: WorkbookMode;
   generation_source?: GenerationSource;

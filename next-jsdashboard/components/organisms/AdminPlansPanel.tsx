@@ -23,16 +23,6 @@ function sourceOf(plan: HistoryRecord): GenerationSource {
   return plan.generation_source ?? "whatsapp";
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 export function AdminPlansPanel({
   plans,
   activePlanId,
@@ -120,10 +110,10 @@ export function AdminPlansPanel({
   }
 
   const cards = [
-    ["Total plans", summary.totalPlans.toLocaleString()],
-    ["Generated", summary.generated.toLocaleString()],
+    ["Generated plans", summary.generated.toLocaleString()],
     ["Failed", summary.failed.toLocaleString()],
     ["Archived", summary.archived.toLocaleString()],
+    ["Total plans", summary.totalPlans.toLocaleString()],
   ];
 
   return (
@@ -164,7 +154,7 @@ export function AdminPlansPanel({
             <label htmlFor="plan-status-filter">Status</label>
             <select id="plan-status-filter" className="select-atom" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status">
               <option value="">All statuses</option>
-              {["generated", "archived", "failed"].map((status) => (
+              {["generating", "generated", "archived", "failed"].map((status) => (
                 <option value={status} key={status}>{status.replace("_", " ")}</option>
               ))}
             </select>
@@ -231,7 +221,6 @@ export function AdminPlansPanel({
               <th>Estimated hours</th>
               <th>Team size</th>
               <th>Source</th>
-              <th>Created at</th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
@@ -266,9 +255,6 @@ export function AdminPlansPanel({
                   <td className="numeric-cell" data-label="Estimated hours">{Number(item.total_hours_estimate || 0).toLocaleString()}</td>
                   <td className="numeric-cell" data-label="Team size">{item.recommended_team_size ?? "—"}</td>
                   <td data-label="Source"><span className={`compact-badge source-${sourceOf(item)}`}>{sourceOf(item)}</span></td>
-                  <td data-label="Created at">
-                    <span className="date-cell">{formatDateTime(item.created_at)}</span>
-                  </td>
                   <td data-label="Actions" className="text-right actions-cell" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="action-btn view-btn" onClick={() => onViewPlan(item.id)} title="View plan" aria-label={`View ${item.project_title}`}>
                       <Icon name="eye" />
@@ -284,14 +270,14 @@ export function AdminPlansPanel({
             ))}
             {filteredPlans.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center text-muted p-4">
+                <td colSpan={8} className="text-center text-muted p-4">
                   No production plans match the current filters.
                 </td>
               </tr>
             )}
             {hiddenFilteredCount > 0 && (
               <tr className="table-limit-row">
-                <td colSpan={9}>
+                <td colSpan={8}>
                   Showing the first {PLAN_OVERVIEW_LIMIT} matching records. Refine filters to narrow the overview.
                 </td>
               </tr>

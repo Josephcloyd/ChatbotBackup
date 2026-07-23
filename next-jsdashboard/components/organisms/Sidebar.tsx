@@ -16,8 +16,8 @@ export const TEMPLATE_OPTIONS = [
 interface SidebarProps {
   user: { username: string; role: "admin" | "operator" };
   plannerOnline: boolean;
-  adminTab: "plans" | "operators" | "runs";
-  setAdminTab: (tab: "plans" | "operators" | "runs") => void;
+  adminTab: "overview" | "plans" | "operators";
+  setAdminTab: (tab: "overview" | "plans" | "operators") => void;
   mode: "dynamic" | "template";
   setMode: (mode: "dynamic" | "template") => void;
   selectedTemplate: string;
@@ -148,6 +148,12 @@ export function Sidebar({
           <div className="panel-section admin-panel-nav grow">
             <label>Administration Panels</label>
             <button
+              className={`admin-nav-btn ${adminTab === "overview" ? "active" : ""}`}
+              onClick={() => setAdminTab("overview")}
+            >
+              <Icon name="hours" /> Command Center
+            </button>
+            <button
               className={`admin-nav-btn ${adminTab === "plans" ? "active" : ""}`}
               onClick={() => setAdminTab("plans")}
             >
@@ -158,12 +164,6 @@ export function Sidebar({
               onClick={() => setAdminTab("operators")}
             >
               <Icon name="users" /> Manage Operators
-            </button>
-            <button
-              className={`admin-nav-btn ${adminTab === "runs" ? "active" : ""}`}
-              onClick={() => setAdminTab("runs")}
-            >
-              <Icon name="clock" /> AI Runs
             </button>
           </div>
 

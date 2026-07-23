@@ -14,6 +14,7 @@ import { planRulesService } from "./services/planRulesService.js";
 import {
   buildDynamicPlan,
   buildDynamicPrompt,
+  type DynamicPlanProposal,
   validateDynamicProposal,
 } from "./services/dynamicPlanService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
@@ -23,7 +24,10 @@ import {
   type ProductionPlanInput,
   type ProductionPlanOutput,
 } from "./productionPrompt.js";
-import { extractRequestedConstraints } from "./services/planningConstraintsService.js";
+import {
+  extractRequestedConstraints,
+  type RequestedConstraints,
+} from "./services/planningConstraintsService.js";
 
 export interface PlannerResult {
   success: boolean;
@@ -46,6 +50,73 @@ function buildFriendlyFailure(errorMessage: string): string {
     return "I understood your request, but the planning numbers did not validate. Please include a positive duration, team/resource count, and total hours.";
   }
   return "I understood your request, but I could not generate a valid production plan. Please try adding a clearer duration, team size, total hours, and start date.";
+}
+
+export function shouldClarifyRequest(requestedConstraints: RequestedConstraints): boolean {
+  const hasHours = requestedConstraints.totalHours !== undefined;
+  const hasQuantity = requestedConstraints.totalQuantity !== undefined;
+
+  if (!hasHours || !hasQuantity) {
+    return false;
+  }
+
+  const hasSchedule = requestedConstraints.duration !== undefined || requestedConstraints.durationDays !== undefined;
+  const hasTeam = requestedConstraints.teamSize !== undefined;
+
+  // Hybrid workload + labor-budget requests are valid in dynamic mode.
+  // They only need clarification when the prompt is genuinely underspecified.
+  return !(hasSchedule && hasTeam);
+}
+
+function canUseDeterministicDynamicFallback(requestedConstraints: RequestedConstraints): boolean {
+  const hasSchedule =
+    requestedConstraints.duration !== undefined ||
+    requestedConstraints.durationDays !== undefined ||
+    requestedConstraints.endDate !== undefined;
+
+  return (
+    hasSchedule &&
+    requestedConstraints.teamSize !== undefined &&
+    requestedConstraints.totalHours !== undefined
+  );
+}
+
+function buildDeterministicDynamicProposal(
+  input: ProductionPlanInput,
+  requestedConstraints: RequestedConstraints,
+  currentDate: string,
+): DynamicPlanProposal {
+  const duration = requestedConstraints.duration ?? {
+    value: requestedConstraints.durationDays ?? 30,
+    unit: "days" as const,
+  };
+  const unit = requestedConstraints.unitOfMeasure ?? "hours";
+  const quantityText = requestedConstraints.totalQuantity
+    ? `${requestedConstraints.totalQuantity.toLocaleString()} ${unit}`
+    : `${requestedConstraints.totalHours ?? 160} hours`;
+
+  return {
+    projectName: `${unit.charAt(0).toUpperCase()}${unit.slice(1)} Production Plan`,
+    client: "",
+    totalAssets: requestedConstraints.totalQuantity ?? 0,
+    planningSettings: {
+      startDate: requestedConstraints.startDate ?? currentDate,
+      durationValue: duration.value,
+      durationUnit: duration.unit,
+      weekdaysOnly: requestedConstraints.weekdaysOnly ?? true,
+      totalHours: requestedConstraints.totalHours ?? 160,
+      teamSize: requestedConstraints.teamSize ?? 1,
+      hoursPerDay: 8,
+      throughputRate: requestedConstraints.throughputRate,
+    },
+    assumptions: [
+      "Plan generated from deterministically extracted request constraints.",
+      `Planned workload is ${quantityText}.`,
+    ],
+    phases: [],
+    risks: [],
+    summary: `Structured production plan for ${input.projectDescription}`,
+  };
 }
 
 export async function generateProductionPlan(
@@ -73,11 +144,10 @@ export async function generateProductionPlan(
       (item) => `I interpreted "${item.source}" as ${item.normalized}.`,
     );
 
-    // Mixed-metric prompt: both hours and a quantity unit detected — ask the user to clarify.
-    if (requestedConstraints.totalHours !== undefined && requestedConstraints.totalQuantity !== undefined) {
+    if (shouldClarifyRequest(requestedConstraints)) {
       const unit = requestedConstraints.unitOfMeasure ?? "items";
-      const qty = requestedConstraints.totalQuantity.toLocaleString();
-      const hrs = requestedConstraints.totalHours;
+      const qty = requestedConstraints.totalQuantity?.toLocaleString() ?? "0";
+      const hrs = requestedConstraints.totalHours ?? 0;
       return {
         success: false,
         error: "Please clarify your request.",
@@ -107,14 +177,29 @@ export async function generateProductionPlan(
     } catch (parseError) {
       console.error("[plannerService] JSON parse failed:", parseError);
       console.error("[plannerService] Raw response was:", rawResponse.slice(0, 500));
-      throw new Error(`Ollama returned invalid JSON: ${(parseError as Error).message}`);
+      if (mode !== "dynamic" || !canUseDeterministicDynamicFallback(requestedConstraints)) {
+        throw new Error(`Ollama returned invalid JSON: ${(parseError as Error).message}`);
+      }
+      console.warn("[plannerService] Falling back to deterministic dynamic proposal after invalid Ollama JSON.");
+      parsedResponse = buildDeterministicDynamicProposal(input, requestedConstraints, currentDate);
     }
 
     let plan: ProductionPlanOutput;
     let workbookPath: string;
     if (mode === "dynamic") {
-      const proposal = validateDynamicProposal(parsedResponse, currentDate);
-      const dynamicResult = buildDynamicPlan(input, proposal, currentDate);
+      let dynamicResult: ReturnType<typeof buildDynamicPlan>;
+      try {
+        const proposal = validateDynamicProposal(parsedResponse, currentDate);
+        dynamicResult = buildDynamicPlan(input, proposal, currentDate);
+      } catch (dynamicError) {
+        if (!canUseDeterministicDynamicFallback(requestedConstraints)) throw dynamicError;
+        console.warn(
+          "[plannerService] Falling back to deterministic dynamic proposal after model proposal failed:",
+          (dynamicError as Error).message,
+        );
+        const proposal = buildDeterministicDynamicProposal(input, requestedConstraints, currentDate);
+        dynamicResult = buildDynamicPlan(input, proposal, currentDate);
+      }
       plan = planRulesService.validate(dynamicResult.plan, { currentDate, input });
       workbookPath = await dynamicExcelService.writeDynamicProductionPlan(dynamicResult);
     } else {
@@ -166,7 +251,7 @@ export async function generateProductionPlan(
         {
           workbookMode: mode === "template" ? "official_template" : "dynamic",
           generationSource: input.generationSource ?? "whatsapp",
-          requestedBy: input.whatsappUserId,
+          requestedBy: input.requestedBy ?? input.whatsappUserId,
         },
       );
       planId = savedRecord.id;

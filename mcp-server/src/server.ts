@@ -21,6 +21,7 @@ import {
   createSignedPlanFileDownload,
   listGenerationRuns,
   updatePlanReviewStatus,
+  updatePlanProgress,
 } from "./supabaseService.js";
 import { verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
@@ -32,6 +33,7 @@ const generationInputSchema = z.object({
   workbookMode: z.enum(["template", "dynamic"]).default("dynamic"),
   selectedTemplate: z.string().optional(),
   generationSource: z.enum(["whatsapp", "dashboard", "api", "admin"]).default("api"),
+  requestedBy: z.string().trim().min(1).max(120).optional(),
 });
 
 const planPatchSchema = z.object({
@@ -54,9 +56,21 @@ const planPatchSchema = z.object({
   }
 });
 
+const progressPatchSchema = z.object({
+  progress_percentage: z.number().min(0).max(100),
+  actual_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  actual_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  actual_hours: z.number().min(0).nullable().optional(),
+  requested_team_size: z.number().int().min(0).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.actual_start_date && value.actual_end_date && value.actual_end_date < value.actual_start_date) {
+    ctx.addIssue({ code: "custom", path: ["actual_end_date"], message: "Actual end date cannot be earlier than start date." });
+  }
+});
+
 const reviewSchema = z.object({
-  action: z.enum(["under_review", "approve", "reject", "archive", "restore", "generated", "failed"]),
-  rejectionReason: z.string().trim().max(2000).optional(),
+  action: z.enum(["archive", "restore", "generated", "failed"]),
 });
 
 const userPatchSchema = z.object({
@@ -67,6 +81,14 @@ const userPatchSchema = z.object({
 function adminContext(req: Request): { id: string } {
   return {
     id: String(req.get("x-flowboard-admin-id") ?? "").trim(),
+  };
+}
+
+function userContext(req: Request): { userId: string; role: "admin" | "operator" } {
+  const roleHeader = String(req.get("x-flowboard-user-role") ?? "").trim();
+  return {
+    userId: String(req.get("x-flowboard-user-id") ?? "").trim(),
+    role: roleHeader === "admin" ? "admin" : "operator",
   };
 }
 
@@ -343,6 +365,30 @@ export function createApp() {
     }
   });
 
+  app.patch("/api/plans/:id/progress", async (req: Request, res: Response) => {
+    try {
+      const parsed = progressPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid plan progress update request", details: parsed.error.flatten() });
+        return;
+      }
+
+      const context = userContext(req);
+      if (!context.userId) {
+        res.status(401).json({ success: false, error: "Authenticated user identity is required." });
+        return;
+      }
+
+      const planId = req.params.id as string;
+      const result = await updatePlanProgress(planId, parsed.data, context);
+      res.json({ success: true, plan: result.plan, progressUpdate: result.progressUpdate });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update plan progress";
+      const status = /only update progress for your own plans/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
+      res.status(status).json({ success: false, error: message });
+    }
+  });
+
   app.post("/api/plans/:id/review", async (req: Request, res: Response) => {
     try {
       const parsed = reviewSchema.safeParse(req.body);
@@ -356,7 +402,7 @@ export function createApp() {
         return;
       }
       const planId = req.params.id as string;
-      const updated = await updatePlanReviewStatus(planId, parsed.data.action, admin.id, parsed.data.rejectionReason);
+      const updated = await updatePlanReviewStatus(planId, parsed.data.action, admin.id);
       res.json({ success: true, plan: updated });
     } catch (error) {
       res.status(400).json({

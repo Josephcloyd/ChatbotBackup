@@ -11,6 +11,7 @@ import {
   resolvePlanningSettings,
 } from "../src/services/planningConstraintsService.js";
 import { planRulesService } from "../src/services/planRulesService.js";
+import { shouldClarifyRequest } from "../src/plannerService.js";
 
 const currentDate = "2026-07-21";
 
@@ -136,6 +137,22 @@ test("supports hours-only student enrollment encoding plans", () => {
   planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
 });
 
+test("does not force clarification for hybrid workload-plus-budget requests", () => {
+  const description = "Create a production plan for processing 10,000 records over a 5-month period using 50 recorders with a total labor budget of 400 hours. Distribute the workload, calculate daily, weekly, and monthly targets, assign hours fairly among the team, estimate productivity per recorder, and determine whether the 400-hour budget is sufficient to meet the target. Generate the plan in a structured format suitable for an Excel production planning workbook.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+
+  assert.equal(constraints.totalQuantity, 10000);
+  assert.equal(constraints.unitOfMeasure, "records");
+  assert.equal(constraints.totalHours, 400);
+  assert.equal(constraints.teamSize, 50);
+  assert.equal(shouldClarifyRequest(constraints), false);
+
+  const plan = dynamicPlan(description);
+  assert.equal(plan.project.productionUnit, "records");
+  assert.equal(plan.project.totalAssets, 10000);
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
 test("builds schedules for custom working days only", () => {
   const description = "Plan 30 tasks over six working days on Mondays, Wednesdays, and Fridays.";
   const constraints = extractRequestedConstraints(description, currentDate);
@@ -183,4 +200,120 @@ test("plan rules reject invalid task dependencies and chart sources", () => {
 test("parses Ollama JSON surrounded by markdown", () => {
   const parsed = parseOllamaJson<{ success: boolean }>('```json\n{"success":true}\n```');
   assert.equal(parsed.success, true);
+});
+
+test("challenge 1: enforces Recording to Validation to QA to Delivery dependencies", () => {
+  const description = "Generate a production plan with dependencies for 160 total hours over 20 weekdays using 4 employees.";
+  const plan = dynamicPlan(description);
+  const taskSheet = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Task Breakdown");
+  assert.ok(taskSheet);
+  const taskNames = taskSheet.rows.map((row) => String(row["Task Name"]));
+  assert.ok(taskNames.some((name) => /Recording/i.test(name)));
+  assert.ok(taskNames.some((name) => /Validation/i.test(name)));
+  assert.ok(taskNames.some((name) => /\bQA\b/i.test(name)));
+  assert.ok(taskNames.some((name) => /Delivery/i.test(name)));
+  for (let index = 1; index < taskSheet.rows.length; index += 1) {
+    assert.equal(taskSheet.rows[index]!.Dependencies, `TASK-${String(index).padStart(3, "0")}`);
+    assert.ok(String(taskSheet.rows[index]!["Planned Start"]) >= String(taskSheet.rows[index - 1]!["Planned End"]));
+  }
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("challenge 2: replans remaining work after month-three staffing changes", () => {
+  const description =
+    "Create a production plan for 60,000 records over 6 months using 50 employees with 48000 total hours. During Month 3, remove 15 employees due to leave and add 8 new junior employees. Recalculate the remaining schedule automatically.";
+  const plan = dynamicPlan(description);
+  assert.ok(plan.structuredPlan?.replanning.isReplan);
+  assert.equal(plan.structuredPlan.replanning.preservedCompletedWork, true);
+
+  const staffing = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Staffing Changes");
+  assert.ok(staffing);
+  assert.ok(staffing.rows.some((row) => row["Removed Employees"] === 15 && row["Added Junior Employees"] === 8));
+
+  const currentActuals = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Current Actuals");
+  assert.ok(currentActuals);
+  assert.ok(currentActuals.rows.some((row) => row.Status === "Completed"));
+
+  const forecast = plan.structuredPlan.forecast;
+  assert.match(forecast.revisedCompletionDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(forecast.scheduleVarianceDays >= 0);
+  assert.ok(plan.structuredPlan.replanning.remainingWork.length > 0);
+});
+
+test("challenge 3: excludes holidays and respects overtime limits in capacity", () => {
+  const description =
+    "Plan 100 records over 5 weekdays using 2 employees with 80 total hours, excluding holiday 2026-07-22, overtime limit of 1 hour per day.";
+  const plan = dynamicPlan(description);
+  const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  assert.ok(production);
+  assert.equal(production.rows.some((row) => row.Date === "2026-07-22"), false);
+  assert.ok(production.rows.every((row) => {
+    const day = new Date(`${row.Date}T00:00:00Z`).getUTCDay();
+    return day >= 1 && day <= 5;
+  }));
+  const capacity = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Capacity Analysis");
+  assert.ok(capacity?.rows.some((row) => row.Metric === "Overtime limit" && row.Value === 1));
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("challenge 4: scores scenarios and recommends the measurable optimum", () => {
+  const description =
+    "Compare three staffing strategies with different budgets and recommend the optimal solution for 120 total hours over 10 weekdays using 3 employees.";
+  const plan = dynamicPlan(description);
+  const scenarios = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Scenario Comparison");
+  assert.ok(scenarios);
+  assert.equal(scenarios.rows.length, 3);
+  assert.ok(scenarios.rows.every((row) => Number(row["Scenario Score"]) > 0));
+  const best = scenarios.rows.reduce((winner, row) =>
+    Number(row["Scenario Score"]) > Number(winner["Scenario Score"]) ? row : winner,
+  );
+  assert.equal(plan.structuredPlan?.recommendedScenario.name, best.Scenario);
+  assert.ok(plan.workbook.sheets.some((sheet) => sheet.sheetName === "Cost Optimization"));
+});
+
+test("challenge 5: allocates shared validators without exceeding capacity", () => {
+  const description =
+    "Create a validation production plan for two projects sharing 4 validators over 10 weekdays with 160 total hours.";
+  const plan = dynamicPlan(description);
+  const resources = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Resource Allocation");
+  assert.ok(resources);
+  assert.equal(resources.rows.length, 4);
+  const maxPerValidator = 10 * 8;
+  assert.ok(resources.rows.every((row) => Number(row["Planned Hours"]) <= maxPerValidator));
+  const totalAssigned = resources.rows.reduce((sum, row) => sum + Number(row["Planned Hours"]), 0);
+  assert.equal(totalAssigned, 160);
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("challenge 6: produces complete end-to-end workbook-ready planning output", () => {
+  const description =
+    "Generate a complete production plan considering staffing, dependencies, risks, forecasting, scenario comparison, holidays, overtime limits, and workbook generation for 10,000 records over 20 weekdays using 5 employees with 800 total hours excluding holiday 2026-07-22, overtime limit of 2 hours per day.";
+  const plan = dynamicPlan(description);
+  const requiredSheets = [
+    "Executive Summary",
+    "Input Assumptions",
+    "Capacity Analysis",
+    "Production Schedule",
+    "Dependency Timeline",
+    "Resource Allocation",
+    "Staffing Changes",
+    "Current Actuals",
+    "Revised Forecast",
+    "Scenario Comparison",
+    "Cost Optimization",
+    "Bottleneck Analysis",
+    "Risk Register",
+    "Recommended Recovery Plan",
+    "KPI Dashboard",
+    "Revision History",
+  ];
+  for (const sheetName of requiredSheets) {
+    assert.ok(plan.workbook.sheets.some((sheet) => sheet.sheetName === sheetName), `${sheetName} should exist`);
+  }
+  assert.ok(plan.structuredPlan);
+  assert.equal(plan.structuredPlan.excelWorkbook.sheets.includes("Scenario Comparison"), true);
+  assert.match(plan.structuredPlan.forecast.revisedCompletionDate, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(plan.structuredPlan.scenarios.length === 3);
+  assert.ok(plan.structuredPlan.recommendedScenario.name.length > 0);
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
 });

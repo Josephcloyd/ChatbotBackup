@@ -40,18 +40,17 @@ export interface PlanRecord {
   actual_hours?: number | null;
   requested_team_size?: number | null;
   progress_percentage?: number;
+  latest_progress_note?: string | null;
+  latest_progress_updated_at?: string | null;
+  latest_progress_updated_by?: string | null;
   priority?: PlanPriority;
   workbook_mode?: WorkbookMode;
   generation_source?: GenerationSource;
 }
 
 export type PlanStatus =
-  | "draft"
   | "generating"
   | "generated"
-  | "under_review"
-  | "approved"
-  | "rejected"
   | "archived"
   | "failed";
 
@@ -90,6 +89,28 @@ export interface PlanGenerationRunRecord {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+}
+
+export interface PlanProgressUpdateRecord {
+  id: string;
+  plan_id: string;
+  updated_by: string;
+  progress_percentage: number;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
+  actual_hours: number | null;
+  requested_team_size: number | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface PlanProgressUpdateInput {
+  progress_percentage: number;
+  actual_start_date?: string | null;
+  actual_end_date?: string | null;
+  actual_hours?: number | null;
+  requested_team_size?: number | null;
+  note?: string | null;
 }
 
 interface BuildPlanRecordOptions {
@@ -270,7 +291,48 @@ export async function getRecentPlans(
   if (whatsappUserId) query = query.eq("whatsapp_user_id", whatsappUserId);
   const { data, error } = await query;
   if (error) throw new Error(`Supabase query failed: ${error.message}`);
-  return (data ?? []) as PlanRecord[];
+  return enrichPlansWithLatestProgress((data ?? []) as PlanRecord[]);
+}
+
+async function enrichPlansWithLatestProgress(plans: PlanRecord[]): Promise<PlanRecord[]> {
+  const ids = plans.map((plan) => plan.id).filter((id): id is string => Boolean(id));
+  if (ids.length === 0) return plans;
+
+  try {
+    const supabase = getClient();
+    const { data, error } = await supabase
+      .from("plan_progress_updates")
+      .select("plan_id, updated_by, note, created_at")
+      .in("plan_id", ids)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const latestByPlan = new Map<string, { updated_by: string; note: string | null; created_at: string }>();
+    for (const row of data ?? []) {
+      const planId = String(row.plan_id ?? "");
+      if (!planId || latestByPlan.has(planId)) continue;
+      latestByPlan.set(planId, {
+        updated_by: String(row.updated_by ?? ""),
+        note: typeof row.note === "string" ? row.note : null,
+        created_at: String(row.created_at ?? ""),
+      });
+    }
+
+    return plans.map((plan) => {
+      const latest = plan.id ? latestByPlan.get(plan.id) : undefined;
+      if (!latest) return plan;
+      return {
+        ...plan,
+        latest_progress_note: latest.note,
+        latest_progress_updated_at: latest.created_at,
+        latest_progress_updated_by: latest.updated_by,
+      };
+    });
+  } catch (error) {
+    console.warn("[supabaseService] Could not load latest progress updates:", error instanceof Error ? error.message : String(error));
+    return plans;
+  }
 }
 
 function getWorkbookBucket(): string | null {
@@ -506,7 +568,73 @@ export async function updatePlan(planId: string, updates: Record<string, unknown
   return data as PlanRecord;
 }
 
-export type ReviewAction = "under_review" | "approve" | "reject" | "archive" | "restore" | "generated" | "failed";
+export async function updatePlanProgress(
+  planId: string,
+  input: PlanProgressUpdateInput,
+  context: { userId: string; role: "admin" | "operator" },
+): Promise<{ plan: PlanRecord; progressUpdate: PlanProgressUpdateRecord }> {
+  const userId = context.userId.trim();
+  if (!userId) throw new Error("Authenticated user id is required.");
+
+  const existing = await getPlanById(planId);
+  if (!existing) throw new Error("Plan not found.");
+  if (context.role !== "admin" && existing.requested_by !== userId) {
+    throw new Error("You can only update progress for your own plans.");
+  }
+
+  const note = typeof input.note === "string" && input.note.trim().length > 0
+    ? input.note.trim().slice(0, 2000)
+    : null;
+  const progressUpdate = {
+    progress_percentage: input.progress_percentage,
+    actual_start_date: input.actual_start_date ?? null,
+    actual_end_date: input.actual_end_date ?? null,
+    actual_hours: input.actual_hours ?? null,
+    requested_team_size: input.requested_team_size ?? null,
+  };
+
+  const supabase = getClient();
+  const { data: updatedPlan, error: updateError } = await supabase
+    .from("production_plans")
+    .update({
+      ...progressUpdate,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", planId)
+    .select()
+    .single();
+
+  if (updateError) {
+    throw new Error(`Failed to update plan progress ${planId} in Supabase: ${updateError.message}`);
+  }
+
+  const { data: progressRow, error: insertError } = await supabase
+    .from("plan_progress_updates")
+    .insert({
+      plan_id: planId,
+      updated_by: userId,
+      ...progressUpdate,
+      note,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to record plan progress history ${planId} in Supabase: ${insertError.message}`);
+  }
+
+  return {
+    plan: {
+      ...(updatedPlan as PlanRecord),
+      latest_progress_note: note,
+      latest_progress_updated_at: (progressRow as PlanProgressUpdateRecord).created_at,
+      latest_progress_updated_by: userId,
+    },
+    progressUpdate: progressRow as PlanProgressUpdateRecord,
+  };
+}
+
+export type ReviewAction = "archive" | "restore" | "generated" | "failed";
 
 export async function updatePlanReviewStatus(
   planId: string,
@@ -517,20 +645,7 @@ export async function updatePlanReviewStatus(
   const now = new Date().toISOString();
   const updates: Partial<PlanRecord> = { updated_at: now };
 
-  if (action === "under_review") {
-    updates.status = "under_review";
-  } else if (action === "approve") {
-    updates.status = "approved";
-    updates.reviewed_by = adminId;
-    updates.reviewed_at = now;
-    updates.rejection_reason = null;
-  } else if (action === "reject") {
-    if (!rejectionReason?.trim()) throw new Error("Rejection reason is required.");
-    updates.status = "rejected";
-    updates.reviewed_by = adminId;
-    updates.reviewed_at = now;
-    updates.rejection_reason = rejectionReason.trim();
-  } else if (action === "archive") {
+  if (action === "archive") {
     updates.status = "archived";
     updates.archived_at = now;
   } else if (action === "restore") {

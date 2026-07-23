@@ -976,6 +976,78 @@ a {
   padding: 21px 22px;
 }
 
+.progress-card {
+  display: grid;
+  gap: 16px;
+}
+
+.progress-snapshot {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.progress-snapshot > div,
+.progress-note {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfd;
+}
+
+.progress-snapshot span,
+.progress-note span {
+  display: block;
+  color: #77869a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.progress-snapshot strong {
+  display: block;
+  margin-top: 5px;
+  color: #34485d;
+  font-size: 13px;
+}
+
+.progress-note p {
+  margin: 7px 0 0;
+  color: #526378;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.progress-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.progress-note-field {
+  grid-column: span 3;
+}
+
+.progress-note-field .textarea-atom {
+  min-height: 82px;
+}
+
+.progress-form-actions {
+  grid-column: span 2;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 82px;
+}
+
+.progress-form-actions .success-box,
+.progress-form-actions .error-box {
+  flex: 1;
+}
+
 .rows-count,
 .history-state {
   padding: 6px 9px;
@@ -1127,6 +1199,10 @@ td {
   margin: 18px 0;
 }
 
+.admin-summary-grid-six {
+  grid-template-columns: repeat(6, minmax(110px, 1fr));
+}
+
 .admin-summary-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1148,6 +1224,182 @@ td {
   margin-top: 6px;
   color: var(--ink);
   font-size: 22px;
+}
+
+.plans-summary-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, .65fr) minmax(420px, 1.35fr);
+  align-items: center;
+  gap: 18px;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.plans-summary-panel p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plans-summary-grid {
+  margin: 0;
+}
+
+.admin-overview-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-insight-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, .9fr) minmax(320px, 1.1fr) minmax(220px, .8fr);
+  gap: 18px;
+}
+
+.admin-insight-card {
+  display: flex;
+  min-height: 240px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.health-list,
+.pipeline-list,
+.watch-list,
+.activity-feed {
+  display: grid;
+  gap: 10px;
+}
+
+.health-row {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.health-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.health-dot.ok {
+  background: #046241;
+  box-shadow: 0 0 0 4px rgba(4, 98, 65, .08);
+}
+
+.health-dot.warn {
+  background: #ffb347;
+  box-shadow: 0 0 0 4px rgba(255, 179, 71, .14);
+}
+
+.health-row strong,
+.activity-row strong {
+  display: block;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.health-row small,
+.activity-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.pipeline-row {
+  display: grid;
+  grid-template-columns: 98px 1fr 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.pipeline-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1f4;
+}
+
+.pipeline-track div {
+  height: 100%;
+  border-radius: inherit;
+  background: #046241;
+}
+
+.pipeline-row strong {
+  text-align: right;
+  font-size: 13px;
+}
+
+.watch-list {
+  grid-template-columns: 1fr;
+}
+
+.watch-list > div {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.watch-list span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+
+.watch-list strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 22px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 120px;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .5);
+}
+
+.activity-marker {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 50%;
+}
+
+.activity-row p {
+  margin: 4px 0 0;
+  color: #526378;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.activity-row time {
+  color: #728096;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
 }
 
 .admin-filter-panel {
@@ -1395,6 +1647,7 @@ td {
 }
 
 .status-generated,
+.status-completed,
 .status-approved,
 .source-dashboard {
   background: #e6f8ef;
@@ -2128,6 +2381,17 @@ td {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 
+  .admin-summary-grid-six,
+  .admin-insight-grid,
+  .plans-summary-panel {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .progress-snapshot,
+  .progress-form {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
   .admin-filter-grid,
   .admin-generation-grid,
   .admin-form-grid,
@@ -2138,13 +2402,32 @@ td {
 
 @media (max-width: 640px) {
   .admin-summary-grid,
+  .admin-summary-grid-six,
   .details-grid,
+  .progress-snapshot,
+  .progress-form,
+  .plans-summary-panel,
   .admin-filter-grid,
   .admin-generation-grid,
   .admin-form-grid,
   .admin-two-column,
+  .admin-insight-grid,
   .admin-operators-grid {
     grid-template-columns: 1fr;
+  }
+
+  .activity-row {
+    grid-template-columns: 10px 1fr;
+  }
+
+  .activity-row time {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .progress-note-field,
+  .progress-form-actions {
+    grid-column: auto;
   }
 
   .modal-content {
@@ -2228,17 +2511,42 @@ td {
 
 [data-theme="dark"] .plan-title-subtext,
 [data-theme="dark"] .cell-stack small,
-[data-theme="dark"] .date-cell {
+[data-theme="dark"] .date-cell,
+[data-theme="dark"] .progress-snapshot span,
+[data-theme="dark"] .progress-note span {
   color: #a4bba8;
+}
+
+[data-theme="dark"] .progress-snapshot strong,
+[data-theme="dark"] .progress-note p {
+  color: var(--ink);
 }
 
 [data-theme="dark"] .admin-filter-panel,
 [data-theme="dark"] .admin-summary-card,
+[data-theme="dark"] .plans-summary-panel,
 [data-theme="dark"] .detail-item,
+[data-theme="dark"] .progress-snapshot > div,
+[data-theme="dark"] .progress-note,
 [data-theme="dark"] .prompt-card,
+[data-theme="dark"] .health-row,
+[data-theme="dark"] .watch-list > div,
+[data-theme="dark"] .activity-row,
 [data-theme="dark"] .bulk-actions-bar {
   background: rgba(255, 255, 255, .035);
   border-color: var(--line);
+}
+
+[data-theme="dark"] .pipeline-track {
+  background: rgba(255, 255, 255, .07);
+}
+
+[data-theme="dark"] .activity-row p {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .activity-row time {
+  color: #a4bba8;
 }
 
 [data-theme="dark"] .admin-filter-panel .input-atom,

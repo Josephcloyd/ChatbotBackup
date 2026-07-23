@@ -16,6 +16,7 @@ export async function POST(request: Request) {
       ...body,
       whatsappUserId: session.username,
       generationSource: session.role === "admin" ? "admin" : "dashboard",
+      requestedBy: session.id ?? session.username,
     };
     const response = await fetch(`${plannerUrl}/api/generate`, {
       method: "POST",

@@ -185,6 +185,9 @@ export class PlanRulesService {
         if (taskIds.has(taskId)) throw new Error(`Task Breakdown contains duplicate Task ID ${taskId}`);
         taskIds.add(taskId);
       }
+      const taskById = new Map(
+        taskSheet.rows.map((row) => [String(row["Task ID"] ?? "").trim(), row]),
+      );
 
       for (const [index, row] of taskSheet.rows.entries()) {
         const rowNumber = index + 1;
@@ -208,8 +211,15 @@ export class PlanRulesService {
           throw new Error(`Task Breakdown row ${rowNumber} is outside the requested custom working days`);
         }
         for (const dependencyId of splitIds(row.Dependencies)) {
-          if (!taskIds.has(dependencyId)) {
+          const dependency = taskById.get(dependencyId);
+          if (!dependency) {
             throw new Error(`Task Breakdown row ${rowNumber} references unknown dependency ${dependencyId}`);
+          }
+          const dependencyEnd = isoDate(dependency["Planned End"]);
+          if (dependencyEnd && start < dependencyEnd) {
+            throw new Error(
+              `Task Breakdown row ${rowNumber} starts before dependency ${dependencyId} is complete`,
+            );
           }
         }
       }

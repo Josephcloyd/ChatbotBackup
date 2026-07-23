@@ -34,6 +34,10 @@ export interface RequestedConstraints {
   needsBuffer?: boolean;
   needsWeeklyTracking?: boolean;
   workingDays?: number[];
+  /** ISO dates explicitly excluded from planned work, such as holidays. */
+  holidays?: string[];
+  /** Maximum allowed overtime hours per person per day. */
+  overtimeLimitHoursPerPersonPerDay?: number;
   /** Unit of measure extracted from the prompt (e.g. "images", "records"). */
   unitOfMeasure?: string;
   /** Total quantity of units extracted from the prompt (e.g. 350000). */
@@ -54,6 +58,8 @@ export interface PlanningDefaults {
   teamSize?: number;
   weekdaysOnly?: boolean;
   workingDays?: number[];
+  holidays?: string[];
+  overtimeLimitHoursPerPersonPerDay?: number;
   unitOfMeasure?: string;
   totalQuantity?: number;
 }
@@ -66,6 +72,8 @@ export interface ResolvedPlanningSettings {
   teamSize: number;
   weekdaysOnly: boolean;
   workingDays?: number[];
+  holidays?: string[];
+  overtimeLimitHoursPerPersonPerDay?: number;
   unitOfMeasure?: string;
   totalQuantity?: number;
 }
@@ -89,15 +97,15 @@ function positive(value: number | undefined, fallback: number, name: string): nu
 function inferProjectType(description: string): string | undefined {
   if (/\b(?:capture|collection|collect|text\s+capture|data\s+collection)\b/i.test(description)) return "data collection";
   if (/\b(?:software|app|application|dashboard|website|web\s+site|web\s+development|hris|system|feature|module|developers?)\b/i.test(description)) return "software development";
-  if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing)\b/i.test(description)) return "document processing";
+  if (/\bdata\s+encoding|encode|encoder|enrollment\s+records?\b/i.test(description)) return "data encoding";
+  if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing|record\s+processing|data\s+processing)\b/i.test(description)) return "document processing";
   if (/\b(?:manufactur(?:e|ing)|machines?|factory|assembly|units?|production\s+line)\b/i.test(description)) return "manufacturing";
   if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|media\s+production)\b/i.test(description)) return "content production";
   if (/\b(?:customer\s+support|tickets?|service\s+desk|helpdesk|calls?|cases?)\b/i.test(description)) return "customer support";
   if (/\b(?:training|workshop|participants?|learners?|curriculum)\b/i.test(description)) return "training";
   if (/\b(?:event|venue|logistics|inventory|shipments?|stock|batches?)\b/i.test(description)) return "operations";
-  if (/\bonboarding|new hires?|employees?\b/i.test(description)) return "onboarding";
+  if (/\bonboarding|new hires?\b/i.test(description)) return "onboarding";
   if (/\bannotat(?:e|ion|ors?)|label(?:ing|lers?)\b/i.test(description)) return "annotation";
-  if (/\bdata\s+encoding|encode|encoder|enrollment\s+records?\b/i.test(description)) return "data encoding";
   if (/\bresearch|study|survey\b/i.test(description)) return "research";
   if (/\bvalidation|validate|verification\b/i.test(description)) return "validation";
   return undefined;
@@ -139,6 +147,16 @@ function extractWorkingDays(description: string): number[] | undefined {
     .filter(([name]) => new RegExp(`\\b${name}s?\\b`, "i").test(description))
     .map(([, value]) => value);
   return matched.length ? [...new Set(matched)].sort((a, b) => a - b) : undefined;
+}
+
+function extractHolidayDates(description: string): string[] | undefined {
+  if (!/\b(?:holiday|holidays|exclude|excluding|blackout|unavailable)\b/i.test(description)) {
+    return undefined;
+  }
+  const matches = [...description.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)]
+    .map((match) => match[1]!)
+    .filter(isIsoDate);
+  return matches.length ? [...new Set(matches)].sort() : undefined;
 }
 
 const productionUnitPattern =
@@ -183,9 +201,10 @@ export function extractRequestedConstraints(
   const hoursMatch = description.match(new RegExp(String.raw`\b${numberToken}\s+(?:total\s+|working\s+|productive\s+)?hours?\b`, "i"));
   const teamMatch =
     description.match(new RegExp(String.raw`\b(?:class|team|group|crew)\s+of\s+${numberToken}\b`, "i")) ??
-    description.match(new RegExp(String.raw`\b${numberToken}\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?|developers?|engineers?|testers?|reviewers?|designers?|writers?|editors?|machines?|operators?)\b`, "i"));
+    description.match(new RegExp(String.raw`\b${numberToken}\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?|developers?|engineers?|testers?|reviewers?|validators?|qa\s+analysts?|designers?|writers?|editors?|machines?|operators?|recorders?)\b`, "i"));
   const normalizedDates = extractNormalizedDateConstraints(description, currentDate);
   const workingDays = extractWorkingDays(description);
+  const holidays = extractHolidayDates(description);
 
   const constraints: RequestedConstraints = {};
   if (weekdayDurationMatch) {
@@ -219,6 +238,12 @@ export function extractRequestedConstraints(
   if (workingDays) {
     constraints.workingDays = workingDays;
     constraints.weekdaysOnly = workingDays.every((day) => day >= 1 && day <= 5);
+  }
+  if (holidays) constraints.holidays = holidays;
+  const overtimeMatch = description.match(/\b(?:overtime\s+)?limit(?:ed)?\s+(?:to|of|is)?\s*(\d+(?:\.\d+)?)\s+hours?\s+(?:per|\/)\s+(?:person\s+)?(?:day|weekday)\b/i) ??
+    description.match(/\bmaximum\s+overtime\s+(?:is\s+)?(\d+(?:\.\d+)?)\s+hours?\s+(?:per|\/)\s+(?:person\s+)?(?:day|weekday)\b/i);
+  if (overtimeMatch) {
+    constraints.overtimeLimitHoursPerPersonPerDay = Number(overtimeMatch[1]);
   }
   if (normalizedDates.startDate) constraints.startDate = normalizedDates.startDate;
   else if (/\b(?:starting|starts?|from)(?:\s+date\s+of)?\s+today\b/i.test(description)) {
@@ -309,6 +334,7 @@ export function resolvePlanningSettings(
   const requested = extractRequestedConstraints(description, currentDate);
   const weekdaysOnly = requested.weekdaysOnly ?? defaults.weekdaysOnly ?? inferDefaultWeekdaysOnly(description);
   const workingDays = requested.workingDays ?? defaults.workingDays;
+  const holidays = requested.holidays ?? defaults.holidays;
   const defaultStartDate = weekdaysOnly ? nextBusinessDay(currentDate) : currentDate;
   const duration = requested.duration ?? {
     value: positive(defaults.durationValue, 30, "durationValue"),
@@ -341,6 +367,8 @@ export function resolvePlanningSettings(
     teamSize: Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")),
     weekdaysOnly,
     workingDays,
+    holidays,
+    overtimeLimitHoursPerPersonPerDay: requested.overtimeLimitHoursPerPersonPerDay ?? defaults.overtimeLimitHoursPerPersonPerDay,
     unitOfMeasure: requested.unitOfMeasure ?? defaults.unitOfMeasure,
     totalQuantity: requested.totalQuantity ?? defaults.totalQuantity,
   };
@@ -363,7 +391,9 @@ function addMonthsClamped(date: Date, count: number): Date {
 export function buildScheduleDates(settings: ResolvedPlanningSettings): string[] {
   const start = parseIso(settings.startDate);
   const dates: string[] = [];
+  const holidays = new Set(settings.holidays ?? []);
   const isScheduledDay = (date: Date): boolean => {
+    if (holidays.has(formatIsoDate(date))) return false;
     if (settings.workingDays?.length) return settings.workingDays.includes(date.getUTCDay());
     return !settings.weekdaysOnly || isWeekday(date);
   };

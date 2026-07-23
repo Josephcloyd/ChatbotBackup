@@ -57,22 +57,44 @@ export function extractOllamaText(payloads: OllamaResponse[]): string {
     .join("")
     .trim();
 
-  if (!text) {
-    const finalPayload = payloads.at(-1);
-    const fields = finalPayload ? Object.keys(finalPayload).join(", ") : "none";
-    const thinkingLength = payloads.reduce(
-      (length, payload) => length + (payload.thinking?.length ?? 0),
-      0,
-    );
-    throw new Error(
-      "Ollama returned an empty response body — check field extraction and streaming settings. " +
-        `Expected response for /api/generate or message.content for /api/chat; ` +
-        `received fields: ${fields}; done=${String(finalPayload?.done)}; ` +
-        `done_reason=${String(finalPayload?.done_reason)}; thinkingLength=${thinkingLength}.`,
-    );
+  if (text) return text;
+
+  const thinkingText = payloads
+    .map((payload) => (typeof payload.thinking === "string" ? payload.thinking : ""))
+    .join("")
+    .trim();
+  const thinkingJson = extractCompleteJsonObject(thinkingText);
+  if (thinkingJson) {
+    console.warn("[ollamaService] Empty response field; recovered JSON from Ollama thinking field.");
+    return thinkingJson;
   }
 
-  return text;
+  const finalPayload = payloads.at(-1);
+  const fields = finalPayload ? Object.keys(finalPayload).join(", ") : "none";
+  const thinkingLength = payloads.reduce(
+    (length, payload) => length + (payload.thinking?.length ?? 0),
+    0,
+  );
+  throw new Error(
+    "Ollama returned an empty response body — check field extraction and streaming settings. " +
+      `Expected response for /api/generate or message.content for /api/chat; ` +
+      `received fields: ${fields}; done=${String(finalPayload?.done)}; ` +
+      `done_reason=${String(finalPayload?.done_reason)}; thinkingLength=${thinkingLength}.`,
+  );
+}
+
+function extractCompleteJsonObject(rawText: string): string | null {
+  const firstBrace = rawText.indexOf("{");
+  const lastBrace = rawText.lastIndexOf("}");
+  if (firstBrace === -1 || lastBrace <= firstBrace) return null;
+
+  const candidate = rawText.slice(firstBrace, lastBrace + 1).trim();
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -110,6 +132,7 @@ export async function generateWithOllama(prompt: string): Promise<string> {
     prompt,
     format: "json",
     stream: false,
+    think: false,
     options: {
       temperature: 0.3,   // low temp for structured JSON output
       top_p: 0.9,

@@ -10,7 +10,7 @@ import { PlanHistory } from "../components/organisms/PlanHistory";
 import { AdminPlansPanel } from "../components/organisms/AdminPlansPanel";
 import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel";
 import { AdminPlanDetailsPanel } from "../components/organisms/AdminPlanDetailsPanel";
-import { AdminRunsPanel } from "../components/organisms/AdminRunsPanel";
+import { AdminOverviewPanel } from "../components/organisms/AdminOverviewPanel";
 import {
   BulkDeletePlansModal,
   DeleteOperatorModal,
@@ -42,6 +42,25 @@ interface GenerationResult {
   whatsappSummary?: string;
 }
 
+interface ProgressFormValues {
+  progress_percentage: string;
+  actual_start_date: string;
+  actual_end_date: string;
+  actual_hours: string;
+  requested_team_size: string;
+  note: string;
+}
+
+interface PlannerHealth {
+  status?: string;
+  service?: string;
+  dependencies?: {
+    template?: { available?: boolean; requiredFor?: string };
+    ollama?: { configured?: boolean; baseUrl?: string; model?: string; reachability?: string };
+    supabase?: { configured?: boolean; required?: boolean };
+  };
+}
+
 const PLAN_OVERVIEW_LIMIT = 15;
 const starterPrompt =
   "Create a 1-week production plan for a student enrollment encoding project with 8 total hours.";
@@ -51,10 +70,38 @@ function numberValue(value: CellValue | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function compactDate(value: string | undefined): string {
+function compactDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function compactDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function progressValue(value: number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), 100);
+}
+
+function buildProgressValues(planRecord: HistoryRecord | undefined): ProgressFormValues {
+  return {
+    progress_percentage: String(progressValue(planRecord?.progress_percentage)),
+    actual_start_date: planRecord?.actual_start_date ?? "",
+    actual_end_date: planRecord?.actual_end_date ?? "",
+    actual_hours: planRecord?.actual_hours === null || planRecord?.actual_hours === undefined ? "" : String(planRecord.actual_hours),
+    requested_team_size: planRecord?.requested_team_size === null || planRecord?.requested_team_size === undefined ? "" : String(planRecord.requested_team_size),
+    note: "",
+  };
 }
 
 export default function Dashboard() {
@@ -62,7 +109,7 @@ export default function Dashboard() {
 
   // Session & UI States
   const [user, setUser] = useState<{ id?: string; username: string; role: FrontendRole } | null>(null);
-  const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
+  const [adminTab, setAdminTab] = useState<"overview" | "plans" | "operators">("overview");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
 
@@ -77,9 +124,20 @@ export default function Dashboard() {
   const [planFilesLoading, setPlanFilesLoading] = useState(false);
   const [planFilesError, setPlanFilesError] = useState("");
   const [runs, setRuns] = useState<PlanGenerationRun[]>([]);
-  const [runsLoading, setRunsLoading] = useState(false);
-  const [runsError, setRunsError] = useState("");
+  const [progressPlanId, setProgressPlanId] = useState<string | null>(null);
+  const [progressValues, setProgressValues] = useState<ProgressFormValues>({
+    progress_percentage: "0",
+    actual_start_date: "",
+    actual_end_date: "",
+    actual_hours: "",
+    requested_team_size: "",
+    note: "",
+  });
+  const [progressErrors, setProgressErrors] = useState<Partial<Record<keyof ProgressFormValues, string>>>({});
+  const [progressSaving, setProgressSaving] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
   const [plannerOnline, setPlannerOnline] = useState(false);
+  const [plannerHealth, setPlannerHealth] = useState<PlannerHealth | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -170,39 +228,44 @@ export default function Dashboard() {
     Object.entries(filters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
-    setRunsLoading(true);
-    setRunsError("");
     fetch(`/api/planner/runs?${params.toString()}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         if (!data.success) throw new Error(data.error ?? "Failed to load AI runs");
         setRuns(data.runs ?? []);
       })
-      .catch((caught) => setRunsError(caught instanceof Error ? caught.message : "Failed to load AI runs"))
-      .finally(() => setRunsLoading(false));
+      .catch(() => setRuns([]));
   }, [user]);
+
+  const fetchHealth = useCallback(() => {
+    fetch("/api/planner/health", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({ status: "offline" }));
+        setPlannerHealth(data);
+        setPlannerOnline(response.ok && data.status !== "offline");
+      })
+      .catch(() => {
+        setPlannerHealth({ status: "offline" });
+        setPlannerOnline(false);
+      });
+  }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    const checkHealth = () =>
-      fetch("/api/planner/health", { cache: "no-store" })
-        .then((response) => setPlannerOnline(response.ok))
-        .catch(() => setPlannerOnline(false));
-
-    checkHealth();
+    fetchHealth();
     fetchPlans();
     fetchOperators();
     const adminDataTimer = window.setTimeout(() => {
       fetchRuns();
     }, 0);
 
-    const timer = window.setInterval(checkHealth, 15_000);
+    const timer = window.setInterval(fetchHealth, 15_000);
     return () => {
       window.clearTimeout(adminDataTimer);
       window.clearInterval(timer);
     };
-  }, [user, fetchPlans, fetchOperators, fetchRuns]);
+  }, [user, fetchPlans, fetchOperators, fetchRuns, fetchHealth]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => fetchPlanFiles(activePlanId), 0);
@@ -333,6 +396,10 @@ export default function Dashboard() {
     }
     return undefined;
   }, [activePlanRecord, result, user, metrics, mode]);
+  const selectedProgress = progressValue(planToShow?.progress_percentage);
+  const progressValuesForPlan = progressPlanId === planToShow?.id ? progressValues : buildProgressValues(planToShow);
+  const progressErrorsForPlan = progressPlanId === planToShow?.id ? progressErrors : {};
+  const progressMessageForPlan = progressPlanId === planToShow?.id ? progressMessage : "";
 
   // User actions
   async function logout() {
@@ -364,6 +431,7 @@ export default function Dashboard() {
       if (data.planId) setActivePlanId(data.planId);
       setPlanDetailsOpen(true);
       fetchPlans();
+      fetchRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
     } finally {
@@ -413,6 +481,80 @@ export default function Dashboard() {
       actual_hours: nullableNumber(values.actual_hours),
       requested_team_size: nullableNumber(values.requested_team_size),
     };
+  }
+
+  function validateProgress(values: ProgressFormValues): Partial<Record<keyof ProgressFormValues, string>> {
+    const nextErrors: Partial<Record<keyof ProgressFormValues, string>> = {};
+    const progress = Number(values.progress_percentage);
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      nextErrors.progress_percentage = "Progress must be between 0 and 100.";
+    }
+    if (values.actual_hours !== "" && Number(values.actual_hours) < 0) {
+      nextErrors.actual_hours = "Actual hours cannot be negative.";
+    }
+    const teamSize = Number(values.requested_team_size);
+    if (values.requested_team_size !== "" && (!Number.isInteger(teamSize) || teamSize < 0)) {
+      nextErrors.requested_team_size = "Team size must be a whole number at least 0.";
+    }
+    if (values.actual_start_date && values.actual_end_date && values.actual_end_date < values.actual_start_date) {
+      nextErrors.actual_end_date = "End date cannot be earlier than start date.";
+    }
+    return nextErrors;
+  }
+
+  function progressPayload(values: ProgressFormValues) {
+    const nullableDate = (value: string) => value || null;
+    const nullableNumber = (value: string) => value === "" ? null : Number(value);
+    return {
+      progress_percentage: Number(values.progress_percentage),
+      actual_start_date: nullableDate(values.actual_start_date),
+      actual_end_date: nullableDate(values.actual_end_date),
+      actual_hours: nullableNumber(values.actual_hours),
+      requested_team_size: nullableNumber(values.requested_team_size),
+      note: values.note.trim() || null,
+    };
+  }
+
+  function setProgressField(field: keyof ProgressFormValues, value: string) {
+    setProgressPlanId(planToShow?.id ?? null);
+    setProgressValues((current) => ({
+      ...(progressPlanId === planToShow?.id ? current : progressValuesForPlan),
+      [field]: value,
+    }));
+  }
+
+  async function handleUpdateProgress(e: React.FormEvent) {
+    e.preventDefault();
+    if (!planToShow || planToShow.id === "generated") return;
+    const nextErrors = validateProgress(progressValuesForPlan);
+    setProgressPlanId(planToShow.id);
+    setProgressErrors(nextErrors);
+    setProgressMessage("");
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setProgressSaving(true);
+    try {
+      const res = await fetch(`/api/planner/plans/progress?id=${encodeURIComponent(planToShow.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(progressPayload(progressValuesForPlan)),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan progress");
+      if (data.plan) {
+        setHistory((current) => ({
+          ...current,
+          plans: current.plans.map((item) => item.id === data.plan.id ? { ...item, ...data.plan } : item),
+        }));
+      }
+      setProgressValues((current) => ({ ...(progressPlanId === planToShow.id ? current : progressValuesForPlan), note: "" }));
+      setProgressMessage("Progress saved.");
+      fetchPlans();
+    } catch (caught) {
+      setProgressMessage(caught instanceof Error ? caught.message : "Error saving progress");
+    } finally {
+      setProgressSaving(false);
+    }
   }
 
   async function confirmDeletePlan() {
@@ -665,12 +807,143 @@ export default function Dashboard() {
                       {compactDate(plan.project.deadline)}
                     </div>
                   </div>
-                  <div className="completion-ring">
+                  <div
+                    className="completion-ring"
+                    style={{ background: `conic-gradient(#046241 ${selectedProgress * 3.6}deg, #e8eef3 0)` }}
+                  >
                     <div>
-                      <strong>0%</strong>
+                      <strong>{selectedProgress}%</strong>
                       <span>actual</span>
                     </div>
                   </div>
+                </section>
+
+                <section className="schedule-card progress-card">
+                  <div className="card-heading">
+                    <div>
+                      <span className="eyebrow">PLAN PROGRESS / ACTUALS</span>
+                      <h3>Latest employee update</h3>
+                    </div>
+                    <span className="rows-count">{selectedProgress}% complete</span>
+                  </div>
+
+                  <div className="progress-snapshot">
+                    <div>
+                      <span>Actual start</span>
+                      <strong>{compactDate(planToShow?.actual_start_date)}</strong>
+                    </div>
+                    <div>
+                      <span>Actual end</span>
+                      <strong>{compactDate(planToShow?.actual_end_date)}</strong>
+                    </div>
+                    <div>
+                      <span>Actual hours</span>
+                      <strong>{planToShow?.actual_hours ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Requested team</span>
+                      <strong>{planToShow?.requested_team_size ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Last updated</span>
+                      <strong>{compactDateTime(planToShow?.latest_progress_updated_at ?? planToShow?.updated_at)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="progress-note">
+                    <span>Latest note</span>
+                    <p>{planToShow?.latest_progress_note?.trim() || "No progress note recorded yet."}</p>
+                  </div>
+
+                  <form className="progress-form" onSubmit={handleUpdateProgress}>
+                    <div className="form-group-compact">
+                      <label htmlFor="progress-percentage">Progress percentage</label>
+                      <input
+                        id="progress-percentage"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={progressValuesForPlan.progress_percentage}
+                        onChange={(event) => setProgressField("progress_percentage", event.target.value)}
+                        className="input-atom editable-placeholder-field"
+                      />
+                      {progressErrorsForPlan.progress_percentage && <p className="field-error">{progressErrorsForPlan.progress_percentage}</p>}
+                    </div>
+                    <div className="form-group-compact">
+                      <label htmlFor="actual-start-date">Actual start date</label>
+                      <input
+                        id="actual-start-date"
+                        type="date"
+                        value={progressValuesForPlan.actual_start_date}
+                        onChange={(event) => setProgressField("actual_start_date", event.target.value)}
+                        className="input-atom editable-placeholder-field"
+                      />
+                    </div>
+                    <div className="form-group-compact">
+                      <label htmlFor="actual-end-date">Actual end date</label>
+                      <input
+                        id="actual-end-date"
+                        type="date"
+                        value={progressValuesForPlan.actual_end_date}
+                        onChange={(event) => setProgressField("actual_end_date", event.target.value)}
+                        className="input-atom editable-placeholder-field"
+                      />
+                      {progressErrorsForPlan.actual_end_date && <p className="field-error">{progressErrorsForPlan.actual_end_date}</p>}
+                    </div>
+                    <div className="form-group-compact">
+                      <label htmlFor="actual-hours">Actual hours</label>
+                      <input
+                        id="actual-hours"
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={progressValuesForPlan.actual_hours}
+                        onChange={(event) => setProgressField("actual_hours", event.target.value)}
+                        placeholder="Enter actual hours"
+                        className="input-atom editable-placeholder-field"
+                      />
+                      {progressErrorsForPlan.actual_hours && <p className="field-error">{progressErrorsForPlan.actual_hours}</p>}
+                    </div>
+                    <div className="form-group-compact">
+                      <label htmlFor="requested-team-size">Requested team size</label>
+                      <input
+                        id="requested-team-size"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={progressValuesForPlan.requested_team_size}
+                        onChange={(event) => setProgressField("requested_team_size", event.target.value)}
+                        placeholder="Set team size"
+                        className="input-atom editable-placeholder-field"
+                      />
+                      {progressErrorsForPlan.requested_team_size && <p className="field-error">{progressErrorsForPlan.requested_team_size}</p>}
+                    </div>
+                    <div className="form-group-compact progress-note-field">
+                      <label htmlFor="progress-note">Update note</label>
+                      <textarea
+                        id="progress-note"
+                        value={progressValuesForPlan.note}
+                        onChange={(event) => setProgressField("note", event.target.value)}
+                        placeholder="Add a short update"
+                        className="textarea-atom editable-placeholder-field"
+                      />
+                    </div>
+                    <div className="progress-form-actions">
+                      {progressMessageForPlan && (
+                        <div className={progressMessageForPlan === "Progress saved." ? "success-box" : "error-box"} role="alert">
+                          {progressMessageForPlan}
+                        </div>
+                      )}
+                      <button
+                        className="download-button"
+                        type="submit"
+                        disabled={progressSaving || !planToShow || planToShow.id === "generated"}
+                      >
+                        {progressSaving ? "Saving..." : "Save Progress"}
+                      </button>
+                    </div>
+                  </form>
                 </section>
 
                 <DashboardMetrics metrics={metrics} mode={mode} sheetsCount={plan.workbook.sheets.length} />
@@ -732,7 +1005,24 @@ export default function Dashboard() {
           </>
         ) : (
           <>
-            {adminTab === "plans" ? (
+            {adminTab === "overview" ? (
+              <>
+                <AdminOverviewPanel
+                  plans={history.plans}
+                  runs={runs}
+                  operators={operators}
+                  plannerOnline={plannerOnline}
+                  health={plannerHealth}
+                  currentUser={user}
+                  onRefresh={() => {
+                    fetchHealth();
+                    fetchPlans();
+                    fetchOperators();
+                    fetchRuns();
+                  }}
+                />
+              </>
+            ) : adminTab === "plans" ? (
               <>
                 <AdminPlansPanel
                   plans={history.plans}
@@ -869,15 +1159,7 @@ export default function Dashboard() {
                 )}
 
               </>
-            ) : (
-              <AdminRunsPanel
-                runs={runs}
-                plans={history.plans}
-                loading={runsLoading}
-                error={runsError}
-                onRefresh={fetchRuns}
-              />
-            )}
+            ) : null}
           </>
         )}
       </div>

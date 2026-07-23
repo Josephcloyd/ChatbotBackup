@@ -31,6 +31,22 @@ test("concatenates streamed NDJSON chunks and ignores the empty done chunk", () 
   assert.equal(extractOllamaText(payloads), '{"ok":true}');
 });
 
+test("recovers JSON from thinking when response content is empty", () => {
+  assert.equal(
+    extractOllamaText([
+      {
+        model: "thinking-model",
+        created_at: "2026-07-23T00:00:00Z",
+        response: "",
+        thinking: 'Planning notes before final JSON. {"projectName":"Recovered Plan","planningSettings":{"durationValue":5}}',
+        done: true,
+        done_reason: "stop",
+      },
+    ]),
+    '{"projectName":"Recovered Plan","planningSettings":{"durationValue":5}}',
+  );
+});
+
 test("throws a descriptive error for an empty extracted response", () => {
   assert.throws(
     () => extractOllamaText([{ response: "", thinking: "reasoning", done: true }]),

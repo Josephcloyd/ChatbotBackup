@@ -17,6 +17,54 @@ export interface ProductionPlanProject {
   utilizationPercent?: number;
 }
 
+export interface StructuredPlanningOutput {
+  projectSummary: {
+    targetRecords: number;
+    duration: string;
+    deadline: string;
+    laborBudgetHours: number;
+    feasible: boolean;
+  };
+  parsedInputs: {
+    roles: string[];
+    dependencies: string[];
+    constraints: string[];
+    productivityRates: string[];
+  };
+  capacityAnalysis: {
+    workingDays: number;
+    availableHours: number;
+    effectiveCapacity: number;
+    capacityShortfall: number;
+  };
+  schedule: ProductionPlanRow[];
+  resourceAllocation: ProductionPlanRow[];
+  forecast: {
+    revisedCompletionDate: string;
+    scheduleVarianceDays: number;
+    laborVarianceHours: number;
+    bottleneckPhase: string;
+  };
+  replanning: {
+    isReplan: boolean;
+    preservedCompletedWork: boolean;
+    staffingChanges: ProductionPlanRow[];
+    remainingWork: ProductionPlanRow[];
+  };
+  scenarios: ProductionPlanRow[];
+  recommendedScenario: {
+    name: string;
+    reason: string;
+    costImpact: string;
+    scheduleImpact: string;
+    riskLevel: string;
+  };
+  risks: ProductionPlanRow[];
+  excelWorkbook: {
+    sheets: string[];
+  };
+}
+
 export interface ProductionPlanSheet {
   sheetName: string;
   columns: string[];
@@ -28,6 +76,7 @@ export interface ProductionPlan {
   workbook: {
     sheets: ProductionPlanSheet[];
   };
+  structuredPlan?: StructuredPlanningOutput;
   summary: string;
 }
 
@@ -37,4 +86,5 @@ export interface ProductionPlanInput {
   workbookMode?: "template" | "dynamic";
   selectedTemplate?: string;
   generationSource?: "whatsapp" | "dashboard" | "api" | "admin";
+  requestedBy?: string | null;
 }

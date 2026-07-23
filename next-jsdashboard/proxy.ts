@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FLOWBOARD_AUTH_COOKIE, getSessionPayload } from "@/lib/flowboardAuth";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(FLOWBOARD_AUTH_COOKIE)?.value;
   const session = await getSessionPayload(token);
@@ -54,4 +54,3 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
-

@@ -49,6 +49,12 @@ function fileSize(bytes: number | null): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function progressValue(value: number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(Math.max(parsed, 0), 100);
+}
+
 export function AdminPlanDetailsPanel({
   plan,
   rows,
@@ -60,6 +66,7 @@ export function AdminPlanDetailsPanel({
 }: AdminPlanDetailsPanelProps) {
   const details: Array<[string, React.ReactNode, boolean]> = [
     ["Status", editableValue(plan.status ?? "generated", "Select status"), true],
+    ["Progress", `${progressValue(plan.progress_percentage)}%`, true],
     ["Planning start", editableValue(plan.planning_start_date, "Choose planning start date"), true],
     ["Planning end", editableValue(plan.planning_end_date, "Choose planning end date"), true],
     ["Actual start", editableValue(plan.actual_start_date, "Choose actual start date"), true],
@@ -104,6 +111,18 @@ export function AdminPlanDetailsPanel({
             <strong>{value}</strong>
           </div>
         ))}
+      </div>
+
+      <div className="prompt-card mt-4">
+        <span className="eyebrow">LATEST PROGRESS NOTE</span>
+        <p>
+          {plan.latest_progress_note?.trim()
+            ? plan.latest_progress_note
+            : "No progress note recorded yet."}
+        </p>
+        <p className="empty-note mt-2">
+          Last progress update: {display(plan.latest_progress_updated_at) || display(plan.updated_at) || "—"}
+        </p>
       </div>
 
       <div className="admin-summary-grid mt-6">

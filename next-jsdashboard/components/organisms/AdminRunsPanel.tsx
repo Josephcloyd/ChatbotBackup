@@ -26,7 +26,50 @@ export function AdminRunsPanel({ runs, plans, loading, error, onRefresh }: Admin
   const [modelName, setModelName] = useState("");
   const [date, setDate] = useState("");
   const [planId, setPlanId] = useState("");
-  const modelNames = useMemo(() => [...new Set(runs.map((run) => run.model_name).filter(Boolean))], [runs]);
+  const fallbackRuns = useMemo<PlanGenerationRun[]>(
+    () => plans.map((plan) => ({
+      id: `fallback-${plan.id}`,
+      plan_id: plan.id,
+      project_title: plan.project_title,
+      model_provider: "saved-plan",
+      model_name: plan.workbook_mode ?? "dynamic",
+      prompt_version: plan.generation_source ?? "dashboard",
+      status: plan.status === "failed" ? "failed" : "completed",
+      attempt_number: 1,
+      duration_ms: null,
+      input_tokens: null,
+      output_tokens: null,
+      validation_error_count: plan.status === "failed" ? 1 : 0,
+      validation_errors: null,
+      error_message: null,
+      started_at: plan.created_at,
+      completed_at: plan.created_at,
+      created_at: plan.created_at,
+    })),
+    [plans],
+  );
+  const baseRuns = runs.length > 0 ? runs : fallbackRuns;
+  const displayRuns = baseRuns
+    .filter((run) => !status || run.status === status)
+    .filter((run) => !modelName || run.model_name === modelName)
+    .filter((run) => !planId || run.plan_id === planId)
+    .filter((run) => !date || String(run.started_at ?? run.created_at).startsWith(date));
+  const usingFallback = runs.length === 0 && fallbackRuns.length > 0;
+  const modelNames = useMemo(() => [...new Set(baseRuns.map((run) => run.model_name).filter(Boolean))], [baseRuns]);
+  const runSummary = useMemo(() => {
+    const total = displayRuns.length;
+    const completed = displayRuns.filter((run) => run.status === "completed").length;
+    const failed = displayRuns.filter((run) => run.status === "failed").length;
+    const durations = displayRuns.map((run) => Number(run.duration_ms || 0)).filter((value) => value > 0);
+    const avgDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : 0;
+    return {
+      total,
+      completed,
+      failed,
+      successRate: total ? Math.round((completed / total) * 100) : 0,
+      avgDuration,
+    };
+  }, [displayRuns]);
 
   function applyFilters() {
     onRefresh({ status, modelName, date, planId });
@@ -43,6 +86,29 @@ export function AdminRunsPanel({ runs, plans, loading, error, onRefresh }: Admin
       </div>
 
       <div className="admin-filter-panel">
+        {usingFallback && (
+          <div className="success-box">
+            Showing saved plans as completed AI runs because the dedicated run-log table has no records yet.
+          </div>
+        )}
+        <div className="admin-summary-grid">
+          <div className="admin-summary-card">
+            <span>Total runs</span>
+            <strong>{runSummary.total.toLocaleString()}</strong>
+          </div>
+          <div className="admin-summary-card">
+            <span>Success rate</span>
+            <strong>{runSummary.total ? `${runSummary.successRate}%` : "—"}</strong>
+          </div>
+          <div className="admin-summary-card">
+            <span>Failed runs</span>
+            <strong>{runSummary.failed.toLocaleString()}</strong>
+          </div>
+          <div className="admin-summary-card">
+            <span>Avg duration</span>
+            <strong>{runSummary.avgDuration ? duration(runSummary.avgDuration) : "—"}</strong>
+          </div>
+        </div>
         <div className="admin-filter-grid">
           <div className="admin-filter-field">
             <label htmlFor="run-status-filter">Status</label>
@@ -92,7 +158,7 @@ export function AdminRunsPanel({ runs, plans, loading, error, onRefresh }: Admin
               </tr>
             </thead>
             <tbody>
-              {runs.map((run) => (
+              {displayRuns.map((run) => (
                 <React.Fragment key={run.id}>
                   <tr>
                     <td>{display(run.project_title)}</td>
@@ -120,7 +186,7 @@ export function AdminRunsPanel({ runs, plans, loading, error, onRefresh }: Admin
                   )}
                 </React.Fragment>
               ))}
-              {runs.length === 0 && (
+              {displayRuns.length === 0 && (
                 <tr><td colSpan={12} className="text-center text-muted p-4">No generation runs found.</td></tr>
               )}
             </tbody>
