@@ -187,10 +187,16 @@ Rules:
 - Natural-language dates have already been normalized when possible; use those ISO values.
 - Do not create daily schedule rows. The application creates those deterministically.
 - Return structured JSON only. No markdown, comments, or extra prose.
+- Include a "reasoning_steps" array at the beginning of the JSON to calculate feasibility, estimate workload, and plan dependencies before generating the rest of the plan.
 ${quantityRule}
 
 Return only valid JSON matching this structure:
 {
+  "reasoning_steps": [
+    "Step 1: Analyze constraints and calculate required capacity...",
+    "Step 2: Identify phases and dependencies...",
+    "Step 3: Determine risks based on the calculated schedule..."
+  ],
   "projectName": "string",
   "client": "string or empty string",
   "totalAssets": 0,

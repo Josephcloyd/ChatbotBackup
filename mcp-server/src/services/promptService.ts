@@ -63,12 +63,18 @@ The workbook template above is the sole source of truth for workbook structure.
 - Always separate planned values, actual values, and revised forecast values.
 - Always produce structured output that can be used for Excel workbook generation.
 CRITICAL MANDATORY INSTRUCTIONS:
-- Your response MUST be a complete JSON object containing ALL THREE top-level keys: "project", "workbook", and "summary".
-- Do NOT omit "workbook" or "summary".
+- Your response MUST be a complete JSON object containing ALL FOUR top-level keys: "reasoning_steps", "project", "workbook", and "summary".
+- Do NOT omit "reasoning_steps", "workbook" or "summary".
+- Use the "reasoning_steps" array to calculate feasibility, estimate total hours, and plan dependencies before generating the workbook rows.
 - Inside "workbook", include "sheets" array with the sheet object(s) containing exact column names and populated row data for the plan schedule.
 
 Respond with ONLY valid JSON matching this schema:
 {
+  "reasoning_steps": [
+    "Step 1: Calculate total man-hours required based on project scope...",
+    "Step 2: Determine critical dependencies...",
+    "Step 3: Distribute hours across available days..."
+  ],
   "project": {
     "projectName": "string",
     "projectDescription": "string",
