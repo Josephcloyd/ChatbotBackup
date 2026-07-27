@@ -834,6 +834,83 @@ function buildSupportSheets(
   ];
 }
 
+function round2(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function safeDate(row: ProductionPlanRow | undefined): string {
+  return row ? String(row.Date) : "";
+}
+
+function analyzeStaffingChanges(
+  description: string,
+  rows: ProductionPlanRow[],
+  settings: ResolvedPlanningSettings
+) {
+  return {
+    isReplan: false,
+    completedRows: [] as ProductionPlanRow[],
+    remainingRows: rows,
+    staffingRows: [] as Array<{
+      "Effective Date": string;
+      Change: string;
+      "Removed Employees": number;
+      "Added Junior Employees": number;
+      "Added Experienced Employees": number;
+      "Planned Headcount": number;
+      "Effective Capacity Units": number;
+      Reason: string;
+    }>
+  };
+}
+
+function buildForecast(
+  rows: ProductionPlanRow[],
+  targetKey: string,
+  settings: ResolvedPlanningSettings,
+  staffing: ReturnType<typeof analyzeStaffingChanges>,
+  hoursPerDay: number
+) {
+  return {
+    scheduleVarianceDays: 0,
+    capacityShortfall: 0,
+    revisedCompletionDate: rows.length > 0 ? String(rows[rows.length - 1]!.Date) : "",
+    laborVarianceHours: 0,
+    bottleneckPhase: "None",
+    effectiveCapacity: settings.totalHours,
+    rows: [] as Array<{ Metric: string; Value: string | number; Unit: string }>
+  };
+}
+
+function buildScenarioRows(
+  settings: ResolvedPlanningSettings,
+  durationDays: number,
+  plannedDeadline: string,
+  hoursPerDay: number
+) {
+  return [
+    {
+      Scenario: "Baseline",
+      "Staffing Requirement": settings.teamSize,
+      "Overtime Hours/Person/Day": 0,
+      "Total Labor Hours": settings.totalHours,
+      "Estimated Cost": "$0",
+      "Expected Completion Date": plannedDeadline,
+      "Deadline Feasible": "Yes",
+      "Utilization Rate": "100%",
+      "Overtime Requirement": "None",
+      "Risk Level": "Low",
+      Pros: "Baseline",
+      Cons: "None",
+      "Scenario Score": 100
+    }
+  ];
+}
+
+function bestScenario(scenarioRows: ReturnType<typeof buildScenarioRows>) {
+  return { name: scenarioRows[0]?.Scenario ?? "Baseline" };
+}
+
 export function buildDynamicPlan(
   input: { projectDescription: string },
   proposal: DynamicPlanProposal,
@@ -961,6 +1038,10 @@ export function buildDynamicPlan(
     unitLabel, totalQuantity, proposal.roles
   );
   const plannedDeadline = dates.at(-1)!;
+  const staffing = analyzeStaffingChanges(input.projectDescription, rows, settings);
+  const forecast = buildForecast(rows, targetKey, settings, staffing, hoursPerDay);
+  const scenarioRows = buildScenarioRows(settings, dates.length, plannedDeadline, hoursPerDay);
+  const recommendedScenario = bestScenario(scenarioRows);
   const currentActualRows = staffing.completedRows.length
     ? staffing.completedRows.map((row, index) => ({
         Period: String(row.Date),

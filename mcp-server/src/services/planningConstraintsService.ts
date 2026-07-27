@@ -68,6 +68,8 @@ export interface ResolvedPlanningSettings {
   workingDays?: number[];
   unitOfMeasure?: string;
   totalQuantity?: number;
+  holidays?: string[];
+  overtimeLimitHoursPerPersonPerDay?: number;
 }
 
 function toIsoDate(value: string): string | undefined {
