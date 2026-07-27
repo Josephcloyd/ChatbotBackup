@@ -37,10 +37,12 @@ export async function GET(request: Request) {
 
     const requestedUserId = requestUrl.searchParams.get("userId");
     const requestedLimit = requestUrl.searchParams.get("limit");
+    const requestedOffset = requestUrl.searchParams.get("offset");
     const userId = session.role === "operator" ? session.username : requestedUserId;
     const params = new URLSearchParams();
     if (userId) params.set("userId", userId);
     if (requestedLimit) params.set("limit", requestedLimit);
+    if (requestedOffset) params.set("offset", requestedOffset);
     const query = params.size ? `?${params.toString()}` : "";
     const response = await fetch(`${plannerUrl}/api/plans${query}`, { cache: "no-store" });
     const payload = await response.text();
