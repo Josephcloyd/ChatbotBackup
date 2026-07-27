@@ -8,10 +8,6 @@ export async function middleware(request: NextRequest) {
   const hasValidSession = session !== null;
 
   if (pathname === "/login") {
-    if (hasValidSession) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-
     return NextResponse.next();
   }
 

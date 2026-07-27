@@ -22,7 +22,7 @@ import {
   listGenerationRuns,
   updatePlanReviewStatus,
 } from "./supabaseService.js";
-import { verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
+import { DEFAULT_OPERATOR_USERNAME, verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
 
@@ -479,7 +479,7 @@ export function createApp() {
         plans: isTest ? [] : [
           {
             id: "mock-plan-1",
-            whatsapp_user_id: "operator1",
+            whatsapp_user_id: DEFAULT_OPERATOR_USERNAME,
             project_title: "Mock Dynamic Plan",
             summary: "This is a local mock plan since Supabase is not configured.",
             total_hours_estimate: 80,

@@ -553,6 +553,52 @@ a {
   background: #046241;
 }
 
+.topbar-user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 8px 12px;
+  color: var(--ink);
+  background: rgba(4, 98, 65, 0.05);
+  border: 1px solid rgba(4, 98, 65, 0.12);
+  transition: all 0.2s ease;
+}
+
+.topbar-user-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 55, 80, 0.05);
+}
+
+[data-theme="dark"] .topbar-user-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-pill-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.user-pill-name {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.user-pill-role {
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(255, 179, 71, 0.2);
+  color: #ffb347;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
 .download-button {
   display: inline-flex;
   align-items: center;

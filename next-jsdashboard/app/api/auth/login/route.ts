@@ -31,8 +31,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const { id, username: validUser, role } = data.user;
-    const token = await createSessionToken(validUser, role, id);
+    const { id, username: validUser, displayName, role } = data.user;
+    const token = await createSessionToken(validUser, role, id, displayName);
     const cookieStore = await cookies();
 
     cookieStore.set(FLOWBOARD_AUTH_COOKIE, token, {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 8,
     });
 
-    return NextResponse.json({ success: true, user: { username: validUser, role } });
+    return NextResponse.json({ success: true, user: { username: validUser, displayName, role } });
   } catch (err) {
     console.error("Auth Login Error:", err);
     return NextResponse.json(

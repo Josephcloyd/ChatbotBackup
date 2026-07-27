@@ -61,7 +61,7 @@ export default function Dashboard() {
   const router = useRouter();
 
   // Session & UI States
-  const [user, setUser] = useState<{ id?: string; username: string; role: FrontendRole } | null>(null);
+  const [user, setUser] = useState<{ id?: string; username: string; displayName?: string; role: FrontendRole } | null>(null);
   const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
@@ -126,10 +126,16 @@ export default function Dashboard() {
     fetch(`/api/planner/plans?${params.toString()}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data: HistoryResponse) => {
+        if (!Array.isArray(data.plans)) {
+          throw new Error(data.error ?? "Failed to load plans");
+        }
         setHistory(data);
         setPlannerOnline(true);
       })
-      .catch(() => setHistory({ configured: false, plans: [] }));
+      .catch(() => {
+        setHistory({ configured: false, plans: [] });
+        setPlannerOnline(false);
+      });
   }, [user]);
 
   const fetchOperators = useCallback(() => {
@@ -621,6 +627,11 @@ export default function Dashboard() {
           <span className={`connection-pill ${history.configured ? "connected" : "pending"}`}>
             <span /> Supabase Auth {history.configured ? "linked" : "offline"}
           </span>
+          <div className="topbar-user-pill">
+            <span className="user-pill-label">Logged In As</span>
+            <strong className="user-pill-name">{user.displayName ?? user.username}</strong>
+            <span className="user-pill-role">{user.role}</span>
+          </div>
           <ThemeToggle />
           <button className="download-button" type="button" onClick={logout}>
             Sign out

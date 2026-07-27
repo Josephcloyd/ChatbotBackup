@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Brand } from "../molecules/Brand";
 import { StatusIndicator } from "../atoms/StatusIndicator";
 import { ModeSwitch } from "../molecules/ModeSwitch";
@@ -15,7 +15,7 @@ export const TEMPLATE_OPTIONS = [
 ];
 
 interface SidebarProps {
-  user: { username: string; role: "admin" | "operator" };
+  user: { username: string; displayName?: string; role: "admin" | "operator" };
   plannerOnline: boolean;
   adminTab: "plans" | "operators" | "runs";
   setAdminTab: (tab: "plans" | "operators" | "runs") => void;
@@ -57,13 +57,6 @@ export function Sidebar({
     <>
       <div className="brand-section-desktop-only">
         <Brand variant="dark" showSubtitle />
-      </div>
-
-      <div className="user-card">
-        <div className="user-card-label">Logged In As</div>
-        <div className="user-card-info">
-          {user.username} <span className="user-card-role">{user.role}</span>
-        </div>
       </div>
 
       <div className="model-card">

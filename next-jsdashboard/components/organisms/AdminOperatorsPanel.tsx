@@ -5,7 +5,7 @@ import type { FrontendRole, OperatorAccount } from "../../lib/adminTypes";
 
 interface AdminOperatorsPanelProps {
   operators: OperatorAccount[];
-  currentUser: { id?: string; username: string; role: FrontendRole };
+  currentUser: { id?: string; username: string; displayName?: string; role: FrontendRole };
   onDeleteOperator: (op: OperatorAccount) => void;
   onUpdateOperator: (
     op: OperatorAccount,

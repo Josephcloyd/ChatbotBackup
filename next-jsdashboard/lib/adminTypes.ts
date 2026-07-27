@@ -69,6 +69,7 @@ export interface HistoryResponse {
 export interface OperatorAccount {
   id: string;
   username: string;
+  displayName?: string;
   role: FrontendRole;
   databaseRole?: "admin" | "user";
   active?: boolean;

@@ -1,6 +1,11 @@
 import { getClient, createServiceRoleClient } from "../supabaseService.js";
 import { config } from "../config.js";
 
+export const DEFAULT_OPERATOR_USERNAME = "operator1";
+export const DEFAULT_OPERATOR_DISPLAY_NAME = "wilfredalternate6969@gmail.com";
+const DEFAULT_OPERATOR_AUTH_EMAIL = DEFAULT_OPERATOR_DISPLAY_NAME;
+const DEFAULT_OPERATOR_PASSWORD = "operator123";
+
 // Helper to normalize username to lifewood.local email format
 function getEmail(username: string): string {
   const clean = username.trim();
@@ -22,6 +27,7 @@ function getUsername(email: string | undefined): string {
 export interface UserRecord {
   id: string;
   username: string;
+  displayName?: string;
   role: "admin" | "operator";
   databaseRole: "admin" | "user";
   active: boolean;
@@ -33,6 +39,7 @@ export interface UserRecord {
 export interface VerifiedUser {
   id: string;
   username: string;
+  displayName?: string;
   role: "admin" | "operator";
 }
 
@@ -46,6 +53,14 @@ function frontendRoleToDatabase(role: unknown): "admin" | "user" {
 
 function isActive(metadata: Record<string, unknown> | undefined): boolean {
   return metadata?.active !== false;
+}
+
+function getDisplayName(email: string | undefined, metadata: Record<string, unknown> | undefined): string | undefined {
+  const metadataName = metadata?.display_name;
+  if (typeof metadataName === "string" && metadataName.trim()) {
+    return metadataName.trim();
+  }
+  return email;
 }
 
 async function syncUserRole(userId: string, role: "admin" | "operator", active: boolean): Promise<void> {
@@ -106,7 +121,7 @@ export async function seedUsers(): Promise<void> {
     }
 
     const adminEmail = "admin@lifewood.local";
-    const operatorEmail = "operator1@lifewood.local";
+    const operatorEmail = getEmail(DEFAULT_OPERATOR_USERNAME);
 
     const adminExists = users?.some((u) => u.email === adminEmail);
     if (!adminExists) {
@@ -130,9 +145,9 @@ export async function seedUsers(): Promise<void> {
       console.log(`[userService] Seeding default operator user: ${operatorEmail}`);
       const { error: createOpError } = await supabase.auth.admin.createUser({
         email: operatorEmail,
-        password: "operator123",
+        password: DEFAULT_OPERATOR_PASSWORD,
         email_confirm: true,
-        user_metadata: { role: "user", display_name: "operator1", active: true },
+        user_metadata: { role: "user", display_name: DEFAULT_OPERATOR_DISPLAY_NAME, active: true },
       });
       if (createOpError) {
         console.error("[userService] Failed to create seed operator:", createOpError.message);
@@ -154,34 +169,50 @@ export async function verifyUser(username: string, password: string): Promise<Ve
     console.warn("[userService] Supabase not configured. Authenticating using local mock configuration.");
     const cleanUser = username.trim().toLowerCase();
     if (cleanUser === "admin" && password === "admin123") {
-      return { id: "mock-admin-id", username: "admin", role: "admin" };
+      return { id: "mock-admin-id", username: "admin", displayName: "admin", role: "admin" };
     }
-    if (cleanUser.startsWith("operator") && password === `${cleanUser}123`) {
-      return { id: `mock-${cleanUser}-id`, username: cleanUser, role: "operator" };
+    const defaultOperatorLogin = cleanUser === DEFAULT_OPERATOR_USERNAME && password === DEFAULT_OPERATOR_PASSWORD;
+    const legacyOperatorLogin = cleanUser.startsWith("operator") && password === `${cleanUser}123`;
+    if (defaultOperatorLogin || legacyOperatorLogin) {
+      return { id: `mock-${cleanUser}-id`, username: cleanUser, displayName: DEFAULT_OPERATOR_DISPLAY_NAME, role: "operator" };
     }
     throw new Error("Invalid username or password (Mock Mode).");
   }
 
   const supabase = createServiceRoleClient();
-  const email = getEmail(username);
+  const cleanUser = username.trim().toLowerCase();
+  const candidateEmails = cleanUser === DEFAULT_OPERATOR_USERNAME
+    ? [getEmail(cleanUser), DEFAULT_OPERATOR_AUTH_EMAIL]
+    : [getEmail(cleanUser)];
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error || !data.user) {
-    throw new Error(error?.message ?? "Authentication failed");
+  let authenticatedUser: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"]["user"] = null;
+  let lastErrorMessage = "Authentication failed";
+  for (const email of candidateEmails) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (data.user) {
+      authenticatedUser = data.user;
+      break;
+    }
+    if (error?.message) lastErrorMessage = error.message;
   }
 
-  if (!isActive(data.user.user_metadata)) {
+  if (!authenticatedUser) {
+    throw new Error(lastErrorMessage);
+  }
+
+  if (!isActive(authenticatedUser.user_metadata)) {
     throw new Error("This user account is inactive.");
   }
 
-  const role = databaseRoleToFrontend(data.user.user_metadata?.role);
+  const role = databaseRoleToFrontend(authenticatedUser.user_metadata?.role);
+  const actualUsername = getUsername(authenticatedUser.email);
+  const displayName = getDisplayName(authenticatedUser.email, authenticatedUser.user_metadata);
   return {
-    id: data.user.id,
-    username: getUsername(data.user.email),
+    id: authenticatedUser.id,
+    username: cleanUser === DEFAULT_OPERATOR_USERNAME && actualUsername === DEFAULT_OPERATOR_AUTH_EMAIL
+      ? DEFAULT_OPERATOR_USERNAME
+      : actualUsername,
+    displayName,
     role,
   };
 }
@@ -191,7 +222,7 @@ export async function listUsers(): Promise<UserRecord[]> {
     // Return mock users for mock local development mode
     return [
       { id: "mock-admin-id", username: "admin", role: "admin", databaseRole: "admin", active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), planCount: 0 },
-      { id: "mock-op1-id", username: "operator1", role: "operator", databaseRole: "user", active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), planCount: 1 },
+      { id: "mock-op1-id", username: DEFAULT_OPERATOR_USERNAME, displayName: DEFAULT_OPERATOR_DISPLAY_NAME, role: "operator", databaseRole: "user", active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), planCount: 1 },
     ];
   }
 
@@ -203,7 +234,8 @@ export async function listUsers(): Promise<UserRecord[]> {
 
   return (users ?? []).map((u) => ({
     id: u.id,
-    username: getUsername(u.email),
+    username: u.email === DEFAULT_OPERATOR_AUTH_EMAIL ? DEFAULT_OPERATOR_USERNAME : getUsername(u.email),
+    displayName: getDisplayName(u.email, u.user_metadata),
     role: databaseRoleToFrontend(u.user_metadata?.role),
     databaseRole: frontendRoleToDatabase(databaseRoleToFrontend(u.user_metadata?.role)),
     active: isActive(u.user_metadata),
@@ -212,23 +244,27 @@ export async function listUsers(): Promise<UserRecord[]> {
   }));
 }
 
-export async function getUserAccessByUsername(username: string): Promise<{ active: boolean; role: "admin" | "operator"; id: string } | null> {
+export async function getUserAccessByUsername(username: string): Promise<{ active: boolean; role: "admin" | "operator"; id: string; displayName?: string } | null> {
   if (!config.supabaseConfigured) {
     const cleanUser = username.trim().toLowerCase();
-    if (cleanUser === "admin") return { id: "mock-admin-id", active: true, role: "admin" };
-    if (cleanUser.startsWith("operator")) return { id: `mock-${cleanUser}-id`, active: true, role: "operator" };
+    if (cleanUser === "admin") return { id: "mock-admin-id", active: true, role: "admin", displayName: "admin" };
+    if (cleanUser.startsWith("operator")) return { id: `mock-${cleanUser}-id`, active: true, role: "operator", displayName: DEFAULT_OPERATOR_DISPLAY_NAME };
     return null;
   }
 
   const supabase = getClient();
   const { data: { users }, error } = await supabase.auth.admin.listUsers();
   if (error) throw new Error(`Failed to list users: ${error.message}`);
-  const user = users?.find((candidate) => getUsername(candidate.email) === username);
+  const user = users?.find((candidate) => {
+    const candidateUsername = candidate.email === DEFAULT_OPERATOR_AUTH_EMAIL ? DEFAULT_OPERATOR_USERNAME : getUsername(candidate.email);
+    return candidateUsername === username;
+  });
   if (!user) return null;
   return {
     id: user.id,
     active: isActive(user.user_metadata),
     role: databaseRoleToFrontend(user.user_metadata?.role),
+    displayName: getDisplayName(user.email, user.user_metadata),
   };
 }
 
