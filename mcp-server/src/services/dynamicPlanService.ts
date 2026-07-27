@@ -19,6 +19,16 @@ export interface DynamicRisk {
   mitigation: string;
 }
 
+export interface DynamicRole {
+  roleName: string;
+  headcount: number;
+}
+
+export interface DynamicScenario {
+  scenarioName: string;
+  description: string;
+}
+
 export interface DynamicPlanProposal {
   projectName: string;
   client: string;
@@ -38,6 +48,8 @@ export interface DynamicPlanProposal {
   assumptions: string[];
   phases: DynamicPhase[];
   risks: DynamicRisk[];
+  roles?: DynamicRole[];
+  scenarios?: DynamicScenario[];
   summary: string;
 }
 
@@ -160,7 +172,16 @@ DETERMINISTICALLY EXTRACTED CONSTRAINTS
 ${JSON.stringify(requested, null, 2)}
 
 Rules:
-- Preserve every extracted constraint exactly.
+- Use the deterministically extracted constraints as a baseline, but you MUST override them in your proposed settings and provide multiple scenarios if the user asks for optimization, trade-offs, or if the baseline is infeasible.
+- You are a production planning AI. You do not simply generate schedules. You help the backend calculate feasibility, enforce dependencies, preserve actual progress, forecast completion, compare scenarios, and recommend the most realistic plan.
+- Always validate the plan before presenting it; application code performs deterministic validation after your proposal.
+- Never allow downstream work to exceed upstream completed work.
+- Never restart an active project unless the user explicitly asks for a new plan.
+- Never ignore staffing changes, leave, training, holidays, overtime limits, or labor budget constraints.
+- If the plan is infeasible, make sure assumptions expose why in measurable terms.
+- If multiple solutions are possible, provide enough context for the backend to compare and recommend the best option.
+- Always separate planned values, actual values, and revised forecast values.
+- Always support structured output that can be used for Excel workbook generation.
 - If a value was not extracted, choose a conservative realistic default.
 - Adapt to the project category. Do not force annotation language onto software, document-processing, manufacturing, content, support, training, logistics, or admin projects.
 - Preserve the production unit from the request when present (images, records, documents, features, modules, tickets, articles, videos, batches, units, participants, transactions, hours, or tasks).
@@ -194,6 +215,8 @@ Return only valid JSON matching this structure:
     "teamSize": 1,
     "hoursPerDay": 8${throughputField}
   },
+  "roles": [{ "roleName": "string", "headcount": 1 }],
+  "scenarios": [{ "scenarioName": "string", "description": "string" }],
   "assumptions": ["string"],
   "phases": [{ "name": "string", "objective": "string" }],
   "risks": [{ "risk": "string", "impact": "string", "mitigation": "string" }],
@@ -220,6 +243,23 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
       }))
     : [];
 
+  const dynamicRoles = Array.isArray(value.roles)
+    ? value.roles.filter(isRecord).map((r) => ({
+        roleName: text(r.roleName, "Production Resource"),
+        headcount: Math.round(number(r.headcount, 1)),
+      }))
+    : [];
+  const dynamicScenarios = Array.isArray(value.scenarios)
+    ? value.scenarios.filter(isRecord).map((s) => ({
+        scenarioName: text(s.scenarioName, "Alternative Scenario"),
+        description: text(s.description, "Alternative approach to schedule or budget"),
+      }))
+    : [];
+
+  const teamSize = dynamicRoles.length > 0
+    ? dynamicRoles.reduce((sum, r) => sum + r.headcount, 0)
+    : Math.round(number(rawSettings.teamSize, 1));
+
   return {
     projectName: text(value.projectName, "Production Plan"),
     client: text(value.client),
@@ -230,7 +270,7 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
       durationUnit,
       weekdaysOnly: typeof rawSettings.weekdaysOnly === "boolean" ? rawSettings.weekdaysOnly : true,
       totalHours: number(rawSettings.totalHours, 160),
-      teamSize: Math.round(number(rawSettings.teamSize, 1)),
+      teamSize,
       hoursPerDay: typeof rawSettings.hoursPerDay === "number" && rawSettings.hoursPerDay > 0
         ? rawSettings.hoursPerDay : undefined,
       throughputRate: typeof rawSettings.throughputRate === "number" && rawSettings.throughputRate > 0
@@ -239,6 +279,8 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
     assumptions: stringArray(value.assumptions),
     phases: phases.length ? phases : [{ name: "Production", objective: "Complete planned work." }],
     risks,
+    roles: dynamicRoles,
+    scenarios: dynamicScenarios,
     summary: text(value.summary, "A structured production plan with auditable targets."),
   };
 }
@@ -522,6 +564,7 @@ function buildSupportSheets(
   kind: string,
   unitLabel = "Hours",
   totalQuantity?: number,
+  roles?: DynamicRole[],
 ): Array<{ sheetName: string; columns: string[]; rows: ProductionPlanRow[] }> {
   const isQuantity = unitLabel !== "Hours";
   const targetColumn = isQuantity ? `Target ${unitLabel}` : "Target Total Hours";
@@ -529,14 +572,29 @@ function buildSupportSheets(
   const actualVolumeKey = isQuantity ? `Actual ${unitLabel}` : "Actual Hours";
 
   const weeklyRows = groupWeeks(planRows, targetColumn, volumeKey);
-  const perResourceHours = Number((settings.totalHours / settings.teamSize).toFixed(2));
-  const resources = Array.from({ length: settings.teamSize }, (_, index) => ({
-    Resource: `Resource ${index + 1}`,
-    Role: kind === "annotation" ? "Annotator" : kind === "onboarding" ? "Employee / Buddy" : "Production resource",
-    "Planned Hours": perResourceHours,
-    "Primary Focus": phases[index % phases.length]?.name ?? "Production",
-    Notes: settings.weekdaysOnly ? "Weekday allocation" : "Calendar-day allocation",
-  }));
+  const perResourceHours = Number((settings.totalHours / Math.max(settings.teamSize, 1)).toFixed(2));
+  let resources: ProductionPlanRow[] = [];
+  if (roles && roles.length > 0) {
+    roles.forEach(roleObj => {
+      for (let i = 0; i < roleObj.headcount; i++) {
+        resources.push({
+          Resource: `${roleObj.roleName} ${i + 1}`,
+          Role: roleObj.roleName,
+          "Planned Hours": perResourceHours,
+          "Primary Focus": phases[resources.length % phases.length]?.name ?? "Production",
+          Notes: settings.weekdaysOnly ? "Weekday allocation" : "Calendar-day allocation",
+        });
+      }
+    });
+  } else {
+    resources = Array.from({ length: settings.teamSize }, (_, index) => ({
+      Resource: `Resource ${index + 1}`,
+      Role: kind === "annotation" ? "Annotator" : kind === "onboarding" ? "Employee / Buddy" : "Production resource",
+      "Planned Hours": perResourceHours,
+      "Primary Focus": phases[index % phases.length]?.name ?? "Production",
+      Notes: settings.weekdaysOnly ? "Weekday allocation" : "Calendar-day allocation",
+    }));
+  }
   const milestoneRows = phases.map((phase, index) => {
     const dateIndex = Math.min(
       planRows.length - 1,
@@ -900,8 +958,214 @@ export function buildDynamicPlan(
   ];
   const supportSheets = buildSupportSheets(
     rows, phases, effectiveRisks, settings, requested, kind,
-    unitLabel, totalQuantity,
+    unitLabel, totalQuantity, proposal.roles
   );
+  const plannedDeadline = dates.at(-1)!;
+  const currentActualRows = staffing.completedRows.length
+    ? staffing.completedRows.map((row, index) => ({
+        Period: String(row.Date),
+        "Historical Assignment": `Original ${String(row["Target Active Annotators"])} resource(s)`,
+        "Planned Work": Number(row[targetKey] ?? 0),
+        "Actual Work Preserved": Number(row[targetKey] ?? 0),
+        Status: "Completed",
+        Notes: "Preserved from active project history; remaining plan recalculated separately.",
+      }))
+    : [{ Period: "Not reported", "Historical Assignment": "", "Planned Work": 0, "Actual Work Preserved": 0, Status: "No actuals supplied", Notes: "No completed work was inferred from the prompt." }];
+  const remainingWorkRows = groupWeeks(staffing.remainingRows, targetKey, `Revised ${unitLabel}`);
+  const recoveryRows: ProductionPlanRow[] = [
+    {
+      Option: "Protect scope and extend completion",
+      "Schedule Impact": forecast.scheduleVarianceDays > 0 ? `Extend by ${forecast.scheduleVarianceDays} working day(s)` : "No extension required",
+      "Cost Impact": "Lowest incremental cost",
+      "Resource Impact": "Uses revised staffing only",
+      Risk: forecast.capacityShortfall > 0 ? "Deadline miss risk remains visible" : "Low",
+      Recommendation: forecast.capacityShortfall > 0 ? "Use only if deadline is flexible" : "Acceptable",
+    },
+    {
+      Option: "Add temporary experienced staff",
+      "Schedule Impact": "Recovers capacity shortfall fastest",
+      "Cost Impact": "Moderate to high",
+      "Resource Impact": "Requires recruiting or reassignment",
+      Risk: "Medium onboarding risk",
+      Recommendation: forecast.capacityShortfall > 0 ? "Recommended recovery if deadline is fixed" : "Keep as contingency",
+    },
+    {
+      Option: "Use controlled overtime",
+      "Schedule Impact": "Partial recovery within overtime limit",
+      "Cost Impact": "Overtime premium applies",
+      "Resource Impact": "Raises fatigue and quality risk",
+      Risk: "Medium",
+      Recommendation: settings.overtimeLimitHoursPerPersonPerDay ? "Use within stated overtime limit" : "Not recommended without an approved overtime limit",
+    },
+  ];
+  const advancedSheets: Array<{ sheetName: string; columns: string[]; rows: ProductionPlanRow[] }> = [
+    {
+      sheetName: "Executive Summary",
+      columns: ["Section", "Finding", "Value"],
+      rows: [
+        { Section: "Feasibility", Finding: "Deterministic feasibility result", Value: feasibility },
+        { Section: "Forecast", Finding: "Revised completion date", Value: forecast.revisedCompletionDate },
+        { Section: "Variance", Finding: "Schedule variance in working days", Value: forecast.scheduleVarianceDays },
+        { Section: "Recommendation", Finding: "Best staffing scenario", Value: recommendedScenario.name },
+      ],
+    },
+    {
+      sheetName: "Input Assumptions",
+      columns: ["Assumption", "Source", "Impact"],
+      rows: assumptions.map((assumption) => ({ Assumption: assumption, Source: "Prompt / deterministic parser", Impact: "Used in schedule, capacity, or forecast calculation" })),
+    },
+    {
+      sheetName: "Production Schedule",
+      columns: planColumns,
+      rows,
+    },
+    {
+      sheetName: "Dependency Timeline",
+      columns: ["Phase", "Depends On", "Dependency Rule", "Planned Start", "Planned End"],
+      rows: phases.map((phase, index) => {
+        const startIndex = Math.floor((index / phases.length) * rows.length);
+        const endIndex = Math.min(rows.length - 1, Math.floor(((index + 1) / phases.length) * rows.length) - 1);
+        return {
+          Phase: phase.name,
+          "Depends On": index === 0 ? "Project inputs" : phases[index - 1]!.name,
+          "Dependency Rule": index === 0 ? "Inputs must be available before work starts" : "Downstream work cannot exceed upstream completed work",
+          "Planned Start": safeDate(rows[Math.max(startIndex, 0)]),
+          "Planned End": safeDate(rows[Math.max(endIndex, startIndex)]),
+        };
+      }),
+    },
+    {
+      sheetName: "Staffing Changes",
+      columns: ["Effective Date", "Change", "Removed Employees", "Added Junior Employees", "Added Experienced Employees", "Planned Headcount", "Effective Capacity Units", "Reason"],
+      rows: staffing.staffingRows.length
+        ? staffing.staffingRows
+        : [{ "Effective Date": settings.startDate, Change: "No staffing change reported", "Removed Employees": 0, "Added Junior Employees": 0, "Added Experienced Employees": 0, "Planned Headcount": settings.teamSize, "Effective Capacity Units": settings.teamSize, Reason: "Baseline plan" }],
+    },
+    {
+      sheetName: "Current Actuals",
+      columns: ["Period", "Historical Assignment", "Planned Work", "Actual Work Preserved", "Status", "Notes"],
+      rows: currentActualRows,
+    },
+    {
+      sheetName: "Revised Forecast",
+      columns: ["Metric", "Value", "Unit"],
+      rows: forecast.rows,
+    },
+    {
+      sheetName: "Revised Monthly Targets",
+      columns: ["Week", "Start Date", "End Date", `Revised ${unitLabel}`, "Focus", "Review Checkpoint"],
+      rows: remainingWorkRows,
+    },
+    {
+      sheetName: "Scenario Comparison",
+      columns: ["Scenario", "Staffing Requirement", "Overtime Hours/Person/Day", "Total Labor Hours", "Estimated Cost", "Expected Completion Date", "Deadline Feasible", "Utilization Rate", "Overtime Requirement", "Risk Level", "Pros", "Cons", "Scenario Score"],
+      rows: scenarioRows,
+    },
+    {
+      sheetName: "Cost Optimization",
+      columns: ["Scenario", "Estimated Cost", "Total Labor Hours", "Cost Efficiency Note"],
+      rows: scenarioRows.map((row) => ({
+        Scenario: row.Scenario,
+        "Estimated Cost": row["Estimated Cost"],
+        "Total Labor Hours": row["Total Labor Hours"],
+        "Cost Efficiency Note": row.Scenario === recommendedScenario.name ? "Best weighted option" : "Lower score after deadline, utilization, and risk weighting",
+      })),
+    },
+    {
+      sheetName: "Bottleneck Analysis",
+      columns: ["Bottleneck", "Measured Impact", "Cause", "Corrective Action"],
+      rows: [
+        {
+          Bottleneck: forecast.bottleneckPhase,
+          "Measured Impact": `${forecast.capacityShortfall} hour shortfall; ${forecast.scheduleVarianceDays} working day variance`,
+          Cause: staffing.isReplan ? "Staffing change applied to remaining work only" : "Capacity compared with required work",
+          "Corrective Action": forecast.capacityShortfall > 0 ? "Add staff, reduce scope, approve overtime, or move deadline" : "Monitor actual progress against planned targets",
+        },
+      ],
+    },
+    {
+      sheetName: "Recommended Recovery Plan",
+      columns: ["Option", "Schedule Impact", "Cost Impact", "Resource Impact", "Risk", "Recommendation"],
+      rows: recoveryRows,
+    },
+    {
+      sheetName: "KPI Dashboard",
+      columns: ["KPI", "Planned", "Actual", "Forecast", "Status"],
+      rows: [
+        { KPI: "Target workload", Planned: isQuantity && totalQuantity ? totalQuantity : settings.totalHours, Actual: staffing.completedRows.reduce((sum, row) => sum + Number(row[targetKey] ?? 0), 0), Forecast: isQuantity && totalQuantity ? totalQuantity : settings.totalHours, Status: "Tracked" },
+        { KPI: "Completion date", Planned: plannedDeadline, Actual: "", Forecast: forecast.revisedCompletionDate, Status: forecast.scheduleVarianceDays > 0 ? "At risk" : "On track" },
+        { KPI: "Capacity shortfall", Planned: 0, Actual: "", Forecast: forecast.capacityShortfall, Status: forecast.capacityShortfall > 0 ? "Action required" : "OK" },
+        { KPI: "Recommended scenario", Planned: "", Actual: "", Forecast: recommendedScenario.name, Status: "Selected" },
+      ],
+    },
+    {
+      sheetName: "Revision History",
+      columns: ["Revision", "Date", "Trigger", "Change Summary"],
+      rows: [
+        { Revision: 1, Date: currentDate, Trigger: staffing.isReplan ? "Dynamic staffing change" : "Initial plan generation", "Change Summary": staffing.isReplan ? "Completed work preserved and remaining schedule recalculated." : "Initial deterministic production plan created." },
+      ],
+    },
+  ];
+  const workbookSheets = [
+    { sheetName: "Production Plan", columns: planColumns, rows },
+    ...supportSheets,
+    ...advancedSheets,
+  ];
+  if (proposal.scenarios && proposal.scenarios.length > 0) {
+    workbookSheets.push({
+      sheetName: "AI Recommendations",
+      columns: ["Scenario", "Description"],
+      rows: proposal.scenarios.map(s => ({ Scenario: s.scenarioName, Description: s.description })),
+    });
+  }
+  const structuredPlan = {
+    projectSummary: {
+      targetRecords: totalQuantity ?? settings.totalHours,
+      duration: `${dates.length} working day(s)`,
+      deadline: plannedDeadline,
+      laborBudgetHours: settings.totalHours,
+      feasible: feasibility !== "NOT_FEASIBLE" && forecast.capacityShortfall === 0,
+    },
+    parsedInputs: {
+      roles: proposal.roles && proposal.roles.length ? proposal.roles.map(r => r.roleName) : [roleForKind(kind), "Quality reviewer", "Project lead"],
+      dependencies: phases.map((phase, index) => index === 0 ? `${phase.name}: inputs confirmed` : `${phase.name}: after ${phases[index - 1]!.name}`),
+      constraints: [
+        settings.weekdaysOnly ? "Weekdays only" : "Calendar days allowed",
+        ...(settings.holidays ?? []).map((holiday) => `Holiday excluded: ${holiday}`),
+        settings.overtimeLimitHoursPerPersonPerDay !== undefined ? `Overtime limit: ${settings.overtimeLimitHoursPerPersonPerDay} hours/person/day` : "No overtime limit provided",
+      ],
+      productivityRates: [
+        `${hoursPerDay} base hours/person/day`,
+        ...(effectiveThroughputRate ? [`${round2(effectiveThroughputRate)} ${unitLabel.toLowerCase()}/person/hour`] : []),
+      ],
+    },
+    capacityAnalysis: {
+      workingDays: dates.length,
+      availableHours: round2(availableHours),
+      effectiveCapacity: staffing.isReplan ? forecast.effectiveCapacity : round2(availableHours),
+      capacityShortfall: forecast.capacityShortfall,
+    },
+    schedule: rows,
+    resourceAllocation: supportSheets.find((sheet) => sheet.sheetName === "Resource Allocation")?.rows ?? [],
+    forecast: {
+      revisedCompletionDate: forecast.revisedCompletionDate,
+      scheduleVarianceDays: forecast.scheduleVarianceDays,
+      laborVarianceHours: forecast.laborVarianceHours,
+      bottleneckPhase: forecast.bottleneckPhase,
+    },
+    replanning: {
+      isReplan: staffing.isReplan,
+      preservedCompletedWork: staffing.isReplan,
+      staffingChanges: staffing.staffingRows,
+      remainingWork: staffing.remainingRows,
+    },
+    scenarios: scenarioRows,
+    recommendedScenario,
+    risks: supportSheets.find((sheet) => sheet.sheetName === "Risk Register")?.rows ?? [],
+    excelWorkbook: {
+      sheets: workbookSheets.map((sheet) => sheet.sheetName),
+    },
+  };
   const plan: ProductionPlan = {
     project: {
       projectName: proposal.projectName,

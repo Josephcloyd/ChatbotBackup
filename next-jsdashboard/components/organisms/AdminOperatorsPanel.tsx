@@ -49,12 +49,12 @@ export function AdminOperatorsPanel({
             <thead>
               <tr>
                 <th>Username</th>
-                <th>Role</th>
-                <th>Status</th>
+                <th style={{ width: "160px" }}>Role</th>
+                <th style={{ width: "100px" }}>Status</th>
                 <th>Plans</th>
                 <th>Created</th>
                 <th>Updated</th>
-                <th className="text-right">Actions</th>
+                <th className="text-right" style={{ width: "200px" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -75,7 +75,6 @@ export function AdminOperatorsPanel({
                         <option value="operator">Operator</option>
                         <option value="admin">Admin</option>
                       </select>
-                      <small className="db-role-note">DB: {op.role === "admin" ? "admin" : "user"}</small>
                     </td>
                     <td>
                       <span className={`compact-badge ${op.active === false ? "status-archived" : "status-approved"}`}>
@@ -86,22 +85,26 @@ export function AdminOperatorsPanel({
                     <td>{displayDate(op.createdAt)}</td>
                     <td>{displayDate(op.updatedAt)}</td>
                     <td className="text-right actions-cell">
-                      <button
-                        className="action-btn"
-                        onClick={() => onUpdateOperator(op, { active: op.active === false })}
-                        disabled={isSelf}
-                        title={op.active === false ? "Activate user" : "Deactivate user"}
-                      >
-                        {op.active === false ? "Activate" : "Deactivate"}
-                      </button>
-                      <button
-                        className="action-btn delete-btn"
-                        onClick={() => onDeleteOperator(op)}
-                        disabled={isSelf}
-                        title="Delete user"
-                      >
-                        <Icon name="trash" />
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ minHeight: "32px", height: "32px", padding: "0 12px", fontSize: "11px", borderRadius: "8px", margin: 0 }}
+                          onClick={() => onUpdateOperator(op, { active: op.active === false })}
+                          disabled={isSelf}
+                          title={op.active === false ? "Activate user" : "Deactivate user"}
+                        >
+                          {op.active === false ? "Activate" : "Deactivate"}
+                        </button>
+                        <button
+                          className="action-btn delete-btn"
+                          style={{ margin: 0 }}
+                          onClick={() => onDeleteOperator(op)}
+                          disabled={isSelf}
+                          title="Delete user"
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -153,7 +156,7 @@ export function AdminOperatorsPanel({
             onChange={(event) => setNewRole(event.target.value as FrontendRole)}
             className="select-atom editable-placeholder-field"
           >
-            <option value="operator">Operator (stored as DB user)</option>
+            <option value="operator">Operator</option>
             <option value="admin">Administrator</option>
           </select>
         </div>
