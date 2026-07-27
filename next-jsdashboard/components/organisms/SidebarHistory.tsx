@@ -32,7 +32,7 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
   const fetchingRef = useRef(false);
 
   const fetchPage = useCallback(
-    async (pageOffset: number) => {
+    async (pageOffset: number, isReset = false) => {
       if (fetchingRef.current) return;
       fetchingRef.current = true;
       setLoading(true);
@@ -48,6 +48,7 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
         const data = await res.json();
         const incoming: HistoryRecord[] = data.plans ?? [];
         setPlans((prev) => {
+          if (isReset) return incoming;
           const existingIds = new Set(prev.map((p) => p.id));
           return [...prev, ...incoming.filter((p) => !existingIds.has(p.id))];
         });
@@ -64,10 +65,8 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
   );
 
   useEffect(() => {
-    setPlans([]);
-    setOffset(0);
-    setHasMore(true);
-    fetchPage(0);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPage(0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, role]);
 

@@ -7,7 +7,10 @@ interface AdminOperatorsPanelProps {
   operators: OperatorAccount[];
   currentUser: { id?: string; username: string; role: FrontendRole };
   onDeleteOperator: (op: OperatorAccount) => void;
-  onUpdateOperator: (op: OperatorAccount, updates: { role?: FrontendRole; active?: boolean }) => void;
+  onUpdateOperator: (
+    op: OperatorAccount,
+    updates: { role?: FrontendRole; active?: boolean },
+  ) => void;
   newUsername: string;
   setNewUsername: (val: string) => void;
   newPassword: string;
@@ -36,10 +39,20 @@ export function AdminOperatorsPanel({
 }: AdminOperatorsPanelProps) {
   return (
     <section className="admin-operators-grid">
-      <form onSubmit={handleCreateOperator} className="schedule-card admin-form-card">
+      <form
+        onSubmit={handleCreateOperator}
+        className="schedule-card admin-form-card"
+      >
         <h3 className="form-title">Create User Profile</h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: "12px", alignItems: "end" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr auto",
+            gap: "12px",
+            alignItems: "end",
+          }}
+        >
           <div className="form-group-compact" style={{ margin: 0 }}>
             <label htmlFor="new-username">Username</label>
             <input
@@ -70,7 +83,9 @@ export function AdminOperatorsPanel({
             <select
               id="new-role"
               value={newRole}
-              onChange={(event) => setNewRole(event.target.value as FrontendRole)}
+              onChange={(event) =>
+                setNewRole(event.target.value as FrontendRole)
+              }
               className="select-atom editable-placeholder-field"
             >
               <option value="operator">Operator (stored as DB user)</option>
@@ -78,9 +93,7 @@ export function AdminOperatorsPanel({
             </select>
           </div>
 
-          <Button type="submit">
-            Create User Account
-          </Button>
+          <Button type="submit">Create User Account</Button>
         </div>
       </form>
 
@@ -102,12 +115,16 @@ export function AdminOperatorsPanel({
                 <th>Plans</th>
                 <th>Created</th>
                 <th>Updated</th>
-                <th className="text-right" style={{ width: "200px" }}>Actions</th>
+                <th className="text-right" style={{ width: "200px" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {operators.map((op) => {
-                const isSelf = op.username === currentUser.username || op.id === currentUser.id;
+                const isSelf =
+                  op.username === currentUser.username ||
+                  op.id === currentUser.id;
                 return (
                   <tr key={op.id}>
                     <td className="font-bold">{op.username}</td>
@@ -117,17 +134,28 @@ export function AdminOperatorsPanel({
                         style={{ width: "100%", maxWidth: 140 }}
                         value={op.role}
                         disabled={isSelf}
-                        onChange={(event) => onUpdateOperator(op, { role: event.target.value as FrontendRole })}
+                        onChange={(event) =>
+                          onUpdateOperator(op, {
+                            role: event.target.value as FrontendRole,
+                          })
+                        }
                         aria-label={`Update role for ${op.username}`}
                         title="Select role"
                       >
                         <option value="operator">Operator</option>
                         <option value="admin">Admin</option>
                       </select>
-                      <small className="db-role-note" style={{ color: "var(--muted)", fontSize: 10 }}>DB: {op.role === "admin" ? "admin" : "user"}</small>
+                      <small
+                        className="db-role-note"
+                        style={{ color: "var(--muted)", fontSize: 10 }}
+                      >
+                        DB: {op.role === "admin" ? "admin" : "user"}
+                      </small>
                     </td>
                     <td>
-                      <span className={`compact-badge ${op.active === false ? "status-archived" : "status-approved"}`}>
+                      <span
+                        className={`compact-badge ${op.active === false ? "status-archived" : "status-approved"}`}
+                      >
                         {op.active === false ? "inactive" : "active"}
                       </span>
                     </td>
@@ -137,9 +165,15 @@ export function AdminOperatorsPanel({
                     <td className="text-right actions-cell">
                       <button
                         className={`action-btn-text ${op.active === false ? "edit-btn" : ""}`}
-                        onClick={() => onUpdateOperator(op, { active: op.active === false })}
+                        onClick={() =>
+                          onUpdateOperator(op, { active: op.active === false })
+                        }
                         disabled={isSelf}
-                        title={op.active === false ? "Activate user" : "Deactivate user"}
+                        title={
+                          op.active === false
+                            ? "Activate user"
+                            : "Deactivate user"
+                        }
                       >
                         {op.active === false ? "Activate" : "Deactivate"}
                       </button>
@@ -147,7 +181,11 @@ export function AdminOperatorsPanel({
                         className="action-btn delete-btn"
                         onClick={() => onDeleteOperator(op)}
                         disabled={isSelf || Number(op.planCount ?? 0) > 0}
-                        title={Number(op.planCount ?? 0) > 0 ? "Reassign plans before deleting" : "Delete user"}
+                        title={
+                          Number(op.planCount ?? 0) > 0
+                            ? "Reassign plans before deleting"
+                            : "Delete user"
+                        }
                       >
                         <Icon name="trash" />
                       </button>
@@ -157,13 +195,18 @@ export function AdminOperatorsPanel({
               })}
               {operators.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted p-4">No users found.</td>
+                  <td colSpan={7} className="text-center text-muted p-4">
+                    No users found.
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <p className="empty-note mt-4">Permanent deletion is disabled for accounts that still own plans. Reassign their plans first.</p>
+        <p className="empty-note mt-4">
+          Permanent deletion is disabled for accounts that still own plans.
+          Reassign their plans first.
+        </p>
       </div>
     </section>
   );

@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 
 interface LeafLogoProps {
   width?: number | string;
@@ -9,11 +10,11 @@ interface LeafLogoProps {
 
 export function LeafLogo({ width = 32, height = 32, className = "", style = {} }: LeafLogoProps) {
   return (
-    <img
+    <Image
       src="/lifeplan-leaf.png"
       alt="LifePlan Logo"
-      width={width}
-      height={height}
+      width={typeof width === "string" ? parseInt(width, 10) || 32 : width}
+      height={typeof height === "string" ? parseInt(height, 10) || 32 : height}
       className={`leaf-logo-icon ${className}`}
       style={{
         objectFit: "contain",
