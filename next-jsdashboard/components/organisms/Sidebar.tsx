@@ -1,10 +1,11 @@
-import React from "react";
+﻿import React from "react";
 import { Brand } from "../molecules/Brand";
 import { StatusIndicator } from "../atoms/StatusIndicator";
 import { ModeSwitch } from "../molecules/ModeSwitch";
 import { Icon } from "../atoms/Icon";
 import { Button } from "../atoms/Button";
 import { Textarea } from "../atoms/Input";
+import { SidebarHistory } from "./SidebarHistory";
 
 export const TEMPLATE_OPTIONS = [
   { id: "HourBased_Annotation_Production_Plan_Template.xlsx", name: "Hour-Based Annotation Plan" },
@@ -28,6 +29,8 @@ interface SidebarProps {
   loading: boolean;
   error: string;
   generatePlan: () => void;
+  activePlanId: string | null;
+  onSelectPlan: (id: string, promptText: string) => void;
 }
 
 const generationPromptPlaceholder = "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
@@ -47,6 +50,8 @@ export function Sidebar({
   loading,
   error,
   generatePlan,
+  activePlanId,
+  onSelectPlan,
 }: SidebarProps) {
   return (
     <>
@@ -54,7 +59,6 @@ export function Sidebar({
         <Brand variant="dark" showSubtitle />
       </div>
 
-      {/* User Card */}
       <div className="user-card">
         <div className="user-card-label">Logged In As</div>
         <div className="user-card-info">
@@ -62,7 +66,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Model Card */}
       <div className="model-card">
         <div className="model-topline">
           <StatusIndicator status={plannerOnline ? "online" : "offline"} />
@@ -113,7 +116,14 @@ export function Sidebar({
             </div>
           )}
 
-          <div className="panel-section grow">
+          <SidebarHistory
+            username={user.username}
+            role="operator"
+            activePlanId={activePlanId}
+            onSelectPlan={onSelectPlan}
+          />
+
+          <div className="admin-sidebar-composer">
             <label htmlFor="prompt">Describe your production plan</label>
             <Textarea
               id="prompt"
@@ -126,26 +136,25 @@ export function Sidebar({
               <span>Natural language</span>
               <span>{prompt.length} characters</span>
             </div>
+            {error && (
+              <div className="error-box" role="alert">
+                {error}
+              </div>
+            )}
+            <Button
+              className="generate-button"
+              onClick={generatePlan}
+              disabled={loading || (prompt.trim().length > 0 && prompt.trim().length < 10)}
+              isLoading={loading}
+            >
+              {!loading && <Icon name="spark" />} {loading ? "Building your plan..." : "Generate plan"}
+            </Button>
+            <p className="privacy-note">Runs locally through Ollama. Data saved under your account.</p>
           </div>
-
-          {error && (
-            <div className="error-box" role="alert">
-              {error}
-            </div>
-          )}
-          <Button
-            className="generate-button"
-            onClick={generatePlan}
-            disabled={loading || (prompt.trim().length > 0 && prompt.trim().length < 10)}
-            isLoading={loading}
-          >
-            {!loading && <Icon name="spark" />} {loading ? "Building your plan..." : "Generate plan"}
-          </Button>
-          <p className="privacy-note">Runs locally through Ollama. Data saved under your account.</p>
         </>
       ) : (
         <>
-          <div className="panel-section admin-panel-nav grow">
+          <div className="panel-section admin-panel-nav">
             <label>Administration Panels</label>
             <button
               className={`admin-nav-btn ${adminTab === "plans" ? "active" : ""}`}
@@ -166,6 +175,13 @@ export function Sidebar({
               <Icon name="clock" /> AI Runs
             </button>
           </div>
+
+          <SidebarHistory
+            username={user.username}
+            role="admin"
+            activePlanId={activePlanId}
+            onSelectPlan={onSelectPlan}
+          />
 
           <div className="admin-sidebar-composer">
             <label htmlFor="admin-sidebar-prompt">Describe your production plan</label>

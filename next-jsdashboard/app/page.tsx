@@ -600,6 +600,13 @@ export default function Dashboard() {
       loading={loading}
       error={error}
       generatePlan={generatePlan}
+      activePlanId={activePlanId}
+      onSelectPlan={(id, promptText) => {
+        setActivePlanId(id);
+        setResult(null);
+        if (promptText) setPrompt(promptText);
+        setPlanDetailsOpen(true);
+      }}
     />
   );
 

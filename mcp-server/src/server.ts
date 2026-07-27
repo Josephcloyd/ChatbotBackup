@@ -525,7 +525,8 @@ export function createApp() {
     try {
       const userId = typeof req.query.userId === "string" ? req.query.userId.trim() : undefined;
       const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 15;
-      const plans = await getRecentPlans(userId || undefined, limit);
+      const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+      const plans = await getRecentPlans(userId || undefined, limit, offset);
       res.json({ configured: true, plans });
     } catch (error) {
       res.status(502).json({

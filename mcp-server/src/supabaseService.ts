@@ -258,14 +258,16 @@ export async function getLatestPlan(
 export async function getRecentPlans(
   whatsappUserId?: string,
   requestedLimit = 15,
+  offset = 0,
 ): Promise<PlanRecord[]> {
   const supabase = getClient();
-  const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 15);
+  const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 50);
+  const safeOffset = Math.max(Math.trunc(offset), 0);
   let query = supabase
     .from("production_plans")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(safeOffset, safeOffset + limit - 1);
 
   if (whatsappUserId) query = query.eq("whatsapp_user_id", whatsappUserId);
   const { data, error } = await query;
