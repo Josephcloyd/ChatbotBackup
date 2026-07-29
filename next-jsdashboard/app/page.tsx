@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "../components/templates/DashboardLayout";
 import { Sidebar } from "../components/organisms/Sidebar";
-import { DashboardMetrics } from "../components/organisms/DashboardMetrics";
-import { PlanTable } from "../components/organisms/PlanTable";
 import { PlanHistory } from "../components/organisms/PlanHistory";
 import { AdminPlansPanel } from "../components/organisms/AdminPlansPanel";
 import { AdminOperatorsPanel } from "../components/organisms/AdminOperatorsPanel";
-import { AdminPlanDetailsPanel } from "../components/organisms/AdminPlanDetailsPanel";
 import { AdminRunsPanel } from "../components/organisms/AdminRunsPanel";
 import {
   BulkDeletePlansModal,
@@ -21,14 +18,18 @@ import {
 import { Icon } from "../components/atoms/Icon";
 import { ThemeToggle } from "../components/atoms/ThemeToggle";
 import { DashboardSkeleton } from "../components/organisms/DashboardSkeleton";
+import { PlanWorkspace } from "../components/planner/PlanWorkspace";
 import type {
   CellValue,
   FrontendRole,
   HistoryRecord,
   HistoryResponse,
   OperatorAccount,
+  PlanChangeProposal,
   PlanFileRecord,
   PlanGenerationRun,
+  PlanRevision,
+  PlanWorkspaceResponse,
   ProductionPlan,
 } from "../lib/adminTypes";
 
@@ -51,10 +52,50 @@ function numberValue(value: CellValue | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function compactDate(value: string | undefined): string {
-  if (!value) return "—";
-  const date = new Date(`${value}T00:00:00`);
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+function normalizedUnit(plan: ProductionPlan | undefined): string {
+  const unit = (plan?.project as { productionUnit?: string })?.productionUnit;
+  return typeof unit === "string" && unit.trim() ? unit.trim().toLowerCase() : "hours";
+}
+
+function isLaborHoursColumn(column: string): boolean {
+  return /^target\s+(?:total\s+)?hours$/i.test(column) || /^target\s+hours$/i.test(column);
+}
+
+function selectTargetColumn(keys: string[], plan: ProductionPlan | undefined): string | undefined {
+  const unit = normalizedUnit(plan);
+  const targetColumns = keys.filter(
+    (key) =>
+      (/^target\b/i.test(key) || /^plan\b/i.test(key)) &&
+      !/active|accumulate|accumulative|annotators|recorders|operators|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(key),
+  );
+
+  if (unit !== "hours") {
+    const unitTokens = unit.split(/\s+/).filter(Boolean);
+    const unitMatch = targetColumns.find((key) =>
+      unitTokens.every((token) => key.toLowerCase().includes(token)),
+    );
+    if (unitMatch) return unitMatch;
+    const nonLabor = targetColumns.find((key) => !isLaborHoursColumn(key));
+    if (nonLabor) return nonLabor;
+  }
+
+  return targetColumns.find((key) => !/^target\s+hours$/i.test(key)) ?? targetColumns[0];
+}
+
+function selectTeamColumn(keys: string[]): string | undefined {
+  return keys.find((key) => /^target\s+active\s+(?:annotators|recorders|operators|resources|workers|team members)$/i.test(key))
+    ?? keys.find((key) => /^target\s+active\b/i.test(key))
+    ?? keys.find((key) => /\b(?:team|staff|workers|resources)\b/i.test(key) && !/actual|per\s+/i.test(key));
+}
+
+function selectPerResourceColumn(keys: string[], targetCol: string | undefined): string | undefined {
+  if (!targetCol) return undefined;
+  const targetStem = targetCol.replace(/^target\s+/i, "").toLowerCase();
+  return keys.find((key) =>
+    /^target\b/i.test(key) &&
+    /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(key) &&
+    key.toLowerCase().includes(targetStem),
+  ) ?? keys.find((key) => /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(key));
 }
 
 export default function Dashboard() {
@@ -76,6 +117,13 @@ export default function Dashboard() {
   const [planFiles, setPlanFiles] = useState<PlanFileRecord[]>([]);
   const [planFilesLoading, setPlanFilesLoading] = useState(false);
   const [planFilesError, setPlanFilesError] = useState("");
+  const [workspaceData, setWorkspaceData] = useState<PlanWorkspaceResponse | null>(null);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [workspaceSending, setWorkspaceSending] = useState(false);
+  const [applyingProposalId, setApplyingProposalId] = useState("");
+  const [restoringRevisionId, setRestoringRevisionId] = useState("");
+  const [deletingRevisionId, setDeletingRevisionId] = useState("");
   const [runs, setRuns] = useState<PlanGenerationRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState("");
@@ -102,6 +150,7 @@ export default function Dashboard() {
   const [bulkDeletePlans, setBulkDeletePlans] = useState<HistoryRecord[]>([]);
   const [bulkDeleteSaving, setBulkDeleteSaving] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState("");
+  const workspaceRequestRef = useRef(0);
 
   // 1. Fetch user authentication profile on mount
   useEffect(() => {
@@ -164,6 +213,35 @@ export default function Dashboard() {
       .finally(() => setPlanFilesLoading(false));
   }, [user]);
 
+  const fetchWorkspace = useCallback((planId: string | null) => {
+    const requestId = workspaceRequestRef.current + 1;
+    workspaceRequestRef.current = requestId;
+    setWorkspaceData(null);
+    setWorkspaceError("");
+    if (!planId) {
+      setWorkspaceLoading(false);
+      return;
+    }
+    setWorkspaceLoading(true);
+    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/workspace`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to load plan workspace");
+        return data as PlanWorkspaceResponse;
+      })
+      .then((data) => {
+        if (workspaceRequestRef.current !== requestId) return;
+        setWorkspaceData(data);
+      })
+      .catch((caught) => {
+        if (workspaceRequestRef.current !== requestId) return;
+        setWorkspaceError(caught instanceof Error ? caught.message : "Failed to load plan workspace");
+      })
+      .finally(() => {
+        if (workspaceRequestRef.current === requestId) setWorkspaceLoading(false);
+      });
+  }, []);
+
   const fetchRuns = useCallback((filters: { status?: string; modelName?: string; date?: string; planId?: string } = {}) => {
     if (user?.role !== "admin") return;
     const params = new URLSearchParams();
@@ -210,6 +288,11 @@ export default function Dashboard() {
   }, [activePlanId, fetchPlanFiles]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => fetchWorkspace(activePlanId), 0);
+    return () => window.clearTimeout(timer);
+  }, [activePlanId, fetchWorkspace]);
+
+  useEffect(() => {
     if (!planDetailsOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setPlanDetailsOpen(false);
@@ -220,19 +303,20 @@ export default function Dashboard() {
 
   // Dynamic values
   const plan = useMemo(() => {
+    if (workspaceData?.currentPlanData) return workspaceData.currentPlanData;
     if (result?.plan) return result.plan;
     if (activePlanId) {
       const found = history.plans.find((p) => p.id === activePlanId);
       if (found) return found.raw_plan;
     }
     return undefined;
-  }, [result, activePlanId, history]);
+  }, [workspaceData, result, activePlanId, history]);
 
   const downloadUrl = useMemo(() => {
-    if (result?.downloadUrl) return result.downloadUrl;
     if (activePlanId) {
       return `/api/planner/plans?id=${encodeURIComponent(activePlanId)}&download=true`;
     }
+    if (result?.downloadUrl) return result.downloadUrl;
     return undefined;
   }, [result, activePlanId]);
 
@@ -246,21 +330,16 @@ export default function Dashboard() {
     const firstRow = planSheet?.rows[0];
     const keys = firstRow ? Object.keys(firstRow) : [];
 
-    // 1. Daily target column (e.g., "Plan no. of Posts", "Target Total Hours", "Target Images")
-    const dailyTargetCol = keys.find(
-      (k) =>
-        (/plan|target/i.test(k) || /posts|images|records|documents|units|hours/i.test(k)) &&
-        !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(k),
-    );
+    const dailyTargetCol = selectTargetColumn(keys, plan);
 
     // 2. Accumulative running total column (e.g., "Target Accumulative")
     const accumCol = keys.find((k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k));
 
     // 3. Team size column
-    const teamCol = keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
+    const teamCol = selectTeamColumn(keys);
 
     // 4. Per annotator column
-    const perAnnotCol = keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
+    const perAnnotCol = selectPerResourceColumn(keys, dailyTargetCol);
 
     let totalPlanned = 0;
     const monthly = new Map<string, number>();
@@ -297,7 +376,9 @@ export default function Dashboard() {
 
     const chosenTargetCol = dailyTargetCol ?? accumCol ?? "Target Total Hours";
     const chosenPerAnnotCol = perAnnotCol ?? chosenTargetCol;
-    const unitLabel = chosenTargetCol.replace(/target\s*|plan\s*|no\.\s*of\s*/i, "").trim().toLowerCase() || "units";
+    const unitLabel = normalizedUnit(plan) !== "hours"
+      ? normalizedUnit(plan)
+      : chosenTargetCol.replace(/target\s*|plan\s*|no\.\s*of\s*/i, "").trim().toLowerCase() || "units";
 
     return {
       totalPlanned,
@@ -310,11 +391,21 @@ export default function Dashboard() {
     };
   }, [rows, plan]);
 
-  const maxMonth = Math.max(...metrics.monthly.map((item) => item.value), 1);
   const activePlanRecord = activePlanId ? history.plans.find((item) => item.id === activePlanId) : undefined;
 
   const planToShow = useMemo<HistoryRecord | undefined>(() => {
-    if (activePlanRecord) return activePlanRecord;
+    if (workspaceData?.plan) {
+      return {
+        ...workspaceData.plan,
+        raw_plan: workspaceData.currentPlanData ?? workspaceData.plan.raw_plan,
+      };
+    }
+    if (activePlanRecord) {
+      return {
+        ...activePlanRecord,
+        raw_plan: plan ?? activePlanRecord.raw_plan,
+      };
+    }
     if (result?.plan) {
       return {
         id: result.planId ?? "generated",
@@ -332,7 +423,7 @@ export default function Dashboard() {
       };
     }
     return undefined;
-  }, [activePlanRecord, result, user, metrics, mode]);
+  }, [workspaceData, activePlanRecord, plan, result, user, metrics, mode]);
 
   // User actions
   async function logout() {
@@ -368,6 +459,137 @@ export default function Dashboard() {
       setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleWorkspaceMessage(message: string) {
+    if (!activePlanId || !workspaceData?.currentRevision) return;
+    setWorkspaceSending(true);
+    setWorkspaceError("");
+    try {
+      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/messages`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          message,
+          revisionId: workspaceData.currentRevision.id,
+        }),
+      });
+      const data = await res.json() as {
+        success: boolean;
+        error?: string;
+        userMessage?: PlanWorkspaceResponse["conversation"][number];
+        assistantMessage?: PlanWorkspaceResponse["conversation"][number];
+      };
+      if (!res.ok || !data.success || !data.userMessage || !data.assistantMessage) {
+        throw new Error(data.error ?? "Message failed");
+      }
+      setWorkspaceData((current) => current ? {
+        ...current,
+        conversation: [...current.conversation, data.userMessage!, data.assistantMessage!],
+      } : current);
+    } catch (caught) {
+      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to send message");
+    } finally {
+      setWorkspaceSending(false);
+    }
+  }
+
+  async function handleApplyProposal(proposal: PlanChangeProposal) {
+    if (!activePlanId) return;
+    setApplyingProposalId(proposal.id);
+    setWorkspaceError("");
+    try {
+      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          proposalId: proposal.id,
+          basedOnRevisionId: proposal.basedOnRevisionId,
+          confirmed: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to apply proposal");
+      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      else fetchWorkspace(activePlanId);
+      setResult(null);
+      fetchPlans();
+      fetchPlanFiles(activePlanId);
+    } catch (caught) {
+      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to apply proposal");
+    } finally {
+      setApplyingProposalId("");
+    }
+  }
+
+  async function handleCancelProposal(proposal: PlanChangeProposal) {
+    if (!activePlanId) return;
+    setApplyingProposalId(proposal.id);
+    setWorkspaceError("");
+    try {
+      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          proposalId: proposal.id,
+          basedOnRevisionId: proposal.basedOnRevisionId,
+          confirmed: false,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to cancel proposal");
+      fetchWorkspace(activePlanId);
+    } catch (caught) {
+      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to cancel proposal");
+    } finally {
+      setApplyingProposalId("");
+    }
+  }
+
+  async function handleRestoreRevision(revision: PlanRevision) {
+    if (!activePlanId) return;
+    setRestoringRevisionId(revision.id);
+    setWorkspaceError("");
+    try {
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions/${encodeURIComponent(revision.id)}/restore`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to restore revision");
+      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      else fetchWorkspace(activePlanId);
+      setResult(null);
+      fetchPlans();
+      fetchPlanFiles(activePlanId);
+    } catch (caught) {
+      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to restore revision");
+    } finally {
+      setRestoringRevisionId("");
+    }
+  }
+
+  async function handleDeleteRevision(revision: PlanRevision) {
+    if (!activePlanId || revision.id === workspaceData?.currentRevision.id) return;
+    const confirmed = window.confirm(`Delete revision ${revision.revision_number} from history?`);
+    if (!confirmed) return;
+    setDeletingRevisionId(revision.id);
+    setWorkspaceError("");
+    try {
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions/${encodeURIComponent(revision.id)}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete revision");
+      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      else fetchWorkspace(activePlanId);
+      fetchPlanFiles(activePlanId);
+    } catch (caught) {
+      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to delete revision");
+    } finally {
+      setDeletingRevisionId("");
     }
   }
 
@@ -657,75 +879,27 @@ export default function Dashboard() {
                 <p>Input target annotators, timelines, and hour counts on the sidebar to get started.</p>
               </section>
             ) : (
-              <>
-                <section className="summary-strip">
-                  <div className="project-summary">
-                    <span className="eyebrow">PLAN OVERVIEW</span>
-                    <p>
-                      {plan.summary && plan.summary.trim()
-                        ? plan.summary
-                        : plan.project.projectDescription ||
-                          `Production plan for ${plan.project.projectName || "requested project"} scheduled from ${compactDate(plan.project.startDate)} to ${compactDate(plan.project.deadline)}.`}
-                    </p>
-                    <div className="date-range">
-                      <Icon name="clock" /> {compactDate(plan.project.startDate)} <span>→</span>{" "}
-                      {compactDate(plan.project.deadline)}
-                    </div>
-                  </div>
-                  <div className="completion-ring">
-                    <div>
-                      <strong>0%</strong>
-                      <span>actual</span>
-                    </div>
-                  </div>
-                </section>
-
-                <DashboardMetrics metrics={metrics} mode={mode} sheetsCount={plan.workbook.sheets.length} />
-
-                <section className="content-grid">
-                  <article className="chart-card">
-                    <div className="card-heading">
-                      <div>
-                        <span className="eyebrow">CAPACITY CURVE</span>
-                        <h3>{metrics.unitLabel.charAt(0).toUpperCase() + metrics.unitLabel.slice(1)} by month</h3>
-                      </div>
-                      <span className="legend">
-                        <i /> Planned
-                      </span>
-                    </div>
-                    <div className="bar-chart">
-                      {metrics.monthly.map((item) => (
-                        <div className="bar-column" key={item.month}>
-                          <div className="bar-value">{item.value.toLocaleString()}</div>
-                          <div className="bar-track">
-                            <div style={{ height: `${Math.max((item.value / maxMonth) * 100, 3)}%` }} />
-                          </div>
-                          <span>{item.month}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-
-                  <article className="assumptions-card">
-                    <div className="card-heading">
-                      <div>
-                        <span className="eyebrow">MODEL NOTES</span>
-                        <h3>Key assumptions</h3>
-                      </div>
-                    </div>
-                    <ul>
-                      {plan.project.assumptions.slice(0, 5).map((item, index) => (
-                        <li key={`${item}-${index}`}>
-                          <span>{index + 1}</span>
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                </section>
-
-                <PlanTable rows={rows} metrics={metrics} />
-              </>
+              planToShow && (
+                <PlanWorkspace
+                  plan={planToShow}
+                  workspace={workspaceData}
+                  loading={workspaceLoading}
+                  error={workspaceError}
+                  metrics={metrics}
+                  rows={rows}
+                  downloadUrl={downloadUrl}
+                  sending={workspaceSending}
+                  applyingProposalId={applyingProposalId}
+                  restoringRevisionId={restoringRevisionId}
+                  deletingRevisionId={deletingRevisionId}
+                  onRetry={() => fetchWorkspace(activePlanId)}
+                  onSendMessage={handleWorkspaceMessage}
+                  onApplyProposal={handleApplyProposal}
+                  onCancelProposal={handleCancelProposal}
+                  onRestoreRevision={handleRestoreRevision}
+                  onDeleteRevision={handleDeleteRevision}
+                />
+              )
             )}
 
             <PlanHistory
@@ -800,13 +974,27 @@ export default function Dashboard() {
                           </button>
                         </div>
                       </div>
-                      <AdminPlanDetailsPanel
+                      <PlanWorkspace
                         plan={planToShow}
+                        workspace={workspaceData}
+                        loading={workspaceLoading}
+                        error={workspaceError}
                         rows={rows}
                         metrics={metrics}
+                        downloadUrl={downloadUrl}
+                        sending={workspaceSending}
+                        applyingProposalId={applyingProposalId}
+                        restoringRevisionId={restoringRevisionId}
+                        deletingRevisionId={deletingRevisionId}
                         files={planFiles}
                         filesLoading={planFilesLoading}
                         filesError={planFilesError}
+                        onRetry={() => fetchWorkspace(activePlanId)}
+                        onSendMessage={handleWorkspaceMessage}
+                        onApplyProposal={handleApplyProposal}
+                        onCancelProposal={handleCancelProposal}
+                        onRestoreRevision={handleRestoreRevision}
+                        onDeleteRevision={handleDeleteRevision}
                         onDownloadFile={handleDownloadPlanFile}
                       />
                     </div>

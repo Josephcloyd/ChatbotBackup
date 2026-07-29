@@ -48,7 +48,7 @@ export function AdminRunsPanel({ runs, plans, loading, error, onRefresh }: Admin
             <label htmlFor="run-status-filter">Status</label>
             <select id="run-status-filter" className="select-atom" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter run status">
               <option value="">All statuses</option>
-              {["running", "completed", "failed"].map((item) => <option key={item} value={item}>{item}</option>)}
+              {["started", "completed", "failed"].map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
           </div>
           <div className="admin-filter-field">

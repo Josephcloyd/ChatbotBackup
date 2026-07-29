@@ -12,15 +12,6 @@ export interface PlanRuleOptions {
   input: Pick<ProductionPlanInput, "projectDescription">;
 }
 
-const ACTUAL_COLUMNS = [
-  "Actual Active Annotators",
-  "Actual Total Hours",
-  "Actual Total Hours per Annotator",
-  "Actual Hours",
-  "Total Variance",
-  "Completion Rate (%)",
-];
-
 function numericValue(row: ProductionPlanRow, column: string, rowNumber: number): number {
   const raw = row[column];
   const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : Number.NaN;
@@ -28,6 +19,25 @@ function numericValue(row: ProductionPlanRow, column: string, rowNumber: number)
     throw new Error(`Production Plan row ${rowNumber} must contain a numeric ${column}`);
   }
   return value;
+}
+
+function targetColumn(columns: string[]): string {
+  return columns.find((column) =>
+    (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
+    !/active|accumulate|accumulative|annotators|recorders|operators|workers|team|resource|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(column)
+  ) ?? columns.find((column) => /target\s+(?:total\s+)?hours/i.test(column)) ?? columns[2] ?? "Target Total Hours";
+}
+
+function teamColumn(columns: string[]): string {
+  return columns.find((column) =>
+    /target\s+active\s+(?:annotators|recorders|operators|resources)|active\s+(?:annotators|recorders|operators|resources)|workers|team|staff|resource/i.test(column)
+  ) ?? "Target Active Annotators";
+}
+
+function actualColumns(columns: string[]): string[] {
+  return columns.filter((column) =>
+    /^Actual\b/i.test(column) || column === "Total Variance" || column === "Completion Rate (%)"
+  );
 }
 
 function isoDate(value: unknown): string | null {
@@ -56,7 +66,7 @@ export class PlanRulesService {
       console.warn("[planRulesService] Production Plan sheet had 0 rows. Synthesizing schedule rows from project constraints.");
       const settings = resolvePlanningSettings(options.input.projectDescription, options.currentDate);
       const scheduleDates = buildScheduleDates(settings);
-      const targetCol = sheet.columns.find((c) => /target|plan/i.test(c)) ?? sheet.columns[2] ?? "Target Total Hours";
+      const targetCol = targetColumn(sheet.columns);
       const totalUnits = settings.totalHours ?? settings.totalQuantity ?? 100;
       const dailyTarget = Math.max(1, Math.round(totalUnits / Math.max(scheduleDates.length, 1)));
       let accum = 0;
@@ -103,8 +113,7 @@ export class PlanRulesService {
         ? numericValue(row, "Target Total Hours", rowNumber)
         : 0;
 
-      for (const column of ACTUAL_COLUMNS) {
-        if (!sheet.columns.includes(column)) continue;
+      for (const column of actualColumns(sheet.columns)) {
         const value = row[column];
         if (value !== "" && value !== null && value !== undefined) {
           throw new Error(
@@ -127,7 +136,7 @@ export class PlanRulesService {
 
       if (!scheduleMatches && expectedDates.length > 0) {
         console.warn(`[planRulesService] Auto-expanding ${actualDates.length} sample rows to complete ${expectedDates.length}-day schedule.`);
-        const targetCol = sheet.columns.find((c) => /target|plan/i.test(c)) ?? sheet.columns[2] ?? "Target Total Hours";
+        const targetCol = targetColumn(sheet.columns);
         const totalUnits = settings.totalQuantity ?? (settings.totalHours !== 160 ? settings.totalHours : undefined) ?? 100;
         const dailyTarget = Math.max(1, Math.round(totalUnits / Math.max(expectedDates.length, 1)));
         let accum = 0;
@@ -155,8 +164,9 @@ export class PlanRulesService {
       );
     }
     if (constraints.teamSize !== undefined) {
+      const teamCol = teamColumn(sheet.columns);
       const teamValues = sheet.rows.map((row, index) =>
-        numericValue(row, "Target Active Annotators", index + 1),
+        numericValue(row, teamCol, index + 1),
       );
       if (teamValues.some((value) => value > constraints.teamSize!)) {
         throw new Error(`Production Plan exceeds requested team size of ${constraints.teamSize}`);

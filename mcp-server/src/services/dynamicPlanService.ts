@@ -1,6 +1,7 @@
 import type { ProductionPlan, ProductionPlanRow } from "../types/productionPlan.js";
 import {
   buildScheduleDates,
+  DEFAULT_PLANNING_MODEL,
   extractRequestedConstraints,
   resolvePlanningSettings,
   type DurationUnit,
@@ -68,37 +69,54 @@ export interface DynamicPlanResult {
   hoursPerDay?: number;
 }
 
-// Hour-based column profile (default — unchanged from original).
-const HOUR_COLUMNS = [
-  "No.",
-  "Date",
-  "Month",
-  "Day",
-  "Target Active Annotators",
-  "Target Total Hours",
-  "Target Total Hours per Annotator",
-  "Actual Active Annotators",
-  "Actual Total Hours",
-  "Actual Total Hours per Annotator",
-  "Target Hours",
-  "Actual Hours",
-  "Total Variance",
-  "Completion Rate (%)",
-  "Status",
-  "Notes",
-];
+function resourceLabelFor(kind: string, unitOfMeasure?: string): string {
+  if (unitOfMeasure === "video hours" || /\bvideo\b/i.test(unitOfMeasure ?? "")) return "Recorder";
+  if (kind === "annotation") return "Annotator";
+  if (kind === "data encoding") return "Encoder";
+  if (kind === "customer support") return "Agent";
+  if (kind === "software development") return "Team Member";
+  if (kind === "manufacturing") return "Operator";
+  return "Resource";
+}
+
+function pluralResourceLabel(resourceLabel: string): string {
+  if (resourceLabel === "Resource") return "Resources";
+  if (resourceLabel === "Team Member") return "Team Members";
+  return `${resourceLabel}s`;
+}
+
+function buildHourColumns(resourceLabel: string, resourcePlural: string): string[] {
+  return [
+    "No.",
+    "Date",
+    "Month",
+    "Day",
+    `Target Active ${resourcePlural}`,
+    "Target Total Hours",
+    `Target Total Hours per ${resourceLabel}`,
+    `Actual Active ${resourcePlural}`,
+    "Actual Total Hours",
+    `Actual Total Hours per ${resourceLabel}`,
+    "Target Hours",
+    "Actual Hours",
+    "Total Variance",
+    "Completion Rate (%)",
+    "Status",
+    "Notes",
+  ];
+}
 
 /** Quantity-based column profile (images, records, etc.).
  *  Positions 6-10 use the named unit; positions 11-12 keep hours for capacity reference. */
-function buildQuantityColumns(unitLabel: string): string[] {
+function buildQuantityColumns(unitLabel: string, resourceLabel: string, resourcePlural: string): string[] {
   return [
     "No.", "Date", "Month", "Day",
-    "Target Active Annotators",
+    `Target Active ${resourcePlural}`,
     `Target ${unitLabel}`,
-    `Target ${unitLabel} per Annotator`,
-    "Actual Active Annotators",
+    `Target ${unitLabel} per ${resourceLabel}`,
+    `Actual Active ${resourcePlural}`,
     `Actual ${unitLabel}`,
-    `Actual ${unitLabel} per Annotator`,
+    `Actual ${unitLabel} per ${resourceLabel}`,
     "Target Hours",   // capacity reference — kept for Excel formula compat
     "Actual Hours",
     "Total Variance",
@@ -109,18 +127,20 @@ function buildQuantityColumns(unitLabel: string): string[] {
 }
 
 function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return s.split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
 /** Returns the column list and metadata for the active profile. */
 function selectColumnProfile(
   unitOfMeasure: string | undefined,
+  resourceLabel: string,
+  resourcePlural: string,
 ): { columns: string[]; isQuantity: boolean; unitLabel: string } {
   if (unitOfMeasure && unitOfMeasure !== "hours") {
     const unitLabel = capitalize(unitOfMeasure);
-    return { columns: buildQuantityColumns(unitLabel), isQuantity: true, unitLabel };
+    return { columns: buildQuantityColumns(unitLabel, resourceLabel, resourcePlural), isQuantity: true, unitLabel };
   }
-  return { columns: HOUR_COLUMNS, isQuantity: false, unitLabel: "Hours" };
+  return { columns: buildHourColumns(resourceLabel, resourcePlural), isQuantity: false, unitLabel: "Hours" };
 }
 
 /** Distribute an integer quantity evenly across N days. Sum is exact. */
@@ -185,7 +205,7 @@ Rules:
 - If a value was not extracted, choose a conservative realistic default.
 - Adapt to the project category. Do not force annotation language onto software, document-processing, manufacturing, content, support, training, logistics, or admin projects.
 - Preserve the production unit from the request when present (images, records, documents, features, modules, tickets, articles, videos, batches, units, participants, transactions, hours, or tasks).
-- If the user names a planning or operating model such as LPB Model, preserve it as an explicit assumption and align phases/risks with that model when safely possible.
+- Always apply ${DEFAULT_PLANNING_MODEL}. Preserve it as an explicit assumption and align phases/risks with that model when safely possible.
 - Separate confirmed facts from assumptions.
 - Include quality-control work as real effort; do not treat review as free.
 - Propose workflow phases, risks, and assumptions specific to the project domain.
@@ -308,7 +328,7 @@ function projectKind(description: string, requested: RequestedConstraints): stri
   if (/\b(?:software|app|application|dashboard|website|web\s+site|web\s+development|hris|system|feature|module|developers?)\b/i.test(description)) return "software development";
   if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing)\b/i.test(description)) return "document processing";
   if (/\b(?:manufactur(?:e|ing)|machines?|factory|assembly|units?|production\s+line)\b/i.test(description)) return "manufacturing";
-  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|media\s+production)\b/i.test(description)) return "content production";
+  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|video[-\s]?recording|recordings?|media\s+production)\b/i.test(description)) return "content production";
   if (/\b(?:customer\s+support|tickets?|service\s+desk|helpdesk|calls?|cases?)\b/i.test(description)) return "customer support";
   if (/\b(?:training|workshop|participants?|learners?|curriculum)\b/i.test(description)) return "training";
   if (/\b(?:event|venue|logistics|inventory|shipments?|stock|batches?)\b/i.test(description)) return "operations";
@@ -653,7 +673,13 @@ function buildSupportSheets(
   const qualityReviewHours = Number(Math.max(settings.totalHours * 0.12, planRows.length * 0.25).toFixed(2));
   const productionHours = Number(Math.max(settings.totalHours - qualityReviewHours, 0).toFixed(2));
   const utilization = availableHours > 0 ? Number(((settings.totalHours / availableHours) * 100).toFixed(2)) : 0;
-  const assumedProductivity = isQuantity && requested.totalHours === undefined;
+  const hasDeterministicCapacity =
+    isQuantity &&
+    requested.totalHours === undefined &&
+    requested.totalQuantity !== undefined &&
+    requested.teamSize !== undefined &&
+    requested.duration !== undefined;
+  const assumedProductivity = isQuantity && requested.totalHours === undefined && !hasDeterministicCapacity;
   const feasibility = feasibilityStatus(settings.totalHours, availableHours, assumedProductivity);
   const requiredDailyOutput = isQuantity && totalQuantity
     ? Number((totalQuantity / planRows.length).toFixed(2))
@@ -925,9 +951,11 @@ export function buildDynamicPlan(
   const effectiveRisks = proposal.risks.length ? proposal.risks : defaultRisks(kind);
   const totalQuantity = settings.totalQuantity ?? (settings.unitOfMeasure && proposal.totalAssets > 0 ? Math.round(proposal.totalAssets) : undefined);
   const unitOfMeasure = settings.unitOfMeasure ?? requested.unitOfMeasure;
+  const resourceLabel = resourceLabelFor(kind, unitOfMeasure);
+  const resourcePlural = pluralResourceLabel(resourceLabel);
 
   // Select column profile based on detected unit of measure.
-  const { columns: planColumns, isQuantity, unitLabel } = selectColumnProfile(totalQuantity != null ? unitOfMeasure : undefined);
+  const { columns: planColumns, isQuantity, unitLabel } = selectColumnProfile(totalQuantity != null ? unitOfMeasure : undefined, resourceLabel, resourcePlural);
 
   // ── Throughput-aware quantity distribution ───────────────────────────────────
   const hoursPerDay = Math.max(1, proposal.planningSettings.hoursPerDay ?? 8);
@@ -962,7 +990,13 @@ export function buildDynamicPlan(
     ? distributeQuantity(totalQuantity, dates.length)
     : null;
   const availableHours = settings.teamSize * dates.length * 8;
-  const assumedRate = isQuantity && requested.totalHours === undefined;
+  const hasDeterministicCapacity =
+    isQuantity &&
+    requested.totalHours === undefined &&
+    requested.totalQuantity !== undefined &&
+    requested.teamSize !== undefined &&
+    requested.duration !== undefined;
+  const assumedRate = isQuantity && requested.totalHours === undefined && !hasDeterministicCapacity;
   const feasibility = feasibilityStatus(settings.totalHours, availableHours, assumedRate);
   const requiredDailyOutput = Number(((isQuantity && totalQuantity ? totalQuantity : settings.totalHours) / dates.length).toFixed(2));
   const utilizationPercent = availableHours > 0
@@ -971,13 +1005,15 @@ export function buildDynamicPlan(
 
   // Pre-compute dynamic column key names for the active profile.
   const targetKey = isQuantity ? `Target ${unitLabel}` : "Target Total Hours";
-  const targetPerAnnotKey = isQuantity ? `Target ${unitLabel} per Annotator` : "Target Total Hours per Annotator";
+  const targetPerResourceKey = isQuantity ? `Target ${unitLabel} per ${resourceLabel}` : `Target Total Hours per ${resourceLabel}`;
   const actualKey = isQuantity ? `Actual ${unitLabel}` : "Actual Total Hours";
-  const actualPerAnnotKey = isQuantity ? `Actual ${unitLabel} per Annotator` : "Actual Total Hours per Annotator";
+  const actualPerResourceKey = isQuantity ? `Actual ${unitLabel} per ${resourceLabel}` : `Actual Total Hours per ${resourceLabel}`;
+  const teamKey = `Target Active ${resourcePlural}`;
+  const actualTeamKey = `Actual Active ${resourcePlural}`;
 
   const rows: ProductionPlanRow[] = dates.map((date, index) => {
     const targetVal = quantities != null ? quantities[index]! : hours[index]!;
-    const perAnnotVal = quantities != null
+    const perResourceVal = quantities != null
       ? Math.round(quantities[index]! / settings.teamSize)
       : Number((hours[index]! / settings.teamSize).toFixed(2));
     return {
@@ -985,12 +1021,12 @@ export function buildDynamicPlan(
       Date: date,
       Month: monthName(date),
       Day: new Date(`${date}T00:00:00Z`).toLocaleString("en-US", { weekday: "short", timeZone: "UTC" }),
-      "Target Active Annotators": settings.teamSize,
+      [teamKey]: settings.teamSize,
       [targetKey]: targetVal,
-      [targetPerAnnotKey]: perAnnotVal,
-      "Actual Active Annotators": "",
+      [targetPerResourceKey]: perResourceVal,
+      [actualTeamKey]: "",
       [actualKey]: "",
-      [actualPerAnnotKey]: "",
+      [actualPerResourceKey]: "",
       "Target Hours": hours[index]!,   // capacity reference — always present
       "Actual Hours": "",
       "Total Variance": "",
@@ -1045,7 +1081,7 @@ export function buildDynamicPlan(
   const currentActualRows = staffing.completedRows.length
     ? staffing.completedRows.map((row, index) => ({
         Period: String(row.Date),
-        "Historical Assignment": `Original ${String(row["Target Active Annotators"])} resource(s)`,
+        "Historical Assignment": `Original ${String(row[teamKey] ?? row["Target Active Annotators"] ?? "")} ${resourceLabel.toLowerCase()}(s)`,
         "Planned Work": Number(row[targetKey] ?? 0),
         "Actual Work Preserved": Number(row[targetKey] ?? 0),
         Status: "Completed",

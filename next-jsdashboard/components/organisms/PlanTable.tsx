@@ -9,11 +9,30 @@ interface PlanTableProps {
   };
 }
 
-export function PlanTable({ rows }: PlanTableProps) {
+function selectTeamColumn(keys: string[]): string | undefined {
+  return keys.find((key) => /^target\s+active\b/i.test(key))
+    ?? keys.find((key) => /\b(?:team|staff|workers|resources)\b/i.test(key) && !/actual|per\s+/i.test(key));
+}
+
+export function PlanTable({ rows, metrics }: PlanTableProps) {
   const columns = React.useMemo(() => {
     if (!rows || rows.length === 0) return [];
-    return Object.keys(rows[0]).slice(0, 8);
-  }, [rows]);
+    const keys = Object.keys(rows[0]);
+    const preferred = [
+      "No.",
+      "Date",
+      "Month",
+      "Day",
+      selectTeamColumn(keys),
+      metrics?.targetCol,
+      metrics?.perAnnotCol,
+      "Target Hours",
+      "Actual Hours",
+      "Status",
+      "Notes",
+    ].filter((column): column is string => typeof column === "string" && keys.includes(column));
+    return [...new Set(preferred)].slice(0, 10);
+  }, [rows, metrics?.targetCol, metrics?.perAnnotCol]);
 
   if (!rows || rows.length === 0) return null;
 

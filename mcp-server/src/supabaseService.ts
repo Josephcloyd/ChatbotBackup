@@ -10,6 +10,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProductionPlanOutput } from "./productionPrompt.js";
+import type {
+  PlanChangeProposal,
+  PlanConversationMessage,
+  PlanMessageType,
+  PlanRevision,
+  PlanRevisionSource,
+  StoredPlanChangeProposal,
+} from "./types/planWorkspace.js";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -90,6 +98,33 @@ export interface PlanGenerationRunRecord {
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
+}
+
+export interface CreatePlanRevisionInput {
+  planId: string;
+  revisionNumber: number;
+  parentRevisionId?: string | null;
+  createdBy?: string | null;
+  createdByRole: "operator" | "admin" | "system";
+  revisionSource: PlanRevisionSource;
+  userInstruction?: string | null;
+  changeSummary: string;
+  planData: ProductionPlanOutput | Record<string, unknown>;
+  validationResult?: Record<string, unknown> | null;
+  workbookMode: "dynamic" | "template";
+  workbookFilename?: string | null;
+  workbookStoragePath?: string | null;
+  workbookSignedUrl?: string | null;
+}
+
+export interface CreateConversationMessageInput {
+  planId: string;
+  revisionId?: string | null;
+  userId?: string | null;
+  role: "user" | "assistant" | "system";
+  messageType: PlanMessageType;
+  content: string;
+  metadata?: Record<string, unknown>;
 }
 
 interface BuildPlanRecordOptions {
@@ -373,6 +408,52 @@ export async function getPlanById(planId: string): Promise<PlanRecord | null> {
   return data as PlanRecord | null;
 }
 
+export async function updatePlanFromRevision(
+  planId: string,
+  projectDescription: string,
+  plan: ProductionPlanOutput,
+  options: BuildPlanRecordOptions = {},
+): Promise<PlanRecord> {
+  const supabase = getClient();
+  const nextRecord = buildPlanRecord(
+    options.requestedBy ?? "",
+    projectDescription,
+    plan,
+    options,
+  );
+  const updates: Partial<PlanRecord> = {
+    project_description: projectDescription,
+    project_title: nextRecord.project_title,
+    summary: nextRecord.summary,
+    phases: nextRecord.phases,
+    total_hours_estimate: nextRecord.total_hours_estimate,
+    recommended_team_size: nextRecord.recommended_team_size,
+    key_risks: nextRecord.key_risks,
+    next_steps: nextRecord.next_steps,
+    raw_plan: plan,
+    updated_at: new Date().toISOString(),
+    status: "generated",
+    planning_start_date: nextRecord.planning_start_date,
+    planning_end_date: nextRecord.planning_end_date,
+    requested_team_size: nextRecord.requested_team_size,
+    workbook_mode: options.workbookMode ?? nextRecord.workbook_mode,
+    generation_source: options.generationSource ?? nextRecord.generation_source,
+  };
+
+  const { data, error } = await supabase
+    .from("production_plans")
+    .update(updates)
+    .eq("id", planId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update plan ${planId} from revision: ${error.message}`);
+  }
+
+  return data as PlanRecord;
+}
+
 export async function deletePlan(planId: string): Promise<void> {
   const supabase = getClient();
   const { data: files, error: filesError } = await supabase
@@ -598,6 +679,182 @@ export async function listPlanFiles(planId: string): Promise<PlanFileRecord[]> {
   return (data ?? []) as PlanFileRecord[];
 }
 
+export async function listPlanRevisions(planId: string): Promise<PlanRevision[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_revisions")
+    .select("*")
+    .eq("plan_id", planId)
+    .order("revision_number", { ascending: true });
+
+  if (error) throw new Error(`Failed to list plan revisions: ${error.message}`);
+  return (data ?? []) as PlanRevision[];
+}
+
+export async function getLatestPlanRevision(planId: string): Promise<PlanRevision | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_revisions")
+    .select("*")
+    .eq("plan_id", planId)
+    .order("revision_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to load current plan revision: ${error.message}`);
+  return data as PlanRevision | null;
+}
+
+export async function getPlanRevision(planId: string, revisionId: string): Promise<PlanRevision | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_revisions")
+    .select("*")
+    .eq("plan_id", planId)
+    .eq("id", revisionId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to load plan revision: ${error.message}`);
+  return data as PlanRevision | null;
+}
+
+export async function deletePlanRevision(planId: string, revisionId: string): Promise<void> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_revisions")
+    .delete()
+    .eq("plan_id", planId)
+    .eq("id", revisionId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to delete plan revision: ${error.message}`);
+  if (!data) throw new Error("Revision not found.");
+}
+
+export async function createPlanRevision(input: CreatePlanRevisionInput): Promise<PlanRevision> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_revisions")
+    .insert({
+      plan_id: input.planId,
+      revision_number: input.revisionNumber,
+      parent_revision_id: input.parentRevisionId ?? null,
+      created_by: input.createdBy ?? null,
+      created_by_role: input.createdByRole,
+      revision_source: input.revisionSource,
+      user_instruction: input.userInstruction ?? null,
+      change_summary: input.changeSummary,
+      plan_data: input.planData,
+      validation_result: input.validationResult ?? null,
+      workbook_mode: input.workbookMode,
+      workbook_filename: input.workbookFilename ?? null,
+      workbook_storage_path: input.workbookStoragePath ?? null,
+      workbook_signed_url: input.workbookSignedUrl ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create plan revision: ${error.message}`);
+  return data as PlanRevision;
+}
+
+export async function listPlanConversationMessages(planId: string): Promise<PlanConversationMessage[]> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_conversations")
+    .select("*")
+    .eq("plan_id", planId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`Failed to list plan conversation messages: ${error.message}`);
+  return (data ?? []) as PlanConversationMessage[];
+}
+
+export async function createPlanConversationMessage(
+  input: CreateConversationMessageInput,
+): Promise<PlanConversationMessage> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_conversations")
+    .insert({
+      plan_id: input.planId,
+      revision_id: input.revisionId ?? null,
+      user_id: input.userId ?? null,
+      role: input.role,
+      message_type: input.messageType,
+      content: input.content,
+      metadata: input.metadata ?? {},
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to save plan conversation message: ${error.message}`);
+  return data as PlanConversationMessage;
+}
+
+export async function createPlanChangeProposal(
+  proposal: PlanChangeProposal,
+  createdBy?: string | null,
+): Promise<StoredPlanChangeProposal> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_change_proposals")
+    .insert({
+      id: proposal.id,
+      plan_id: proposal.planId,
+      based_on_revision_id: proposal.basedOnRevisionId,
+      request_summary: proposal.requestSummary,
+      proposal,
+      status: "pending",
+      created_by: createdBy ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to save plan change proposal: ${error.message}`);
+  return data as StoredPlanChangeProposal;
+}
+
+export async function getPlanChangeProposal(
+  planId: string,
+  proposalId: string,
+): Promise<StoredPlanChangeProposal | null> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_change_proposals")
+    .select("*")
+    .eq("plan_id", planId)
+    .eq("id", proposalId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to load plan change proposal: ${error.message}`);
+  return data as StoredPlanChangeProposal | null;
+}
+
+export async function updatePlanChangeProposalStatus(
+  planId: string,
+  proposalId: string,
+  status: "pending" | "applied" | "cancelled",
+  appliedRevisionId?: string | null,
+): Promise<StoredPlanChangeProposal> {
+  const supabase = getClient();
+  const { data, error } = await supabase
+    .from("plan_change_proposals")
+    .update({
+      status,
+      applied_revision_id: appliedRevisionId ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("plan_id", planId)
+    .eq("id", proposalId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to update plan change proposal: ${error.message}`);
+  return data as StoredPlanChangeProposal;
+}
+
 export async function recordPlanFile(
   planId: string,
   upload: WorkbookUploadResult,
@@ -619,7 +876,7 @@ export async function recordPlanFile(
       .insert({
         plan_id: planId,
         file_name: upload.filename,
-        file_type: "xlsx",
+        file_type: "workbook",
         version,
         file_size: upload.fileSize,
         storage_bucket: upload.bucket,
@@ -675,7 +932,7 @@ export async function createGenerationRun(input: {
         model_provider: input.modelProvider ?? "ollama",
         model_name: input.modelName ?? null,
         prompt_version: input.promptVersion ?? null,
-        status: "running",
+        status: "started",
         attempt_number: input.attemptNumber ?? 1,
         started_at: new Date().toISOString(),
       })

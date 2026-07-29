@@ -48,6 +48,7 @@ test("extracts month, staffing, hours, calendar-day, and start-date constraints"
     weekdaysOnly: false,
     startDate: "2026-08-01",
     projectType: "annotation",
+    planningModel: "LPB Model",
   });
 });
 

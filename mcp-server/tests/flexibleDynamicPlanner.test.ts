@@ -127,13 +127,76 @@ test("builds image-based text capture plans from natural WhatsApp wording", () =
   planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
 });
 
+test("treats approved video recording hours as output duration instead of labor hours", () => {
+  const description =
+    "Create a detailed production plan for a video-recording project involving 10 video recorders who must produce a total of 465 hours of approved and usable video recordings within a three-month period. The team will work from Monday to Friday, with each recorder following a standard eight-hour workday. The production process should include equipment preparation, actual video recording, file transfer, quality checking, corrections, and final submission. The 465-hour target refers specifically to the total duration of completed recordings that have passed quality review and been approved, rather than the total number of labor hours worked by the team.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+  assert.equal(constraints.projectType, "content production");
+  assert.equal(constraints.teamSize, 10);
+  assert.deepEqual(constraints.duration, { value: 3, unit: "months" });
+  assert.equal(constraints.weekdaysOnly, true);
+  assert.equal(constraints.totalQuantity, 465);
+  assert.equal(constraints.unitOfMeasure, "video hours");
+  assert.equal(constraints.totalHours, undefined);
+
+  const settings = resolvePlanningSettings(description, currentDate, proposal().planningSettings);
+  assert.ok(settings.totalHours > 465, "labor capacity should be derived separately from approved video duration");
+
+  const plan = dynamicPlan(description);
+  assert.equal(plan.project.projectCategory, "content production");
+  assert.equal(plan.project.productionUnit, "video hours");
+  assert.equal(plan.project.totalAssets, 465);
+  assert.ok(plan.project.assumptions.some((assumption) => /465 video hours/i.test(assumption)));
+
+  const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  assert.ok(production);
+  assert.ok(production!.columns.includes("Target Active Recorders"));
+  assert.ok(production!.columns.includes("Target Video Hours"));
+  assert.ok(production!.columns.includes("Target Video Hours per Recorder"));
+  assert.ok(production!.rows.every((row) => row["Target Active Recorders"] === 10));
+  const targetVideoHours = production!.rows.reduce((sum, row) => sum + Number(row["Target Video Hours"] ?? 0), 0);
+  assert.equal(targetVideoHours, 465);
+
+  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  assert.ok(projectInfo?.rows.some((row) => row.Field === "Requires clarification" && row.Value === "false"));
+  planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("does not confuse video recorders with video output quantity", () => {
+  const description =
+    "Create a detailed production plan for a video-recording project using the LPB Model. The project has 10 video recorders and must deliver 465 hours of approved, usable final video recordings within 3 months. The 465 hours refers to completed video duration that passes quality review, not labor hours. Work schedule: Monday to Friday only, 8 working hours per recorder per day, no weekend work.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+  assert.equal(constraints.teamSize, 10);
+  assert.equal(constraints.totalQuantity, 465);
+  assert.equal(constraints.unitOfMeasure, "video hours");
+  assert.equal(constraints.totalHours, undefined);
+
+  const plan = dynamicPlan(description);
+  assert.equal(plan.project.productionUnit, "video hours");
+  assert.equal(plan.project.totalAssets, 465);
+  const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  assert.ok(production?.columns.includes("Target Active Recorders"));
+  assert.ok(production?.columns.includes("Actual Video Hours per Recorder"));
+  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  assert.ok(projectInfo?.rows.some((row) => row.Field === "Requires clarification" && row.Value === "false"));
+});
+
 test("supports hours-only student enrollment encoding plans", () => {
   const description = "We need to encode student enrollment records for one week with eight total working hours.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+  assert.equal(constraints.planningModel, "LPB Model");
+
   const plan = dynamicPlan(description);
   assert.equal(plan.project.projectCategory, "data encoding");
   assert.equal(plan.project.productionUnit, "hours");
   assert.match(plan.summary, /Required daily output/i);
+  assert.ok(plan.project.assumptions.some((assumption) => /LPB Model/i.test(assumption)));
   planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("uses LPB Model even when another planning model is named", () => {
+  const constraints = extractRequestedConstraints("Create a plan for 200 records using ABC model.", currentDate);
+  assert.equal(constraints.planningModel, "LPB Model");
 });
 
 test("builds schedules for custom working days only", () => {
@@ -149,6 +212,22 @@ test("builds schedules for custom working days only", () => {
   const dates = buildScheduleDates(settings);
   assert.equal(dates.length, 6);
   assert.ok(dates.every((date) => [1, 3, 5].includes(new Date(`${date}T00:00:00Z`).getUTCDay())));
+});
+
+test("honors weekday duration phrased with over", () => {
+  const description = "Create a production plan for four annotators with 120 total hours over 50 weekdays.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+  assert.deepEqual(constraints.duration, { value: 50, unit: "days" });
+  assert.equal(constraints.durationDays, 50);
+  assert.equal(constraints.weekdaysOnly, true);
+
+  const settings = resolvePlanningSettings(description, currentDate);
+  const dates = buildScheduleDates(settings);
+  assert.equal(dates.length, 50);
+  assert.ok(dates.every((date) => {
+    const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+    return day >= 1 && day <= 5;
+  }));
 });
 
 test("capacity and quality-control effort are represented deterministically", () => {

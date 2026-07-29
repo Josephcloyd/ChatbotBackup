@@ -1,6 +1,7 @@
 import { generateWithOllama, parseOllamaJson } from "./ollamaService.js";
 import {
   completeGenerationRun,
+  createPlanRevision,
   createGenerationRun,
   recordPlanFile,
   savePlan,
@@ -36,6 +37,10 @@ export interface PlannerResult {
   workbookSignedUrlExpiresInSeconds?: number;
   dateInterpretations?: string[];
   error?: string;
+}
+
+function pathBaseName(filePath: string): string {
+  return filePath.split(/[\\/]/).pop() ?? filePath;
 }
 
 function buildFriendlyFailure(errorMessage: string): string {
@@ -172,6 +177,29 @@ export async function generateProductionPlan(
       planId = savedRecord.id;
       if (planId && uploadResult) {
         await recordPlanFile(planId, uploadResult, input.whatsappUserId);
+      }
+      if (planId) {
+        try {
+          await createPlanRevision({
+            planId,
+            revisionNumber: 1,
+            createdBy: input.whatsappUserId,
+            createdByRole: input.generationSource === "admin" ? "admin" : "operator",
+            revisionSource: "initial_generation",
+            changeSummary: "Initial production plan generated.",
+            planData: plan,
+            validationResult: { status: "passed", generatedAt: new Date().toISOString() },
+            workbookMode: mode,
+            workbookFilename: uploadResult?.filename ?? (workbookPath ? pathBaseName(workbookPath) : null),
+            workbookStoragePath: uploadResult?.objectPath ?? null,
+            workbookSignedUrl: uploadResult?.signedUrl ?? null,
+          });
+        } catch (revisionError) {
+          console.error(
+            "[plannerService] Initial revision save failed (non-fatal):",
+            (revisionError as Error).message,
+          );
+        }
       }
       await completeGenerationRun(runId, {
         status: "completed",

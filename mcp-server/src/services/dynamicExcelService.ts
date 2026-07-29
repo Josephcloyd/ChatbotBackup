@@ -103,6 +103,7 @@ export class DynamicExcelService {
     if (!productionSheet) throw new Error("Dynamic plan is missing the Production Plan sheet");
     const planRows = productionSheet.rows;
     const lastPlanRow = planRows.length + 1;
+    const teamColumn = productionSheet.columns[4] ?? "Target Active Annotators";
     const primaryTargetColumn = productionSheet.columns[5] ?? "Target Total Hours";
     const primaryActualColumn = productionSheet.columns[8] ?? "Actual Total Hours";
 
@@ -188,7 +189,7 @@ export class DynamicExcelService {
       const targetHours = isQuantityMode
         ? Number(source["Target Hours"] ?? targetColValue)   // capacity reference column K
         : targetColValue;                                    // in hour mode F and K are the same
-      const teamSize = Number(source["Target Active Annotators"]);
+      const teamSize = Number(source[teamColumn]);
       const row = production.addRow([
         index + 1,
         date,
@@ -197,7 +198,7 @@ export class DynamicExcelService {
         teamSize,
         targetColValue,   // col F: Target {Unit} or Target Total Hours
         { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetColValue / Math.max(teamSize, 1)).toFixed(isQuantityMode ? 0 : 2)) },
-        null,             // col H: Actual Active Annotators (user-filled)
+        null,             // col H: Actual active resources (user-filled)
         null,             // col I: Actual {Unit} or Actual Total Hours (user-filled)
         { formula: `IF(OR(H${excelRow}="",I${excelRow}=""),"",I${excelRow}/H${excelRow})`, result: "" },
         targetHours,      // col K: Target Hours (capacity reference) — written as value, not formula in quantity mode

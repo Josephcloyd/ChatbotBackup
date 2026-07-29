@@ -110,6 +110,7 @@ export async function generateWithOllama(prompt: string): Promise<string> {
     prompt,
     format: "json",
     stream: false,
+    think: false,
     options: {
       temperature: 0.3,   // low temp for structured JSON output
       top_p: 0.9,

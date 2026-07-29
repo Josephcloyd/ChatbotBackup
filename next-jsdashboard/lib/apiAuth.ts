@@ -50,3 +50,11 @@ export function adminForwardHeaders(session: SessionPayload): HeadersInit {
     "x-flowboard-admin-id": session.id ?? session.username,
   };
 }
+
+export function sessionForwardHeaders(session: SessionPayload): HeadersInit {
+  return {
+    "x-flowboard-user-id": session.id ?? session.username,
+    "x-flowboard-username": session.username,
+    "x-flowboard-role": session.role,
+  };
+}

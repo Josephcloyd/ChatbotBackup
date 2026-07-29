@@ -109,3 +109,121 @@ export interface PlanGenerationRun {
   completed_at: string | null;
   created_at: string;
 }
+
+export type PlanConversationIntent =
+  | "explain_plan"
+  | "explain_calculation"
+  | "report_mistake"
+  | "clarify_requirement"
+  | "request_modification"
+  | "request_regeneration"
+  | "compare_revisions"
+  | "restore_revision"
+  | "unrelated_request";
+
+export type PlanMessageType =
+  | "user"
+  | "assistant"
+  | "clarification"
+  | "proposal"
+  | "validation"
+  | "system";
+
+export interface PlanChangeProposal {
+  id: string;
+  planId: string;
+  basedOnRevisionId: string;
+  requestSummary: string;
+  interpretedRequest: string;
+  reasonForChange: string;
+  affectedSections: string[];
+  changes: Array<{
+    field: string;
+    label: string;
+    previousValue: unknown;
+    proposedValue: unknown;
+    reason: string;
+    impact?: string;
+  }>;
+  recalculatedMetrics?: {
+    previousWorkerCount?: number;
+    proposedWorkerCount?: number;
+    previousTotalHours?: number;
+    proposedTotalHours?: number;
+    previousDuration?: number;
+    proposedDuration?: number;
+    previousDailyTarget?: number;
+    proposedDailyTarget?: number;
+    previousTotalTarget?: number;
+    proposedTotalTarget?: number;
+  };
+  warnings: string[];
+  clarificationQuestions: string[];
+  requiresConfirmation: boolean;
+}
+
+export interface PlanAssistantResponse {
+  intent: PlanConversationIntent;
+  message: string;
+  explanation?: {
+    summary: string;
+    formulas?: Array<{ label: string; expression: string; result: string }>;
+    assumptions?: string[];
+  };
+  clarificationQuestions?: string[];
+  proposal?: PlanChangeProposal;
+  requiresConfirmation: boolean;
+  canApply: boolean;
+  warnings?: string[];
+}
+
+export interface PlanConversationMessage {
+  id: string;
+  plan_id: string;
+  revision_id?: string | null;
+  user_id?: string | null;
+  role: "user" | "assistant" | "system";
+  message_type: PlanMessageType;
+  content: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PlanRevision {
+  id: string;
+  plan_id: string;
+  revision_number: number;
+  parent_revision_id?: string | null;
+  created_by?: string | null;
+  created_by_role: "operator" | "admin" | "system";
+  revision_source: "initial_generation" | "user_modification" | "admin_edit" | "revision_restore";
+  user_instruction?: string | null;
+  change_summary: string;
+  plan_data: ProductionPlan;
+  validation_result?: Record<string, unknown> | null;
+  workbook_mode: "dynamic" | "template";
+  workbook_filename?: string | null;
+  workbook_storage_path?: string | null;
+  workbook_signed_url?: string | null;
+  created_at: string;
+}
+
+export interface PlanWorkspaceResponse {
+  success: boolean;
+  configured: boolean;
+  plan: HistoryRecord;
+  currentRevision: PlanRevision;
+  currentPlanData: ProductionPlan;
+  conversation: PlanConversationMessage[];
+  revisions: PlanRevision[];
+  workbookFiles: PlanFileRecord[];
+  permissions: {
+    canMessage: boolean;
+    canApplyProposal: boolean;
+    canRestoreRevision: boolean;
+    canDeleteRevision?: boolean;
+    canDownloadWorkbook: boolean;
+    role: FrontendRole;
+  };
+  error?: string;
+}
