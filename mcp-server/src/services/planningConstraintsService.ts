@@ -72,6 +72,8 @@ export interface ResolvedPlanningSettings {
   overtimeLimitHoursPerPersonPerDay?: number;
 }
 
+export const DEFAULT_PLANNING_MODEL = "LPB Model";
+
 function toIsoDate(value: string): string | undefined {
   if (isIsoDate(value)) return value;
   const date = new Date(value);
@@ -93,7 +95,7 @@ function inferProjectType(description: string): string | undefined {
   if (/\b(?:software|app|application|dashboard|website|web\s+site|web\s+development|hris|system|feature|module|developers?)\b/i.test(description)) return "software development";
   if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing)\b/i.test(description)) return "document processing";
   if (/\b(?:manufactur(?:e|ing)|machines?|factory|assembly|units?|production\s+line)\b/i.test(description)) return "manufacturing";
-  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|media\s+production)\b/i.test(description)) return "content production";
+  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|video[-\s]?recording|recordings?|media\s+production)\b/i.test(description)) return "content production";
   if (/\b(?:customer\s+support|tickets?|service\s+desk|helpdesk|calls?|cases?)\b/i.test(description)) return "customer support";
   if (/\b(?:training|workshop|participants?|learners?|curriculum)\b/i.test(description)) return "training";
   if (/\b(?:event|venue|logistics|inventory|shipments?|stock|batches?)\b/i.test(description)) return "operations";
@@ -180,12 +182,17 @@ export function extractRequestedConstraints(
   const durationMatch =
     description.match(new RegExp(String.raw`\b(?:within|for|over|during)?\s*${numberToken}\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b`, "i")) ??
     description.match(new RegExp(String.raw`\bnext\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
-  const weekdayDurationMatch = description.match(new RegExp(String.raw`\b(?:for\s+)?(?:the\s+)?next\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i")) ??
-    description.match(new RegExp(String.raw`\bfor\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
+  const weekdayDurationMatch =
+    description.match(new RegExp(String.raw`\b(?:within|for|over|during)?\s*${numberToken}\s+(weekdays?|business\s+days?)\b`, "i")) ??
+    description.match(new RegExp(String.raw`\b(?:for\s+)?(?:the\s+)?next\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
   const hoursMatch = description.match(new RegExp(String.raw`\b${numberToken}\s+(?:total\s+|working\s+|productive\s+)?hours?\b`, "i"));
+  const videoDurationTargetMatch =
+    description.match(/\b(?:total\s+of\s+|target\s+(?:of\s+|is\s+)?|deliver\s+|produce\s+(?:a\s+)?total\s+of\s+)?([\d,]+)(?:\s*([kKmM]))?\s*[- ]?hours?\s+(?:of\s+)?(?:[^.!?\n]{0,90}?\b)?(?:video[-\s]+)?recordings?\b/i) ??
+    description.match(/\b([\d,]+)(?:\s*([kKmM]))?\s*[- ]?hours?\s+(?:refers?\s+to|means|is)\b[^.!?\n]{0,160}\b(?:completed\s+)?video\s+duration\b/i) ??
+    description.match(/\b([\d,]+)(?:\s*([kKmM]))?\s*[- ]?hour\s+target\b[^.!?\n]{0,160}\b(?:duration|recordings?|approved|usable|quality\s+review)\b/i);
   const teamMatch =
     description.match(new RegExp(String.raw`\b(?:class|team|group|crew)\s+of\s+${numberToken}\b`, "i")) ??
-    description.match(new RegExp(String.raw`\b${numberToken}\s+(?:active\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?|developers?|engineers?|testers?|reviewers?|designers?|writers?|editors?|machines?|operators?)\b`, "i"));
+    description.match(new RegExp(String.raw`\b${numberToken}\s+(?:active\s+)?(?:video\s+|audio\s+|field\s+|production\s+)?(?:annotators?|workers?|agents?|people|members?|employees?|staff|encoders?|resources?|developers?|engineers?|testers?|reviewers?|designers?|writers?|editors?|machines?|operators?|recorders?)\b`, "i"));
   const normalizedDates = extractNormalizedDateConstraints(description, currentDate);
   const workingDays = extractWorkingDays(description);
 
@@ -206,7 +213,11 @@ export function extractRequestedConstraints(
     constraints.duration = { value, unit };
     if (unit === "days") constraints.durationDays = value;
   }
-  if (hoursMatch) {
+  if (videoDurationTargetMatch) {
+    constraints.totalQuantity = normalizeQuantity(videoDurationTargetMatch[1]!, videoDurationTargetMatch[2]);
+    constraints.unitOfMeasure = "video hours";
+  }
+  if (hoursMatch && !videoDurationTargetMatch) {
     const tail = description.slice((hoursMatch.index ?? 0) + hoursMatch[0].length, (hoursMatch.index ?? 0) + hoursMatch[0].length + 24);
     if (!/^\s*(?:per|\/)\s*(?:weekday|day|worker|resource|person|machine|shift)/i.test(tail)) {
       constraints.totalHours = tokenNumber(hoursMatch[1]);
@@ -247,9 +258,7 @@ export function extractRequestedConstraints(
   if (/\bweekly\s+(?:progress\s+)?tracking|weekly\s+summary|weekly\s+report\b/i.test(description)) {
     constraints.needsWeeklyTracking = true;
   }
-  const modelMatch = description.match(/\b(?:apply|use|using|under)\s+([A-Z][A-Z0-9]{1,12})\s+model\b/i) ??
-    description.match(/\b([A-Z][A-Z0-9]{1,12})\s+model\b/i);
-  if (modelMatch) constraints.planningModel = `${modelMatch[1]!.toUpperCase()} Model`;
+  constraints.planningModel = DEFAULT_PLANNING_MODEL;
 
   // ── Quantity extraction (multi-pass) ─────────────────────────────────────────
   // Matches: "350,000 images", "1M records", "target of 350000 images",
@@ -265,7 +274,10 @@ export function extractRequestedConstraints(
 
   // Pass 1 — NUMBER directly adjacent to UNIT: "350000 images"
   const p1 = new RegExp(`\\b${NUM_PAT}\\s+(${UNIT_PAT})\\b`, "i").exec(description);
-  if (p1) {
+  if (constraints.totalQuantity) {
+    // A more specific target, such as "465 hours of approved video recordings",
+    // has already established the production unit.
+  } else if (p1) {
     constraints.totalQuantity = parseQuantityNum(p1[1]!, p1[2]);
     constraints.unitOfMeasure = p1[3]!.toLowerCase();
   } else {
@@ -277,7 +289,10 @@ export function extractRequestedConstraints(
     } else {
       // Pass 3 — UNIT then NUMBER (unit first, e.g. "images to be collected is 350000")
       const p3 = new RegExp(`\\b(${UNIT_PAT})\\b[^.!?\\n]{0,80}?\\b${NUM_PAT}\\b`, "i").exec(description);
-      if (p3) {
+      const ambiguousVideoCrewCount = p3 && /^videos?$/i.test(p3[1]!) && /\b(?:recorders?|operators?|staff|workers?|team)\b/i.test(
+        description.slice(p3.index, p3.index + p3[0].length + 24),
+      );
+      if (p3 && !ambiguousVideoCrewCount) {
         constraints.totalQuantity = parseQuantityNum(p3[2]!, p3[3]);
         constraints.unitOfMeasure = p3[1]!.toLowerCase();
       }
@@ -337,11 +352,32 @@ export function resolvePlanningSettings(
     throw new Error("Duration must be a whole number between 1 and 730");
   }
 
+  let totalHours = positive(requested.totalHours, positive(defaults.totalHours, 160, "totalHours"), "totalHours");
+  if (
+    requested.totalHours === undefined &&
+    requested.totalQuantity !== undefined &&
+    requested.unitOfMeasure === "video hours" &&
+    requested.teamSize !== undefined
+  ) {
+    const scheduledDays = buildScheduleDates({
+      startDate,
+      endDate,
+      duration,
+      totalHours,
+      teamSize: Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")),
+      weekdaysOnly,
+      workingDays,
+      unitOfMeasure: requested.unitOfMeasure,
+      totalQuantity: requested.totalQuantity,
+    }).length;
+    totalHours = scheduledDays * Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")) * 8;
+  }
+
   return {
     startDate,
     endDate,
     duration,
-    totalHours: positive(requested.totalHours, positive(defaults.totalHours, 160, "totalHours"), "totalHours"),
+    totalHours,
     teamSize: Math.round(positive(requested.teamSize, positive(defaults.teamSize, 1, "teamSize"), "teamSize")),
     weekdaysOnly,
     workingDays,

@@ -17,10 +17,12 @@ export async function proxy(request: NextRequest) {
 
   if (hasValidSession) {
     // Restrict Admin APIs
+    const isRevisionWorkspaceRoute = /^\/api\/planner\/plans\/[^/]+\/revisions(?:\/|$)/.test(pathname);
     const isAdminPlannerRoute =
       pathname.startsWith("/api/planner/operators") ||
       pathname.startsWith("/api/planner/runs") ||
       (pathname.startsWith("/api/planner/plans") &&
+        !isRevisionWorkspaceRoute &&
         (["DELETE", "PATCH"].includes(request.method) ||
           pathname.includes("/review") ||
           pathname.includes("/files")));

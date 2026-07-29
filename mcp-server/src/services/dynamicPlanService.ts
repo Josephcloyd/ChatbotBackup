@@ -7,6 +7,7 @@ import type {
 } from "../types/productionPlan.js";
 import {
   buildScheduleDates,
+  DEFAULT_PLANNING_MODEL,
   extractRequestedConstraints,
   resolvePlanningSettings,
   type DurationUnit,
@@ -86,8 +87,28 @@ export interface DynamicPlanResult {
   hoursPerDay?: number;
 }
 
+/** Quantity-based column profile (images, records, etc.).
+ *  Positions 6-10 use the named unit; positions 11-12 keep hours for capacity reference. */
+function buildQuantityColumns(unitLabel: string, resourceLabel: string, resourcePlural: string): string[] {
+  return [
+    "No.", "Date", "Month", "Day",
+    `Target Active ${resourcePlural}`,
+    `Target ${unitLabel}`,
+    `Target ${unitLabel} per ${resourceLabel}`,
+    `Actual Active ${resourcePlural}`,
+    `Actual ${unitLabel}`,
+    `Actual ${unitLabel} per ${resourceLabel}`,
+    "Target Hours",   // capacity reference — kept for Excel formula compat
+    "Actual Hours",
+    "Total Variance",
+    "Completion Rate (%)",
+    "Status",
+    "Notes",
+  ];
+}
+
 function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return s.split(/\s+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
 type CoreColumnSemantic = Exclude<
@@ -388,7 +409,7 @@ Rules:
 - If a value was not extracted, choose a conservative realistic default.
 - Adapt to the project category. Do not force annotation language onto software, document-processing, manufacturing, content, support, training, logistics, or admin projects.
 - Preserve the production unit from the request when present (images, records, documents, features, modules, tickets, articles, videos, batches, units, participants, transactions, hours, or tasks).
-- If the user names a planning or operating model such as LPB Model, preserve it as an explicit assumption and align phases/risks with that model when safely possible.
+- Always apply ${DEFAULT_PLANNING_MODEL}. Preserve it as an explicit assumption and align phases/risks with that model when safely possible.
 - Separate confirmed facts from assumptions.
 - Include quality-control work as real effort; do not treat review as free.
 - Propose workflow phases, risks, and assumptions specific to the project domain.
@@ -619,7 +640,7 @@ function projectKind(description: string, requested: RequestedConstraints): stri
   if (/\b(?:software|app|application|dashboard|website|web\s+site|web\s+development|hris|system|feature|module|developers?)\b/i.test(description)) return "software development";
   if (/\b(?:receipt|invoice|document|ocr|forms?|pages?|manual\s+verification|document\s+processing)\b/i.test(description)) return "document processing";
   if (/\b(?:manufactur(?:e|ing)|machines?|factory|assembly|units?|production\s+line)\b/i.test(description)) return "manufacturing";
-  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|media\s+production)\b/i.test(description)) return "content production";
+  if (/\b(?:content|articles?|posts?|social\s+media|marketing|campaign|videos?|video[-\s]?recording|recordings?|media\s+production)\b/i.test(description)) return "content production";
   if (/\b(?:customer\s+support|tickets?|service\s+desk|helpdesk|calls?|cases?)\b/i.test(description)) return "customer support";
   if (/\b(?:training|workshop|participants?|learners?|curriculum)\b/i.test(description)) return "training";
   if (/\b(?:event|venue|logistics|inventory|shipments?|stock|batches?)\b/i.test(description)) return "operations";
@@ -1086,7 +1107,13 @@ function buildSupportSheets(
   const qualityReviewHours = Number(Math.max(settings.totalHours * 0.12, planRows.length * 0.25).toFixed(2));
   const productionHours = Number(Math.max(settings.totalHours - qualityReviewHours, 0).toFixed(2));
   const utilization = availableHours > 0 ? Number(((settings.totalHours / availableHours) * 100).toFixed(2)) : 0;
-  const assumedProductivity = isQuantity && requested.totalHours === undefined;
+  const hasDeterministicCapacity =
+    isQuantity &&
+    requested.totalHours === undefined &&
+    requested.totalQuantity !== undefined &&
+    requested.teamSize !== undefined &&
+    requested.duration !== undefined;
+  const assumedProductivity = isQuantity && requested.totalHours === undefined && !hasDeterministicCapacity;
   const feasibility = feasibilityStatus(settings.totalHours, availableHours, assumedProductivity);
   const requiredDailyOutput = isQuantity && totalQuantity
     ? Number((totalQuantity / planRows.length).toFixed(2))
@@ -1461,7 +1488,13 @@ export function buildDynamicPlan(
       : distributeQuantity(totalQuantity, dates.length)
     : null;
   const availableHours = settings.teamSize * dates.length * 8;
-  const assumedRate = isQuantity && requested.totalHours === undefined;
+  const hasDeterministicCapacity =
+    isQuantity &&
+    requested.totalHours === undefined &&
+    requested.totalQuantity !== undefined &&
+    requested.teamSize !== undefined &&
+    requested.duration !== undefined;
+  const assumedRate = isQuantity && requested.totalHours === undefined && !hasDeterministicCapacity;
   const feasibility = feasibilityStatus(settings.totalHours, availableHours, assumedRate);
   const requiredDailyOutput = Number(((isQuantity && totalQuantity ? totalQuantity : settings.totalHours) / dates.length).toFixed(2));
   const utilizationPercent = availableHours > 0

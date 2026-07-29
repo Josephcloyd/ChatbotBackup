@@ -131,6 +131,7 @@ export class DynamicExcelService {
     const planRows = productionSheet.rows;
     const lastPlanRow = planRows.length + 1;
 
+
     const summary = workbook.addWorksheet("Overview", {
       views: [{ showGridLines: false }],
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 1 },

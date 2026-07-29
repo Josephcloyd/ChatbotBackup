@@ -69,7 +69,7 @@ const options = {
 test("extracts duration and total-hour constraints", () => {
   assert.deepEqual(
     extractRequestedConstraints("Create a 30-day duration plan with 60 total hours."),
-    { duration: { value: 30, unit: "days" }, durationDays: 30, totalHours: 60 },
+    { duration: { value: 30, unit: "days" }, durationDays: 30, totalHours: 60, planningModel: "LPB Model" },
   );
 });
 

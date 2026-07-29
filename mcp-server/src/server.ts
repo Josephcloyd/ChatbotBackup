@@ -29,6 +29,16 @@ import {
   findColumnLabel,
   getSemanticCell,
 } from "./services/productionPlanColumns.js";
+import {
+  applyPlanWorkspaceProposal,
+  comparePlanWorkspaceRevisions,
+  deletePlanWorkspaceRevision,
+  loadPlanWorkspace,
+  PlanWorkspaceError,
+  restorePlanWorkspaceRevision,
+  sendPlanWorkspaceMessage,
+  type WorkspaceUser,
+} from "./services/planWorkspaceService.js";
 
 const generationInputSchema = z.object({
   whatsappUserId: z.string().trim().min(1).max(120),
@@ -63,6 +73,17 @@ const reviewSchema = z.object({
   rejectionReason: z.string().trim().max(2000).optional(),
 });
 
+const workspaceMessageSchema = z.object({
+  message: z.string().trim().min(1).max(4_000),
+  revisionId: z.string().trim().min(1).optional(),
+});
+
+const applyProposalSchema = z.object({
+  proposalId: z.string().trim().min(1),
+  basedOnRevisionId: z.string().trim().min(1),
+  confirmed: z.boolean(),
+});
+
 const userPatchSchema = z.object({
   role: z.enum(["admin", "operator"]).optional(),
   active: z.boolean().optional(),
@@ -72,6 +93,25 @@ function adminContext(req: Request): { id: string } {
   return {
     id: String(req.get("x-flowboard-admin-id") ?? "").trim(),
   };
+}
+
+function workspaceUser(req: Request): WorkspaceUser | null {
+  const username = String(req.get("x-flowboard-username") ?? "").trim();
+  const id = String(req.get("x-flowboard-user-id") ?? "").trim() || undefined;
+  const role = req.get("x-flowboard-role") === "admin" ? "admin" : "operator";
+  if (!username) return null;
+  return { id, username, role };
+}
+
+function sendWorkspaceError(res: Response, error: unknown): void {
+  if (error instanceof PlanWorkspaceError) {
+    res.status(error.status).json({ success: false, error: error.message, code: error.code });
+    return;
+  }
+  res.status(500).json({
+    success: false,
+    error: error instanceof Error ? error.message : "Plan workspace request failed",
+  });
 }
 
 export function createMcpServer() {
@@ -406,6 +446,128 @@ export function createApp() {
         success: false,
         error: error instanceof Error ? error.message : "Failed to update plan review status",
       });
+    }
+  });
+
+  app.get("/api/plans/:id/workspace", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const workspace = await loadPlanWorkspace(req.params.id as string, user);
+      res.json(workspace);
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.post("/api/plans/:id/messages", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const parsed = workspaceMessageSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid message request", details: parsed.error.flatten() });
+        return;
+      }
+      const result = await sendPlanWorkspaceMessage(req.params.id as string, user, parsed.data);
+      res.json(result);
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.get("/api/plans/:id/revisions", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const workspace = await loadPlanWorkspace(req.params.id as string, user);
+      res.json({ success: true, revisions: workspace.revisions, currentRevision: workspace.currentRevision });
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.post("/api/plans/:id/revisions", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const parsed = applyProposalSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ success: false, error: "Invalid revision request", details: parsed.error.flatten() });
+        return;
+      }
+      const result = await applyPlanWorkspaceProposal(req.params.id as string, user, parsed.data);
+      res.json(result);
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.get("/api/plans/:id/revisions/compare", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const from = typeof req.query.from === "string" ? req.query.from : "";
+      const to = typeof req.query.to === "string" ? req.query.to : "";
+      if (!from || !to) {
+        res.status(400).json({ success: false, error: "Both from and to revision IDs are required." });
+        return;
+      }
+      const result = await comparePlanWorkspaceRevisions(req.params.id as string, user, from, to);
+      res.json(result);
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.post("/api/plans/:id/revisions/:revisionId/restore", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const result = await restorePlanWorkspaceRevision(
+        req.params.id as string,
+        user,
+        req.params.revisionId as string,
+      );
+      res.json(result);
+    } catch (error) {
+      sendWorkspaceError(res, error);
+    }
+  });
+
+  app.delete("/api/plans/:id/revisions/:revisionId", async (req: Request, res: Response) => {
+    try {
+      const user = workspaceUser(req);
+      if (!user) {
+        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        return;
+      }
+      const result = await deletePlanWorkspaceRevision(
+        req.params.id as string,
+        user,
+        req.params.revisionId as string,
+      );
+      res.json(result);
+    } catch (error) {
+      sendWorkspaceError(res, error);
     }
   });
 

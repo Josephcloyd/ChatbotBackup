@@ -25,6 +25,25 @@ function numericValue(row: ProductionPlanRow, column: string, rowNumber: number)
   return value;
 }
 
+function targetColumn(columns: string[]): string {
+  return columns.find((column) =>
+    (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
+    !/active|accumulate|accumulative|annotators|recorders|operators|workers|team|resource|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(column)
+  ) ?? columns.find((column) => /target\s+(?:total\s+)?hours/i.test(column)) ?? columns[2] ?? "Target Total Hours";
+}
+
+function teamColumn(columns: string[]): string {
+  return columns.find((column) =>
+    /target\s+active\s+(?:annotators|recorders|operators|resources)|active\s+(?:annotators|recorders|operators|resources)|workers|team|staff|resource/i.test(column)
+  ) ?? "Target Active Annotators";
+}
+
+function actualColumns(columns: string[]): string[] {
+  return columns.filter((column) =>
+    /^Actual\b/i.test(column) || column === "Total Variance" || column === "Completion Rate (%)"
+  );
+}
+
 function isoDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const candidate = value.trim();
@@ -318,6 +337,7 @@ export class PlanRulesService {
       );
     }
     if (constraints.teamSize !== undefined) {
+      const teamCol = teamColumn(sheet.columns);
       const teamValues = sheet.rows.map((row, index) =>
         numericValue(row, plannedStaffColumn, index + 1),
       );

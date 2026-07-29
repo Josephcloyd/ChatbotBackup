@@ -1,0 +1,652 @@
+{
+  ".codex/hooks.json": {
+    "mtime": 1785303019.5229042,
+    "ast_hash": "6c50cc692be0c0f84192689a3c515f47",
+    "semantic_hash": ""
+  },
+  "check-everything.ps1": {
+    "mtime": 1783930328.7146852,
+    "ast_hash": "ca842d841abf0a9fb86774e064665904",
+    "semantic_hash": ""
+  },
+  "mcp-server/call-tool.json": {
+    "mtime": 1783655558.8025975,
+    "ast_hash": "a728b535e8a3e96e6b181cf73c8b4834",
+    "semantic_hash": ""
+  },
+  "mcp-server/package.json": {
+    "mtime": 1785303518.8268473,
+    "ast_hash": "7888ada2865b24cae5c07923b8fb573f",
+    "semantic_hash": ""
+  },
+  "mcp-server/request.json": {
+    "mtime": 1783647666.3940444,
+    "ast_hash": "5e42722fdec8fc38f94b56c0ea1f1013",
+    "semantic_hash": ""
+  },
+  "mcp-server/scripts/generateDynamicDemo.ts": {
+    "mtime": 1783647666.3972385,
+    "ast_hash": "8c737cfc33c97ff68bf4f4b37831db7a",
+    "semantic_hash": ""
+  },
+  "mcp-server/scripts/smokeTest.ts": {
+    "mtime": 1783647666.3972385,
+    "ast_hash": "87e90582dec223f081cbaaf2a43f5b91",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/config.ts": {
+    "mtime": 1784617014.2704616,
+    "ast_hash": "20acc2e971d5d39638817ec48de3c1d9",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/ollamaService.ts": {
+    "mtime": 1785308498.7286446,
+    "ast_hash": "4fbd5d03161568042c1486027c3629f8",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/plannerService.ts": {
+    "mtime": 1785304759.9134889,
+    "ast_hash": "cf2066cb8e5e10fea7c69573a9b01772",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/productionPrompt.ts": {
+    "mtime": 1784622305.7316256,
+    "ast_hash": "e754db27be486607af791f56a7d47a22",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/server.ts": {
+    "mtime": 1785310478.68438,
+    "ast_hash": "5e42dbea2011b1949ed31443486218a0",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/dateNormalizationService.ts": {
+    "mtime": 1785303518.8268473,
+    "ast_hash": "7d26c9e8e8ffe125d54ecf76b0154dea",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/dynamicExcelService.ts": {
+    "mtime": 1785313303.819106,
+    "ast_hash": "ff00e842b4e5af22034f6fde83846ade",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/dynamicPlanService.ts": {
+    "mtime": 1785313227.8721216,
+    "ast_hash": "909b43ed8132c541c5946a6156b39980",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/excelService.ts": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "c8808cf83a3c64e68e838ad3f801a25a",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/planRulesService.ts": {
+    "mtime": 1785313301.7841284,
+    "ast_hash": "28f98549297a94b401bc67012ccfa5c1",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/planWorkspaceService.ts": {
+    "mtime": 1785313209.6349654,
+    "ast_hash": "1aaa5105f2edfde2915f3b2f2525a358",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/planningConstraintsService.ts": {
+    "mtime": 1785312558.178244,
+    "ast_hash": "2efe5bcc879391a72e7567a557d11c3b",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/promptService.ts": {
+    "mtime": 1785288625.4680233,
+    "ast_hash": "b401968d7b21cdc51bfb0b3c78957ef9",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/templateService.ts": {
+    "mtime": 1784708536.791353,
+    "ast_hash": "8bb1753ab0aa891e6b81bb2a320f17c0",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/userService.ts": {
+    "mtime": 1785303518.8425355,
+    "ast_hash": "488cfcc638f56a9e84d3118d1a52d544",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/validationService.ts": {
+    "mtime": 1784708536.7951913,
+    "ast_hash": "12574da9bc33df13f0d8463764f393f6",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/whatsappAccessService.ts": {
+    "mtime": 1783911258.405234,
+    "ast_hash": "88df13c3d1140bfaa21679b52489223d",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/services/whatsappCommandService.ts": {
+    "mtime": 1784623447.8211277,
+    "ast_hash": "eef736f824644158774f13b1fb8a0b86",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/supabaseService.ts": {
+    "mtime": 1785310474.4546695,
+    "ast_hash": "ecfad65793a8220d8151a723d6ffdc71",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/types/planWorkspace.ts": {
+    "mtime": 1785304675.7577848,
+    "ast_hash": "fb664729afe239d2325e7c033fefb717",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/types/productionPlan.ts": {
+    "mtime": 1785303518.847826,
+    "ast_hash": "4752d22e272b4b9b79737ac4f24e4ced",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/whatsappBot.ts": {
+    "mtime": 1784624062.7161512,
+    "ast_hash": "22b8bc6728aff3286d29e5d90753c71c",
+    "semantic_hash": ""
+  },
+  "mcp-server/supabase/migrations/001_create_production_plans.sql": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "a7a4650d312cdc6c0e9ac6dbee29ea76",
+    "semantic_hash": ""
+  },
+  "mcp-server/supabase/migrations/002_admin_dashboard_enhancements.sql": {
+    "mtime": 1785309019.0844078,
+    "ast_hash": "501fbab9d437f34f7096e76d015881d0",
+    "semantic_hash": ""
+  },
+  "mcp-server/supabase/migrations/003_drop_admin_audit_logs.sql": {
+    "mtime": 1784708536.8578024,
+    "ast_hash": "ebf46712144a563f99e139fc0d34688a",
+    "semantic_hash": ""
+  },
+  "mcp-server/supabase/migrations/004_plan_workspace.sql": {
+    "mtime": 1785304696.0399158,
+    "ast_hash": "eb6965ef603c3edd4c5dd65303a59e56",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/dynamicMode.test.ts": {
+    "mtime": 1785310790.5675464,
+    "ast_hash": "a2ff24eb474964412d925dd54ebb9349",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/flexibleDynamicPlanner.test.ts": {
+    "mtime": 1785313236.6827953,
+    "ast_hash": "04f3afc590bd2277f653c8659fcfba60",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/ollamaService.test.ts": {
+    "mtime": 1785303518.8550375,
+    "ast_hash": "7aa9b6c146ba0f757e1afd6cb7772cbd",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/planRulesService.test.ts": {
+    "mtime": 1785310792.2434385,
+    "ast_hash": "27ced3d545a6a0e3fff8ab9ed0d3bbe9",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/planWorkspaceService.test.ts": {
+    "mtime": 1785305542.0125294,
+    "ast_hash": "8035e00486305874c6c2fd7d6162b49e",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/server.test.ts": {
+    "mtime": 1784617014.303395,
+    "ast_hash": "66845078eea6bb3468148e5271d25d44",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/supabaseService.test.ts": {
+    "mtime": 1785303518.8590598,
+    "ast_hash": "654878c8c8673a0b3965ba00d186d74b",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/templatePipeline.test.ts": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "7ee4028fbc106d369469053308291c59",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/whatsappAccessService.test.ts": {
+    "mtime": 1783911320.3088553,
+    "ast_hash": "768d8ceb1f81af7e666ebe4b0e75589b",
+    "semantic_hash": ""
+  },
+  "mcp-server/tests/whatsappCommandService.test.ts": {
+    "mtime": 1784623470.0167859,
+    "ast_hash": "c70bf00894b087624da686348ce5dec4",
+    "semantic_hash": ""
+  },
+  "mcp-server/tsconfig.json": {
+    "mtime": 1784708536.8629017,
+    "ast_hash": "27db1b24c0d75cabde71c6a9639e2424",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/auth/login/route.ts": {
+    "mtime": 1785303518.8590598,
+    "ast_hash": "395865f315a2a845de74492a33a2f5c1",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/auth/logout/route.ts": {
+    "mtime": 1783647666.4119322,
+    "ast_hash": "3cef7308d51d7c1bf615199fd9280d08",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/auth/me/route.ts": {
+    "mtime": 1784708536.8647735,
+    "ast_hash": "c09b69108a71a1cfd76f3ae4f03da60f",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/generate/route.ts": {
+    "mtime": 1785288625.4796593,
+    "ast_hash": "bc31605071354e72f00cb353ad83eba3",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/health/route.ts": {
+    "mtime": 1783647666.4130404,
+    "ast_hash": "1ad35c13210063a175a2cf7b2ebc2ec2",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/operators/reassign/route.ts": {
+    "mtime": 1784708536.871186,
+    "ast_hash": "ab4c05811d56306e47472384f03796e7",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/operators/route.ts": {
+    "mtime": 1785303518.8590598,
+    "ast_hash": "4fb063fd2539723f1832e2ed67534a63",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/files/[fileId]/download/route.ts": {
+    "mtime": 1784708536.877422,
+    "ast_hash": "f8b24d7729f70509bec6deaf4c3d7e39",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/files/route.ts": {
+    "mtime": 1784708536.8782227,
+    "ast_hash": "b0f3dbe6a91a0aa304a0cceb0a34e0c6",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/messages/route.ts": {
+    "mtime": 1785304995.539403,
+    "ast_hash": "06fd8c32fecb4ace6481717a39ee1fa5",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/review/route.ts": {
+    "mtime": 1784708536.8787575,
+    "ast_hash": "b72810e736c5f76a69b75607d592ed4e",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/revisions/[revisionId]/restore/route.ts": {
+    "mtime": 1785305026.9839303,
+    "ast_hash": "aaa760c2af9736b666af325e976e06eb",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/revisions/compare/route.ts": {
+    "mtime": 1785305015.4494162,
+    "ast_hash": "369e01a09e33eb0f0a91b86cfa237df1",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/revisions/route.ts": {
+    "mtime": 1785305006.5921485,
+    "ast_hash": "ed715935574b057bbfbab46a1f7c3780",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/workspace/route.ts": {
+    "mtime": 1785304986.49727,
+    "ast_hash": "244f3adf3ca333837c882ded056f6e32",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/route.ts": {
+    "mtime": 1785288640.545936,
+    "ast_hash": "9f45fb3c2b0760f527dd4169a7b3e69f",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/runs/route.ts": {
+    "mtime": 1784708536.881241,
+    "ast_hash": "b38b4408935ff25e4b4a3182144a0109",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/layout.tsx": {
+    "mtime": 1784708409.4531748,
+    "ast_hash": "1cc4a0cf7bd4f453d0c478392f6b96ad",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/login/page.tsx": {
+    "mtime": 1785303518.867281,
+    "ast_hash": "879f5c5590796206b02b8f0601f89fa7",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/page.tsx": {
+    "mtime": 1785313211.5130186,
+    "ast_hash": "8795f4051b72d13a69e5b767c5454abd",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/Button.tsx": {
+    "mtime": 1784617014.3365912,
+    "ast_hash": "a670c223a037bc1f7178e7c650b45c3e",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/Icon.tsx": {
+    "mtime": 1785303518.8679347,
+    "ast_hash": "7a7e9ea0e695cb3a1ba47c21436cc3cc",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/Input.tsx": {
+    "mtime": 1784617014.3365912,
+    "ast_hash": "ef16deaffa90833758f35988043b1995",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/LeafLogo.tsx": {
+    "mtime": 1785288640.567233,
+    "ast_hash": "8c9648f274fa5666e505575801c75f13",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/Skeleton.tsx": {
+    "mtime": 1784624340.5674877,
+    "ast_hash": "f119a758b8438ebf41f74fd610482352",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/Spinner.tsx": {
+    "mtime": 1784617014.3446658,
+    "ast_hash": "0ee2989cbcb1d50c09548d86efeeb9de",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/StatusIndicator.tsx": {
+    "mtime": 1784617014.3446658,
+    "ast_hash": "d5f0cf09ae695504c37b35b91763844e",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/atoms/ThemeToggle.tsx": {
+    "mtime": 1784708536.9330466,
+    "ast_hash": "4c6a284b6ee5d99767bbab56bb0c3775",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/molecules/Brand.tsx": {
+    "mtime": 1784708409.4591575,
+    "ast_hash": "8dd59dd72105deeeff6ddabcd0852bf8",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/molecules/FormGroup.tsx": {
+    "mtime": 1784617014.3530426,
+    "ast_hash": "f496a61df4dfae4d28a7e7a22704360b",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/molecules/MetricCard.tsx": {
+    "mtime": 1784617014.3530426,
+    "ast_hash": "e61a3b4ca0814451511cf58762444a86",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/molecules/ModeSwitch.tsx": {
+    "mtime": 1784617014.3611732,
+    "ast_hash": "4989b553671802c7bf072008c6fafef1",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/AdminModals.tsx": {
+    "mtime": 1784708536.9359605,
+    "ast_hash": "981b9c197eb1a9ee09fae62b090e9be9",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/AdminOperatorsPanel.tsx": {
+    "mtime": 1785303518.8679347,
+    "ast_hash": "55e1cf16d5527b475ea2fffbe893b599",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/AdminPlanDetailsPanel.tsx": {
+    "mtime": 1785288625.5242326,
+    "ast_hash": "b55b2958ce9a0dae5b7e26c626e1296b",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/AdminPlansPanel.tsx": {
+    "mtime": 1785303518.8679347,
+    "ast_hash": "d8797f319dd8b194d809f4045edd55cb",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/AdminRunsPanel.tsx": {
+    "mtime": 1785309024.3408647,
+    "ast_hash": "5df5d447313f836ba6bc46ddd5dbc5db",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/DashboardMetrics.tsx": {
+    "mtime": 1784617014.3695402,
+    "ast_hash": "502ecf36ee4eb05308c7baa148098c67",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/DashboardSkeleton.tsx": {
+    "mtime": 1784708536.9412463,
+    "ast_hash": "7998b302c7efa0b2a94b563d7880f9e6",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/PlanHistory.tsx": {
+    "mtime": 1784617014.3776262,
+    "ast_hash": "52b41d94e64b4b9d71a63bc531933c1c",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/PlanTable.tsx": {
+    "mtime": 1784708536.9412463,
+    "ast_hash": "3decafe4559b01ec8a9212694f168666",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/Sidebar.tsx": {
+    "mtime": 1785303518.8679347,
+    "ast_hash": "7bdd7c840ec8a83637d82247b2576ed4",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/organisms/SidebarHistory.tsx": {
+    "mtime": 1785288640.5877452,
+    "ast_hash": "1de65e3868c1db6818e141c8125449e1",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/planner/PlanWorkspace.tsx": {
+    "mtime": 1785310507.442019,
+    "ast_hash": "11d8fea9ed1b2ecdbacac766135b07b2",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/providers/ThemeProvider.tsx": {
+    "mtime": 1784708536.9484954,
+    "ast_hash": "9c3451d70809b8be67f4145e61acf802",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/templates/AuthLayout.tsx": {
+    "mtime": 1784617014.3857903,
+    "ast_hash": "342e99defd6bbf90f976ebc584e50d41",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/components/templates/DashboardLayout.tsx": {
+    "mtime": 1784708409.4780116,
+    "ast_hash": "ed2b421f1f592ce63bd48e8a13f95680",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/eslint.config.mjs": {
+    "mtime": 1783647666.4151726,
+    "ast_hash": "0c4d15bef59868e851a39f5fdc509b39",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/lib/adminTypes.ts": {
+    "mtime": 1785310480.8452902,
+    "ast_hash": "9fbafa67f9f1b1710cbd0e943a2ac556",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/lib/apiAuth.ts": {
+    "mtime": 1785304974.1757505,
+    "ast_hash": "b9773c9ec607aecc979b1237f9f448a8",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/lib/flowboardAuth.ts": {
+    "mtime": 1785303518.8797908,
+    "ast_hash": "374101cd98caf625ae8200341b4c68fc",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/middleware.ts": {
+    "mtime": 1785311076.2330616,
+    "ast_hash": "f45f605d8ee2e9920be3e8d3267f0b82",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/next-env.d.ts": {
+    "mtime": 1785307183.9930408,
+    "ast_hash": "b698cdd97fe8e3bd16dcd74899ad7cef",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/next.config.ts": {
+    "mtime": 1785288625.539927,
+    "ast_hash": "541f6023e6660b01dd72e83b3e6a4279",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/package.json": {
+    "mtime": 1783647666.4162352,
+    "ast_hash": "e408b7f4089429e77648d433f0d3d0ff",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/scratch/generate_logos.js": {
+    "mtime": 1784708409.4921806,
+    "ast_hash": "00e4c1b3aca0e1119cb22cff5e1b857c",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/scratch/generate_poweredby.js": {
+    "mtime": 1784708409.4921806,
+    "ast_hash": "cef39dc68560b136f3b8b22bd3b222f4",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/scratch/process_user_logo.js": {
+    "mtime": 1784708409.4951413,
+    "ast_hash": "8067622baf5835a31b805befc4d8455f",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/tsconfig.json": {
+    "mtime": 1783647666.4182398,
+    "ast_hash": "adbe1a2853ef6216aa4ecb75c776f9af",
+    "semantic_hash": ""
+  },
+  "old_dynamicPlanService.ts": {
+    "mtime": 1785288640.612988,
+    "ast_hash": "3bab1da4c075efd8d0d530ab5126fe4b",
+    "semantic_hash": ""
+  },
+  "openclaw.json": {
+    "mtime": 1783647666.4182398,
+    "ast_hash": "981d46c3f3decae22d31ca5c6b4b5983",
+    "semantic_hash": ""
+  },
+  "test-e2e.ps1": {
+    "mtime": 1784617014.4186523,
+    "ast_hash": "39b281b8c53ec4b8645cb7dfbeb7493c",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/SKILL.md": {
+    "mtime": 1785303019.504034,
+    "ast_hash": "9127de0dec724028abc460ddb4db1bb3",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/add-watch.md": {
+    "mtime": 1785302920.0686502,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/exports.md": {
+    "mtime": 1785302920.092735,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1785302920.097617,
+    "ast_hash": "bf895ec4d4e40f5f66f7d31c2a9bd4a7",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1785302920.097617,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/hooks.md": {
+    "mtime": 1785302920.0996134,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/query.md": {
+    "mtime": 1785302920.1056528,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/transcribe.md": {
+    "mtime": 1785302920.1142766,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".codex/skills/graphify/references/update.md": {
+    "mtime": 1785302920.1388178,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1785303019.5164297,
+    "ast_hash": "21ceb6533048be51308e69e7b74a35cf",
+    "semantic_hash": ""
+  },
+  "CONTINUATION_PROMPT.md": {
+    "mtime": 1783908022.1303177,
+    "ast_hash": "fcf3da1031e6bb93e2be72969ab75f22",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1785303518.8211763,
+    "ast_hash": "f17f859945fa841cf12c03040e43c822",
+    "semantic_hash": ""
+  },
+  "STEP_BY_STEP_CONTINUATION_PROMPT.md": {
+    "mtime": 1783908666.7977455,
+    "ast_hash": "1d14c469f2573c1ffa4e8e89909c95d6",
+    "semantic_hash": ""
+  },
+  "diff.txt": {
+    "mtime": 1785288640.4764762,
+    "ast_hash": "d8ecb2e680562bde1657c48557c9c112",
+    "semantic_hash": ""
+  },
+  "mcp-server/src/templates/README.md": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "73b26aa252c38efb15ce3e3a2f7256ff",
+    "semantic_hash": ""
+  },
+  "mcp-server/storage-inspection-report.txt": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "8513b82ee67905ebc7a3a750a5f44754",
+    "semantic_hash": ""
+  },
+  "mcp-server/test-message.txt": {
+    "mtime": 1783647666.3993864,
+    "ast_hash": "e9943e4a277033b27c31bca9ab0c5645",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/README.md": {
+    "mtime": 1785303518.8590598,
+    "ast_hash": "97c5993c932e64caf571a87524b52086",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/public/lifeplan-leaf.png": {
+    "mtime": 1784708409.4846654,
+    "ast_hash": "8f7732552c8c8567d2b312040ff0fbd0",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/public/lifeplan-logo-dark.svg": {
+    "mtime": 1784708409.4856768,
+    "ast_hash": "500524a475c73006ce9a0816ea804bf7",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/public/lifeplan-logo.svg": {
+    "mtime": 1784708409.4866867,
+    "ast_hash": "3c3718a82bdb87804964386ceb041f9f",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/public/lifeplan-mark.svg": {
+    "mtime": 1784708409.4888093,
+    "ast_hash": "f6528b66295b83819850212d51e4ddb1",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/public/powered-by-lifewood.svg": {
+    "mtime": 1784708409.4888093,
+    "ast_hash": "ce9f7e7bd0a76fd2be1892808376849c",
+    "semantic_hash": ""
+  },
+  "next-jsdashboard/app/api/planner/plans/[id]/revisions/[revisionId]/route.ts": {
+    "mtime": 1785310484.8736799,
+    "ast_hash": "08ad841c31c062d56ef71eca5bf27b84",
+    "semantic_hash": ""
+  }
+}

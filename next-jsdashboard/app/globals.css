@@ -3181,3 +3181,463 @@ td {
 .admin-notification-banner .banner-close-btn:hover {
   opacity: 1;
 }
+
+/* Plan Workspace */
+.plan-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.plan-review-area,
+.plan-communication-area {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(31, 55, 80, 0.04);
+}
+
+.plan-review-area {
+  padding: 22px;
+}
+
+.plan-communication-area {
+  position: sticky;
+  top: 112px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 134px);
+  overflow: hidden;
+}
+
+.workspace-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.workspace-section-header h2,
+.workspace-section-header h3,
+.workspace-section-header h4 {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.workspace-section-header.compact {
+  padding: 18px 18px 14px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.revision-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #046241;
+  background: rgba(4, 98, 65, 0.08);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.workspace-loading {
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #fbfcfd;
+  font-size: 13px;
+}
+
+.workspace-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workspace-metrics-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(112, 142, 124, 0.18);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.workspace-metrics-grid span {
+  display: block;
+  color: #6f7f93;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.workspace-metrics-grid strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.revision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.revision-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(112, 142, 124, 0.18);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.revision-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.revision-actions .btn {
+  min-height: 34px;
+}
+
+.revision-row span,
+.revision-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.prompt-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.prompt-suggestions button {
+  border: 1px solid rgba(112, 142, 124, 0.22);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #315b44;
+  background: #f8faf8;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.prompt-suggestions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.conversation-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.conversation-empty p {
+  margin: 6px 0 0;
+}
+
+.workspace-message {
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(112, 142, 124, 0.18);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.workspace-message-user {
+  margin-left: 28px;
+  color: white;
+  background: #046241;
+  border-color: #046241;
+}
+
+.workspace-message-assistant,
+.workspace-message-system {
+  margin-right: 28px;
+}
+
+.workspace-message-system {
+  background: #fff8e1;
+}
+
+.workspace-message-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  opacity: 0.72;
+}
+
+.workspace-message p {
+  margin: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.formula-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.formula-list div {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(112, 142, 124, 0.16);
+}
+
+.formula-list span {
+  color: #6f7f93;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.formula-list code {
+  white-space: pre-wrap;
+  color: #315b44;
+  font-size: 12px;
+}
+
+.workspace-question-list {
+  margin-top: 12px;
+}
+
+.proposal-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255, 179, 71, 0.45);
+  border-radius: 8px;
+  background: #fffdf6;
+}
+
+.proposal-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.proposal-card h4 {
+  margin: 4px 0 0;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.proposal-change-list {
+  display: grid;
+  gap: 7px;
+}
+
+.proposal-change-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(68px, 0.8fr) 24px minmax(68px, 0.8fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid rgba(112, 142, 124, 0.16);
+  font-size: 12px;
+}
+
+.proposal-change-row span {
+  color: #6f7f93;
+  font-weight: 800;
+}
+
+.proposal-change-row strong {
+  overflow-wrap: anywhere;
+}
+
+.proposal-change-row svg {
+  color: #c17110;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.proposal-warning {
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: #8b5e0a;
+  background: #fff8e1;
+  font-size: 12px;
+}
+
+.proposal-warning p + p {
+  margin-top: 6px;
+}
+
+.proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.proposal-stale-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-composer {
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.workspace-composer textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid rgba(112, 142, 124, 0.3);
+  border-radius: 8px;
+  outline: none;
+  line-height: 1.5;
+}
+
+.workspace-composer textarea:focus {
+  border-color: rgba(255, 179, 71, 0.65);
+  box-shadow: 0 0 0 3px rgba(255, 179, 71, 0.08);
+}
+
+.workspace-composer-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.workspace-composer-footer span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.plan-view-modal .plan-workspace {
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+}
+
+.plan-view-modal .plan-review-area,
+.plan-view-modal .plan-communication-area {
+  box-shadow: none;
+}
+
+[data-theme="dark"] .plan-review-area,
+[data-theme="dark"] .plan-communication-area,
+[data-theme="dark"] .workspace-metrics-grid > div,
+[data-theme="dark"] .revision-row,
+[data-theme="dark"] .workspace-message,
+[data-theme="dark"] .formula-list div,
+[data-theme="dark"] .proposal-change-row,
+[data-theme="dark"] .workspace-composer {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+[data-theme="dark"] .workspace-message-user {
+  background: #046241;
+  border-color: #046241;
+}
+
+[data-theme="dark"] .workspace-message-system,
+[data-theme="dark"] .proposal-warning {
+  background: rgba(255, 179, 71, 0.1);
+  color: #ffc370;
+}
+
+[data-theme="dark"] .proposal-card {
+  background: rgba(255, 179, 71, 0.06);
+  border-color: rgba(255, 179, 71, 0.28);
+}
+
+[data-theme="dark"] .prompt-suggestions button,
+[data-theme="dark"] .workspace-composer textarea {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--line);
+}
+
+@media (max-width: 1180px) {
+  .plan-workspace,
+  .plan-view-modal .plan-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-communication-area {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .workspace-section-header,
+  .proposal-card-header {
+    flex-direction: column;
+  }
+
+  .proposal-change-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-message-user,
+  .workspace-message-assistant,
+  .workspace-message-system {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
