@@ -502,6 +502,13 @@ a {
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(16px);
+  gap: 20px;
+}
+
+.topbar-title-container {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .eyebrow {
@@ -516,6 +523,9 @@ a {
   margin: 6px 0 0;
   font-size: 24px;
   letter-spacing: -0.65px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-actions {
@@ -523,6 +533,7 @@ a {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .connection-pill {
@@ -1734,6 +1745,7 @@ td {
   color: #12815b;
 }
 
+.status-pending,
 .status-under_review,
 .status-running,
 .priority-high,
@@ -2887,4 +2899,47 @@ td {
 
 .welcome-card {
   animation: fade-in-up 0.4s ease-out both;
+}
+
+/* 4. Admin Notification Banner */
+.admin-notification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  animation: fade-in-up 0.3s ease-out both;
+  grid-column: 1 / -1;
+}
+
+.admin-notification-banner.success {
+  background: #e6f8ef;
+  border: 1px solid #bbf2d6;
+  color: #0d6345;
+}
+
+.admin-notification-banner.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.admin-notification-banner .banner-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  padding: 0 4px;
+  line-height: 1;
+  margin-left: 12px;
+}
+
+.admin-notification-banner .banner-close-btn:hover {
+  opacity: 1;
 }

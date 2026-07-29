@@ -39,8 +39,13 @@ export async function POST(request: Request) {
       headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
     });
   } catch (error) {
+    console.error("[api/planner/operators] Error in POST:", error);
+    const rawError = error instanceof Error ? error.message : "Planner service unavailable";
+    const userFacingError = rawError === "fetch failed"
+      ? "Unable to connect to the backend Planner service. Please ensure mcp-server is running."
+      : rawError;
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Planner service unavailable" },
+      { success: false, error: userFacingError },
       { status: 503 },
     );
   }

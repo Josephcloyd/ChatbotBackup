@@ -214,10 +214,10 @@ export function AdminPlansPanel({
       </div>
 
       <div className="table-scroll admin-table-scroll">
-        <table className="admin-table admin-plans-table">
+        <table className="admin-table admin-plans-table" style={{ minWidth: 950 }}>
           <thead>
             <tr>
-              <th>
+              <th style={{ width: 36 }}>
                 <input
                   type="checkbox"
                   checked={allVisibleSelected}
@@ -225,62 +225,94 @@ export function AdminPlansPanel({
                   aria-label="Select visible plans"
                 />
               </th>
-              <th>Title</th>
-              <th>Operator</th>
-              <th>Status</th>
-              <th>Estimated hours</th>
-              <th>Team size</th>
-              <th>Source</th>
-              <th>Created at</th>
-              <th className="text-right">Actions</th>
+              <th style={{ minWidth: 200, maxWidth: 260 }}>Title</th>
+              <th style={{ width: 180, minWidth: 160 }}>Operator</th>
+              <th style={{ width: 110 }}>Status</th>
+              <th style={{ width: 120 }}>Estimated hours</th>
+              <th style={{ width: 90 }}>Team size</th>
+              <th style={{ width: 90 }}>Source</th>
+              <th style={{ width: 140 }}>Created at</th>
+              <th style={{ width: 110, textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {visiblePlans.map((item) => (
-                <tr
-                  key={item.id}
-                  className={activePlanId === item.id ? "active-row" : ""}
-                  onClick={() => onSelectPlan(item.id)}
-                >
-                  <td data-label="Select" onClick={(event) => event.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedPlanIds.has(item.id)}
-                      onChange={() => togglePlan(item.id)}
-                      aria-label={`Select ${item.project_title}`}
-                    />
-                  </td>
-                  <td className="plan-title-cell" data-label="Title">
-                    <span className="plan-title-main">{item.project_title}</span>
-                    <span className={`plan-title-subtext ${item.summary || item.project_description ? "" : "placeholder-copy"}`}>
-                      {item.summary || item.project_description || "Add summary"}
-                    </span>
-                  </td>
-                  <td data-label="Operator">
-                    <span className="cell-stack">
-                      <strong>{item.whatsapp_user_id}</strong>
-                      <small>{item.requested_by ? `Requested by ${item.requested_by}` : "Requester not set"}</small>
-                    </span>
-                  </td>
-                  <td data-label="Status"><span className={`compact-badge status-${statusOf(item)}`}>{statusOf(item).replace("_", " ")}</span></td>
-                  <td className="numeric-cell" data-label="Estimated hours">{Number(item.total_hours_estimate || 0).toLocaleString()}</td>
-                  <td className="numeric-cell" data-label="Team size">{item.recommended_team_size ?? "—"}</td>
-                  <td data-label="Source"><span className={`compact-badge source-${sourceOf(item)}`}>{sourceOf(item)}</span></td>
-                  <td data-label="Created at">
-                    <span className="date-cell">{formatDateTime(item.created_at)}</span>
-                  </td>
-                  <td data-label="Actions" className="text-right actions-cell" onClick={(event) => event.stopPropagation()}>
-                    <button type="button" className="action-btn view-btn" onClick={() => onViewPlan(item.id)} title="View plan" aria-label={`View ${item.project_title}`}>
-                      <Icon name="eye" />
-                    </button>
-                    <button type="button" className="action-btn edit-btn" onClick={() => onEditPlan(item)} title="Edit plan" aria-label={`Edit ${item.project_title}`}>
-                      <Icon name="edit" />
-                    </button>
-                    <button type="button" className="action-btn delete-btn" onClick={() => onDeletePlan(item)} title="Delete plan" aria-label={`Delete ${item.project_title}`}>
-                      <Icon name="trash" />
-                    </button>
-                  </td>
-                </tr>
+              <tr
+                key={item.id}
+                className={activePlanId === item.id ? "active-row" : ""}
+                onClick={() => onSelectPlan(item.id)}
+              >
+                <td data-label="Select" onClick={(event) => event.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={selectedPlanIds.has(item.id)}
+                    onChange={() => togglePlan(item.id)}
+                    aria-label={`Select ${item.project_title}`}
+                  />
+                </td>
+                <td className="plan-title-cell" data-label="Title" style={{ maxWidth: 260 }}>
+                  <span
+                    className="plan-title-main"
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      display: "block",
+                      maxWidth: 250,
+                    }}
+                    title={item.project_title}
+                  >
+                    {item.project_title}
+                  </span>
+                  <span
+                    className={`plan-title-subtext ${item.summary || item.project_description ? "" : "placeholder-copy"}`}
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      display: "block",
+                      maxWidth: 250,
+                    }}
+                    title={item.summary || item.project_description || undefined}
+                  >
+                    {item.summary || item.project_description || "Add summary"}
+                  </span>
+                </td>
+                <td data-label="Operator" style={{ maxWidth: 180, overflow: "hidden" }}>
+                  <span className="cell-stack" style={{ display: "flex", flexDirection: "column", maxWidth: "100%" }}>
+                    <strong
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        display: "block",
+                        maxWidth: 170,
+                      }}
+                      title={item.whatsapp_user_id}
+                    >
+                      {item.whatsapp_user_id}
+                    </strong>
+                  </span>
+                </td>
+                <td data-label="Status" style={{ whiteSpace: "nowrap" }}><span className={`compact-badge status-${statusOf(item)}`}>{statusOf(item).replace("_", " ")}</span></td>
+                <td className="numeric-cell" data-label="Estimated hours">{Number(item.total_hours_estimate || 0).toLocaleString()}</td>
+                <td className="numeric-cell" data-label="Team size">{item.recommended_team_size ?? "—"}</td>
+                <td data-label="Source" style={{ whiteSpace: "nowrap" }}><span className={`compact-badge source-${sourceOf(item)}`}>{sourceOf(item)}</span></td>
+                <td data-label="Created at" style={{ whiteSpace: "nowrap" }}>
+                  <span className="date-cell">{formatDateTime(item.created_at)}</span>
+                </td>
+                <td data-label="Actions" style={{ textAlign: "center" }} className="actions-cell" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" className="action-btn view-btn" onClick={() => onViewPlan(item.id)} title="View plan" aria-label={`View ${item.project_title}`}>
+                    <Icon name="eye" />
+                  </button>
+                  <button type="button" className="action-btn edit-btn" onClick={() => onEditPlan(item)} title="Edit plan" aria-label={`Edit ${item.project_title}`}>
+                    <Icon name="edit" />
+                  </button>
+                  <button type="button" className="action-btn delete-btn" onClick={() => onDeletePlan(item)} title="Delete plan" aria-label={`Delete ${item.project_title}`}>
+                    <Icon name="trash" />
+                  </button>
+                </td>
+              </tr>
             ))}
             {filteredPlans.length === 0 && (
               <tr>

@@ -22,7 +22,7 @@ import {
   listGenerationRuns,
   updatePlanReviewStatus,
 } from "./supabaseService.js";
-import { DEFAULT_OPERATOR_USERNAME, verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
+import { DEFAULT_OPERATOR_USERNAME, verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername, confirmInvitePassword } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
 
@@ -205,6 +205,32 @@ export function createApp() {
     }
   });
 
+  app.post("/api/auth/confirm-invite", async (req: Request, res: Response) => {
+    try {
+      const { identifier, temporaryPassword, newPassword } = req.body;
+      if (
+        typeof identifier !== "string" || !identifier.trim() ||
+        typeof temporaryPassword !== "string" || !temporaryPassword.trim() ||
+        typeof newPassword !== "string" || !newPassword.trim()
+      ) {
+        res.status(400).json({ success: false, error: "Email/username, temporary password, and new password are required." });
+        return;
+      }
+      if (newPassword.trim().length < 6) {
+        res.status(400).json({ success: false, error: "New password must be at least 6 characters long." });
+        return;
+      }
+      const user = await confirmInvitePassword(identifier.trim(), temporaryPassword, newPassword.trim());
+      res.json({ success: true, user });
+    } catch (error) {
+      console.error("[server] Error confirming invitation password:", error);
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to confirm invitation and update password.",
+      });
+    }
+  });
+
   app.get("/api/operators", async (_req: Request, res: Response) => {
     try {
       const users = await listUsers();
@@ -227,18 +253,31 @@ export function createApp() {
 
   app.post("/api/operators", async (req: Request, res: Response) => {
     try {
-      const { username, password, role } = req.body;
-      if (typeof username !== "string" || typeof password !== "string") {
-        res.status(400).json({ success: false, error: "Username and password required." });
+      const { email, username, password, role } = req.body;
+      if (typeof email !== "string" || !email.trim()) {
+        res.status(400).json({ success: false, error: "A valid email address is required." });
+        return;
+      }
+      if (typeof username !== "string" || !username.trim()) {
+        res.status(400).json({ success: false, error: "Username is required." });
+        return;
+      }
+      if (typeof password !== "string" || !password.trim()) {
+        res.status(400).json({ success: false, error: "A temporary password is required." });
         return;
       }
       const operatorRole = role === "admin" ? "admin" : "operator";
-      const user = await createUser(username, password, operatorRole);
+      const user = await createUser(email.trim(), username.trim(), password, operatorRole);
       res.json({ success: true, user });
     } catch (error) {
+      console.error("[server] Error creating operator:", error);
+      const rawError = error instanceof Error ? error.message : "Failed to create operator";
+      const userFacingError = rawError === "fetch failed"
+        ? "Unable to reach Supabase Auth server. Please check your network connection or Supabase settings."
+        : rawError;
       res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create operator",
+        error: userFacingError,
       });
     }
   });

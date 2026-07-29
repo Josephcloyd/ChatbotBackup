@@ -6,14 +6,17 @@ const plannerUrl = process.env.PLANNER_API_URL ?? "http://127.0.0.1:3001";
 
 async function authError(message: string, status: number): Promise<NextResponse> {
   const response = NextResponse.json({ success: false, error: message }, { status });
-  const cookieStore = await cookies();
-  cookieStore.set(FLOWBOARD_AUTH_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
+  // ONLY clear cookie for 401 Unauthorized (session expired or invalid token)
+  if (status === 401) {
+    const cookieStore = await cookies();
+    cookieStore.set(FLOWBOARD_AUTH_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+    });
+  }
   return response;
 }
 
@@ -31,7 +34,17 @@ export async function requireSession(): Promise<SessionPayload | NextResponse> {
       cache: "no-store",
     });
     const data = await response.json();
-    if (!response.ok || !data.success || data.user?.active === false) {
+    if (!response.ok || !data.success) {
+      if (data.user?.active === false) {
+        return authError("Account is inactive or unavailable.", 403);
+      }
+      // If server returned a temporary error, preserve cookie & fallback to validated session token
+      return {
+        ...session,
+        role: session.role === "admin" ? "admin" : "operator",
+      };
+    }
+    if (data.user?.active === false) {
       return authError("Account is inactive or unavailable.", 403);
     }
     return {
@@ -41,7 +54,11 @@ export async function requireSession(): Promise<SessionPayload | NextResponse> {
       role: data.user?.role === "admin" ? "admin" : "operator",
     };
   } catch {
-    return authError("Authentication service unavailable.", 503);
+    // If planner server is temporarily unreachable, fallback to validated session token without logging out user
+    return {
+      ...session,
+      role: session.role === "admin" ? "admin" : "operator",
+    };
   }
 }
 
