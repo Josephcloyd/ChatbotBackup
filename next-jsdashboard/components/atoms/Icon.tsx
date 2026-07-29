@@ -1,6 +1,6 @@
 import React from "react";
 
-export type IconName = "spark" | "grid" | "clock" | "team" | "hours" | "download" | "trash" | "edit" | "users" | "eye" | "eyeOff" | "sun" | "moon" | "x" | "arrowUp";
+export type IconName = "spark" | "grid" | "clock" | "team" | "hours" | "download" | "trash" | "edit" | "users" | "eye" | "eyeOff" | "sun" | "moon" | "x" | "arrowUp" | "file";
 
 interface IconProps {
   name: IconName;
@@ -25,6 +25,7 @@ export function Icon({ name, className, style }: IconProps) {
     moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
     x: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
     arrowUp: <><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>,
+    file: <><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></>,
   };
 
   return (
