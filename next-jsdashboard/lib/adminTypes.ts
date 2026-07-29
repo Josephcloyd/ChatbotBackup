@@ -81,12 +81,17 @@ export interface HistoryResponse {
   error?: string;
 }
 
+export type UserAccountStatus = "pending" | "active" | "inactive";
+
 export interface OperatorAccount {
   id: string;
   username: string;
+  email?: string;
+  displayName?: string;
   role: FrontendRole;
   databaseRole?: "admin" | "user";
   active?: boolean;
+  status?: UserAccountStatus;
   createdAt: string;
   updatedAt?: string;
   planCount?: number;

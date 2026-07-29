@@ -61,7 +61,7 @@ export default function Dashboard() {
   const router = useRouter();
 
   // Session & UI States
-  const [user, setUser] = useState<{ id?: string; username: string; role: FrontendRole } | null>(null);
+  const [user, setUser] = useState<{ id?: string; username: string; displayName?: string; role: FrontendRole } | null>(null);
   const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
@@ -90,9 +90,11 @@ export default function Dashboard() {
   const [editSaving, setEditSaving] = useState(false);
   const [editMessage, setEditMessage] = useState("");
 
+  const [newEmail, setNewEmail] = useState("");
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<FrontendRole>("operator");
+  const [operatorNotification, setOperatorNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const [deleteOpUser, setDeleteOpUser] = useState<OperatorAccount | null>(null);
   const [reassignTarget, setReassignTarget] = useState("");
@@ -126,10 +128,16 @@ export default function Dashboard() {
     fetch(`/api/planner/plans?${params.toString()}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data: HistoryResponse) => {
+        if (!Array.isArray(data.plans)) {
+          throw new Error(data.error ?? "Failed to load plans");
+        }
         setHistory(data);
         setPlannerOnline(true);
       })
-      .catch(() => setHistory({ configured: false, plans: [] }));
+      .catch(() => {
+        setHistory({ configured: false, plans: [] });
+        setPlannerOnline(false);
+      });
   }, [user]);
 
   const fetchOperators = useCallback(() => {
@@ -497,23 +505,33 @@ export default function Dashboard() {
 
   async function handleCreateOperator(e: React.FormEvent) {
     e.preventDefault();
-    if (!newUsername.trim() || !newPassword.trim()) return;
+    if (!newEmail.trim() || !newUsername.trim() || !newPassword.trim()) return;
+
+    const invitedEmail = newEmail.trim();
+    const invitedName = newUsername.trim();
 
     try {
       const res = await fetch("/api/planner/operators", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: newUsername, password: newPassword, role: newRole }),
+        body: JSON.stringify({ email: newEmail, username: newUsername, password: newPassword, role: newRole }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create operator");
 
+      setNewEmail("");
       setNewUsername("");
       setNewPassword("");
       setNewRole("operator");
       fetchOperators();
+
+      setOperatorNotification({
+        type: "success",
+        message: `Invitation link sent to ${invitedEmail} for user account "${invitedName}". Account status set to Pending.`,
+      });
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error creating user");
+      const errMsg = caught instanceof Error ? caught.message : "Error creating user";
+      setOperatorNotification({ type: "error", message: errMsg });
     }
   }
 
@@ -543,6 +561,7 @@ export default function Dashboard() {
       alert("Reassign this user's plans before deleting the account.");
       return;
     }
+    const deletedName = deleteOpUser.username;
     try {
       if (reassignTarget) {
         const reassignRes = await fetch("/api/planner/operators/reassign", {
@@ -562,8 +581,14 @@ export default function Dashboard() {
       setReassignTarget("");
       fetchOperators();
       fetchPlans();
+
+      setOperatorNotification({
+        type: "success",
+        message: `User account "${deletedName}" was successfully deleted.`,
+      });
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error deleting user");
+      const errMsg = caught instanceof Error ? caught.message : "Error deleting user";
+      setOperatorNotification({ type: "error", message: errMsg });
     }
   }
 
@@ -618,7 +643,7 @@ export default function Dashboard() {
   return (
     <DashboardLayout sidebarContent={sidebarContent}>
       <header className="topbar">
-        <div>
+        <div className="topbar-title-container" title={plan?.project.projectName ?? "Production planning board"}>
           <span className="eyebrow">LIFEPLAN DASHBOARD</span>
           <h1>{plan?.project.projectName ?? "Production planning board"}</h1>
         </div>
@@ -626,6 +651,11 @@ export default function Dashboard() {
           <span className={`connection-pill ${history.configured ? "connected" : "pending"}`}>
             <span /> Supabase Auth {history.configured ? "linked" : "offline"}
           </span>
+          <div className="topbar-user-pill">
+            <span className="user-pill-label">Logged In As</span>
+            <strong className="user-pill-name">{user.displayName ?? user.username}</strong>
+            <span className="user-pill-role">{user.role}</span>
+          </div>
           <ThemeToggle />
           <button className="download-button" type="button" onClick={logout}>
             Sign out
@@ -857,6 +887,8 @@ export default function Dashboard() {
                   currentUser={user}
                   onDeleteOperator={(op) => setDeleteOpUser(op)}
                   onUpdateOperator={handleUpdateOperator}
+                  newEmail={newEmail}
+                  setNewEmail={setNewEmail}
                   newUsername={newUsername}
                   setNewUsername={setNewUsername}
                   newPassword={newPassword}
@@ -864,6 +896,8 @@ export default function Dashboard() {
                   newRole={newRole}
                   setNewRole={setNewRole}
                   handleCreateOperator={handleCreateOperator}
+                  notification={operatorNotification}
+                  onClearNotification={() => setOperatorNotification(null)}
                 />
 
                 {deleteOpUser && (
