@@ -454,9 +454,8 @@ a {
 /* Dashboard Layout */
 .app-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  transition: grid-template-columns 0.3s;
+  display: block;
+  position: relative;
 }
 
 .mobile-header {
@@ -468,9 +467,11 @@ a {
 }
 
 .control-panel {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
   height: 100vh;
+  width: 320px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -478,8 +479,90 @@ a {
   color: #f5eedb;
   background: linear-gradient(165deg, #133020 0%, #08160f 100%);
   box-shadow: 8px 0 32px rgba(19, 48, 32, 0.12);
+  overflow-x: hidden;
   overflow-y: auto;
-  z-index: 10;
+  transition: width 0.25s ease, padding 0.25s ease;
+  z-index: 40;
+}
+
+.control-panel.collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.control-panel-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.sidebar-toggle-btn {
+  position: fixed;
+  top: 24px;
+  left: 320px;
+  width: 22px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: #046241;
+  color: white;
+  cursor: pointer;
+  z-index: 45;
+  box-shadow: 2px 4px 12px rgba(4, 98, 65, 0.3);
+  transition: left 0.25s ease, transform 0.15s ease, background 0.18s ease;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #034e34;
+  transform: scale(1.02);
+}
+
+.sidebar-toggle-btn svg {
+  transform: translateX(-1px);
+}
+
+.sidebar-toggle-btn {
+  padding-right: 3px;
+}
+
+[data-theme="dark"] .sidebar-toggle-btn {
+  background: #ffb347;
+  border-color: #ffb347;
+  color: #133020;
+  box-shadow: 2px 4px 12px rgba(255, 179, 71, 0.3);
+}
+
+[data-theme="dark"] .sidebar-toggle-btn:hover {
+  background: #e49b24;
+}
+
+.sidebar-toggle-btn.collapsed {
+  left: 0;
+  background: #046241;
+  border-color: #046241;
+  color: white;
+  box-shadow: 2px 4px 14px rgba(4, 98, 65, 0.35);
+}
+
+.sidebar-toggle-btn.collapsed:hover {
+  background: #034e34;
+}
+
+[data-theme="dark"] .sidebar-toggle-btn.collapsed {
+  background: #ffb347;
+  border-color: #ffb347;
+  color: #133020;
+  box-shadow: 2px 4px 14px rgba(255, 179, 71, 0.3);
+}
+
+[data-theme="dark"] .sidebar-toggle-btn.collapsed:hover {
+  background: #e49b24;
 }
 
 .workspace {
@@ -488,6 +571,16 @@ a {
   flex-direction: column;
   height: 100vh;
   overflow-y: auto;
+  margin-left: 320px;
+  transition: margin-left 0.25s ease;
+}
+
+.sidebar-collapsed .workspace {
+  margin-left: 0;
+}
+
+.sidebar-collapsed .topbar {
+  padding-left: 56px;
 }
 
 .topbar {
@@ -2532,10 +2625,6 @@ td {
 
 /* RESPONSIVE DESIGN RULES */
 @media (max-width: 1080px) {
-  .app-shell {
-    grid-template-columns: 280px 1fr;
-  }
-
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2590,6 +2679,10 @@ td {
     left: 0;
   }
 
+  .sidebar-toggle-btn {
+    display: none;
+  }
+
   .mobile-overlay {
     position: fixed;
     inset: 0;
@@ -2604,6 +2697,7 @@ td {
   .workspace {
     height: auto;
     overflow-y: visible;
+    margin-left: 0;
   }
 
   .topbar {
