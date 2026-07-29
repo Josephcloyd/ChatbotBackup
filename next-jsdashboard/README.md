@@ -32,7 +32,7 @@ Do not put Supabase service-role credentials in `next-jsdashboard/.env.local`. S
 
 ## Supabase history
 
-Apply the migration at `mcp-server/supabase/migrations/001_create_production_plans.sql`, then set these values in `mcp-server/.env`:
+Apply the SQL files in `mcp-server/supabase/migrations` in numeric order, then set these values in `mcp-server/.env`. The dashboard and backend expect the tables and columns added by `002_admin_dashboard_enhancements.sql`. Migration `004_repair_external_identity_column_types.sql` repairs older databases that stored WhatsApp IDs as UUIDs. Applying only `001_create_production_plans.sql` can make plan saves fail.
 
 ```dotenv
 SUPABASE_URL=https://your-project-id.supabase.co

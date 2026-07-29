@@ -118,13 +118,40 @@ export function Sidebar({
 
           <div className="admin-sidebar-composer">
             <label htmlFor="prompt">Describe your production plan</label>
-            <Textarea
-              id="prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={generationPromptPlaceholder}
-              className="generation-prompt-input editable-placeholder-field"
-            />
+            <div style={{ position: "relative" }}>
+              <Textarea
+                id="prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={generationPromptPlaceholder}
+                className="generation-prompt-input editable-placeholder-field"
+                style={{ paddingBottom: "44px", resize: "none" }}
+              />
+              <div style={{ position: "absolute", bottom: "10px", right: "10px", display: "flex", alignItems: "center" }}>
+                {prompt.length > 0 && (
+                  <Button
+                    onClick={generatePlan}
+                    disabled={loading || prompt.trim().length < 10}
+                    isLoading={loading}
+                    style={{
+                      padding: "0",
+                      width: "28px",
+                      height: "28px",
+                      minWidth: "28px",
+                      maxWidth: "28px",
+                      minHeight: "28px",
+                      maxHeight: "28px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    {!loading && <Icon name="arrowUp" />}
+                  </Button>
+                )}
+              </div>
+            </div>
             <div className="prompt-meta">
               <span>Natural language</span>
               <span>{prompt.length} characters</span>
@@ -134,14 +161,6 @@ export function Sidebar({
                 {error}
               </div>
             )}
-            <Button
-              className="generate-button"
-              onClick={generatePlan}
-              disabled={loading || (prompt.trim().length > 0 && prompt.trim().length < 10)}
-              isLoading={loading}
-            >
-              {!loading && <Icon name="spark" />} {loading ? "Building your plan..." : "Generate plan"}
-            </Button>
             <p className="privacy-note">Runs locally through Ollama. Data saved under your account.</p>
           </div>
         </>
@@ -178,13 +197,40 @@ export function Sidebar({
 
           <div className="admin-sidebar-composer">
             <label htmlFor="admin-sidebar-prompt">Describe your production plan</label>
-            <Textarea
-              id="admin-sidebar-prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              placeholder={generationPromptPlaceholder}
-              className="generation-prompt-input editable-placeholder-field"
-            />
+            <div style={{ position: "relative" }}>
+              <Textarea
+                id="admin-sidebar-prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder={generationPromptPlaceholder}
+                className="generation-prompt-input editable-placeholder-field"
+                style={{ paddingBottom: "44px", resize: "none" }}
+              />
+              <div style={{ position: "absolute", bottom: "10px", right: "10px", display: "flex", alignItems: "center" }}>
+                {prompt.length > 0 && (
+                  <Button
+                    onClick={generatePlan}
+                    disabled={loading || prompt.trim().length < 10}
+                    isLoading={loading}
+                    style={{
+                      padding: "0",
+                      width: "28px",
+                      height: "28px",
+                      minWidth: "28px",
+                      maxWidth: "28px",
+                      minHeight: "28px",
+                      maxHeight: "28px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "6px"
+                    }}
+                  >
+                    {!loading && <Icon name="arrowUp" />}
+                  </Button>
+                )}
+              </div>
+            </div>
             <div className="prompt-meta">
               <span>Admin prompt</span>
               <span>{prompt.length} characters</span>
@@ -194,14 +240,6 @@ export function Sidebar({
                 {error}
               </div>
             )}
-            <Button
-              className="generate-button"
-              onClick={generatePlan}
-              disabled={loading || prompt.trim().length < 10}
-              isLoading={loading}
-            >
-              {!loading && <Icon name="spark" />} {loading ? "Building plan..." : "Generate plan"}
-            </Button>
             <p className="privacy-note">Runs locally through Ollama. Generated plans save under your admin account.</p>
           </div>
         </>

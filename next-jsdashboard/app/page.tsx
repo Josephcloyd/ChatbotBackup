@@ -253,9 +253,11 @@ export default function Dashboard() {
     const planSheet = plan?.workbook.sheets.find((s) => s.sheetName === "Production Plan");
     const firstRow = planSheet?.rows[0];
     const keys = firstRow ? Object.keys(firstRow) : [];
+    const semanticLabel = (semantic: string) =>
+      planSheet?.columnDefinitions?.find((column) => column.semantic === semantic)?.label;
 
     // 1. Daily target column (e.g., "Plan no. of Posts", "Target Total Hours", "Target Images")
-    const dailyTargetCol = keys.find(
+    const dailyTargetCol = semanticLabel("planned_output") ?? keys.find(
       (k) =>
         (/plan|target/i.test(k) || /posts|images|records|documents|units|hours/i.test(k)) &&
         !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(k),
@@ -265,10 +267,13 @@ export default function Dashboard() {
     const accumCol = keys.find((k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k));
 
     // 3. Team size column
-    const teamCol = keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
+    const teamCol = semanticLabel("planned_staff") ??
+      keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
 
     // 4. Per annotator column
-    const perAnnotCol = keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
+    const perAnnotCol = semanticLabel("planned_output_per_person") ??
+      keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
+    const monthCol = semanticLabel("month") ?? "Month";
 
     let totalPlanned = 0;
     const monthly = new Map<string, number>();
@@ -276,7 +281,7 @@ export default function Dashboard() {
     if (dailyTargetCol) {
       totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[dailyTargetCol]), 0);
       rows.forEach((row) => {
-        const month = String(row.Month ?? "Unscheduled");
+        const month = String(row[monthCol] ?? "Unscheduled");
         monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[dailyTargetCol]));
       });
     } else if (accumCol && rows.length > 0) {
@@ -288,7 +293,7 @@ export default function Dashboard() {
       let prevMonthEndAccum = 0;
       const monthGroups = new Map<string, number>();
       rows.forEach((row) => {
-        const month = String(row.Month ?? "Unscheduled");
+        const month = String(row[monthCol] ?? "Unscheduled");
         monthGroups.set(month, numberValue(row[accumCol]));
       });
       monthGroups.forEach((endAccum, month) => {

@@ -72,6 +72,15 @@ create table if not exists public.plan_files (
   unique (plan_id, version)
 );
 
+alter table public.plan_files
+  add column if not exists file_type text not null default 'xlsx',
+  add column if not exists version integer not null default 1,
+  add column if not exists file_size bigint null,
+  add column if not exists storage_bucket text null,
+  add column if not exists storage_path text null,
+  add column if not exists created_by text null,
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.plan_generation_runs (
   id uuid primary key default gen_random_uuid(),
   plan_id uuid null references public.production_plans(id) on delete set null,
@@ -92,6 +101,24 @@ create table if not exists public.plan_generation_runs (
   created_at timestamptz not null default now()
 );
 
+alter table public.plan_generation_runs
+  add column if not exists plan_id uuid null references public.production_plans(id) on delete set null,
+  add column if not exists project_title text null,
+  add column if not exists model_provider text null,
+  add column if not exists model_name text null,
+  add column if not exists prompt_version text null,
+  add column if not exists status text not null default 'running',
+  add column if not exists attempt_number integer null,
+  add column if not exists duration_ms integer null,
+  add column if not exists input_tokens integer null,
+  add column if not exists output_tokens integer null,
+  add column if not exists validation_error_count integer null,
+  add column if not exists validation_errors jsonb null,
+  add column if not exists error_message text null,
+  add column if not exists started_at timestamptz null,
+  add column if not exists completed_at timestamptz null,
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists production_plans_status_created_idx
   on public.production_plans (status, created_at desc);
 
@@ -110,3 +137,5 @@ alter table public.plan_generation_runs enable row level security;
 
 comment on table public.user_roles is
   'Dashboard role mapping. Only user and admin are valid database roles; the UI displays user as Operator.';
+
+notify pgrst, 'reload schema';
