@@ -508,32 +508,18 @@ export async function createUser(
 
   let resolvedUser: any = null;
 
-  // Step 1: Try sending invitation email link via Supabase Auth with redirect to /accept-invite page.
+  const hasCustomEmailProvider = Boolean(
+    (process.env.EMAIL_USER && process.env.EMAIL_PASS) ||
+    (process.env.SMTP_USER && process.env.SMTP_PASS)
+  );
+
   const redirectUrl = process.env.APP_URL
     ? `${process.env.APP_URL.replace(/\/$/, "")}/accept-invite`
     : `http://localhost:3000/accept-invite?email=${encodeURIComponent(email)}`;
 
-  try {
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      data: userMetadata,
-      redirectTo: redirectUrl,
-    });
-
-    if (!inviteError && inviteData?.user) {
-      resolvedUser = inviteData.user;
-    } else {
-      console.warn(
-        `[userService] inviteUserByEmail failed (${inviteError?.message ?? "unknown"}); falling back to direct user creation.`,
-      );
-    }
-  } catch (caughtErr) {
-    console.warn(
-      `[userService] inviteUserByEmail exception (${caughtErr instanceof Error ? caughtErr.message : String(caughtErr)}); falling back to direct user creation.`,
-    );
-  }
-
-  // Step 2: Fallback to direct createUser if invitation link email could not be sent (e.g. SMTP unconfigured or network issue)
-  if (!resolvedUser) {
+  // If custom email provider (Gmail SMTP) is configured, create user account directly
+  // to avoid triggering Supabase's default plain text email ("noreply@mail.app.supabase.io").
+  if (hasCustomEmailProvider) {
     const { data: createData, error: createError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -547,22 +533,45 @@ export async function createUser(
 
     resolvedUser = createData.user;
   } else {
-    // Step 3: Set the temporary password for invited user so credentials work immediately
-    const { data: updatedData, error: updateError } = await supabase.auth.admin.updateUserById(
-      resolvedUser.id,
-      { password, email_confirm: true },
-    );
+    // Step 1: Try sending invitation email link via Supabase Auth with redirect to /accept-invite page.
+    try {
+      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+        data: userMetadata,
+        redirectTo: redirectUrl,
+      });
 
-    if (updateError) {
+      if (!inviteError && inviteData?.user) {
+        resolvedUser = inviteData.user;
+        await supabase.auth.admin.updateUserById(resolvedUser.id, { password, email_confirm: true });
+      } else {
+        console.warn(
+          `[userService] inviteUserByEmail failed (${inviteError?.message ?? "unknown"}); falling back to direct user creation.`,
+        );
+      }
+    } catch (caughtErr) {
       console.warn(
-        `[userService] Invitation sent to ${email} but failed to set temporary password: ${updateError.message}`,
+        `[userService] inviteUserByEmail exception (${caughtErr instanceof Error ? caughtErr.message : String(caughtErr)}); falling back to direct user creation.`,
       );
-    } else if (updatedData?.user) {
-      resolvedUser = updatedData.user;
+    }
+
+    // Step 2: Fallback to direct createUser if invitation link email could not be sent
+    if (!resolvedUser) {
+      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
+
+      if (createError || !createData?.user) {
+        throw new Error(`Failed to create user account: ${createError?.message ?? "Unable to contact Supabase Auth service."}`);
+      }
+
+      resolvedUser = createData.user;
     }
   }
 
-  // Step 4: Dispatch branded invitation email via Gmail SMTP if EMAIL_USER and EMAIL_PASS are configured
+  // Dispatch branded HTML invitation email via Gmail SMTP
   await sendGmailInvitationEmail(email, username, redirectUrl);
 
   const frontendRole = databaseRoleToFrontend(resolvedUser.user_metadata?.role);
