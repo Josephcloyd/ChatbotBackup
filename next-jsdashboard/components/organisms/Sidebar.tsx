@@ -60,15 +60,15 @@ export function Sidebar({
       </div>
 
       <div className="model-card">
-        <div className="model-topline">
-          <StatusIndicator status={plannerOnline ? "online" : "offline"} />
-          <span>Ollama planner</span>
-          <small>{plannerOnline ? "Online" : "Offline"}</small>
-        </div>
-        <div className="model-name">
-          Active Model <span>LOCAL</span>
-        </div>
-      </div>
+  <div className="model-topline">
+    <StatusIndicator status={plannerOnline ? "online" : "offline"} />
+    <span>Ollama planner</span>
+    <small>{plannerOnline ? "Online" : "Offline"}</small>
+  </div>
+  <div className="model-name">
+    Active Model <span>LOCAL</span>
+  </div>
+</div>
 
       {user.role === "operator" ? (
         <>
