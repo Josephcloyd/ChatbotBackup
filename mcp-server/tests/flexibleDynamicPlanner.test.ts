@@ -119,12 +119,58 @@ test("builds image-based text capture plans from natural WhatsApp wording", () =
   const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
   assert.ok(production);
   assert.ok(production!.columns.includes("Target Images"));
+  assert.ok(production!.columns.includes("LPB Phase"));
   const totalTargetImages = production!.rows.reduce((sum, row) => sum + Number(row["Target Images"] ?? 0), 0);
   assert.equal(totalTargetImages, 350000);
+  const phaseTotals = production!.rows.reduce<Record<string, number>>((totals, row) => {
+    const phase = String(row["LPB Phase"] ?? "");
+    totals[phase] = (totals[phase] ?? 0) + Number(row["Target Images"] ?? 0);
+    return totals;
+  }, {});
+  assert.equal(phaseTotals.Learning, 70000);
+  assert.equal(phaseTotals.Performing, 175000);
+  assert.equal(phaseTotals.Breakthrough, 105000);
+  assert.ok(production!.rows.some((row) => /Training day/i.test(String(row.Notes))));
+  assert.ok(production!.rows.some((row) => /Full-production day/i.test(String(row.Notes))));
+  assert.ok(production!.rows.some((row) => /Final validation day/i.test(String(row.Notes))));
+  assert.equal(production!.rows.at(-1)?.["Expected Completion %"], 100);
 
   const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
   assert.ok(projectInfo?.rows.some((row) => row.Field === "Planning model" && row.Value === "LPB Model"));
+  const lpbSummary = plan.workbook.sheets.find((sheet) => sheet.sheetName === "LPB Phase Summary");
+  assert.ok(lpbSummary?.rows.some((row) => row.Phase === "Learning" && row["Target Share"] === "20%"));
+  assert.ok(lpbSummary?.rows.some((row) => row.Phase === "Performing" && row["Target Share"] === "50%"));
+  assert.ok(lpbSummary?.rows.some((row) => row.Phase === "Breakthrough" && row["Target Share"] === "30%"));
   planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("honors explicit historical LPB start date for Siri image text collection plans", () => {
+  const description =
+    "Create a production plan for Image Text collection for Siri AI Text data training. The main unit of measure for the production is: number of images. The total number images would equal to 350000 images, with a timeframe of 6 months. The start date is April 3, 2026. Apply LPB model.";
+  const constraints = extractRequestedConstraints(description, "2026-07-29");
+  assert.equal(constraints.startDate, "2026-04-03");
+  assert.equal(constraints.allowPastDates, true);
+  assert.equal(constraints.planningModel, "LPB Model");
+
+  const plan = buildDynamicPlan(
+    { projectDescription: description },
+    proposal(),
+    "2026-07-29",
+  ).plan;
+  const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  assert.ok(production);
+  assert.equal(production!.rows[0]?.Date, "2026-04-03");
+  assert.equal(production!.rows.at(-1)?.["Expected Completion %"], 100);
+
+  const phaseTotals = production!.rows.reduce<Record<string, number>>((totals, row) => {
+    const phase = String(row["LPB Phase"] ?? "");
+    totals[phase] = (totals[phase] ?? 0) + Number(row["Target Images"] ?? 0);
+    return totals;
+  }, {});
+  assert.equal(phaseTotals.Learning, 70000);
+  assert.equal(phaseTotals.Performing, 175000);
+  assert.equal(phaseTotals.Breakthrough, 105000);
+  planRulesService.validate(plan, { currentDate: "2026-07-29", input: { projectDescription: description } });
 });
 
 test("supports hours-only student enrollment encoding plans", () => {

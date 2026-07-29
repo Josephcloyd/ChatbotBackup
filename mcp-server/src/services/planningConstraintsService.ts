@@ -222,8 +222,10 @@ export function extractRequestedConstraints(
     constraints.workingDays = workingDays;
     constraints.weekdaysOnly = workingDays.every((day) => day >= 1 && day <= 5);
   }
-  if (normalizedDates.startDate) constraints.startDate = normalizedDates.startDate;
-  else if (/\b(?:starting|starts?|from)(?:\s+date\s+of)?\s+today\b/i.test(description)) {
+  if (normalizedDates.startDate) {
+    constraints.startDate = normalizedDates.startDate;
+    if (normalizedDates.startDate < currentDate) constraints.allowPastDates = true;
+  } else if (/\b(?:starting|starts?|from)(?:\s+date\s+of)?\s+today\b/i.test(description)) {
     constraints.startDate = currentDate;
   }
   if (normalizedDates.endDate) constraints.endDate = normalizedDates.endDate;

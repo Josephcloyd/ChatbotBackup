@@ -25,6 +25,10 @@ import {
 import { verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
+import {
+  findColumnLabel,
+  getSemanticCell,
+} from "./services/productionPlanColumns.js";
 
 const generationInputSchema = z.object({
   whatsappUserId: z.string().trim().min(1).max(120),
@@ -419,10 +423,37 @@ export function createApp() {
         const plan = planRecord.raw_plan;
         const productionSheet = plan.workbook.sheets.find((sheet: any) => sheet.sheetName === "Production Plan");
         const planRows = productionSheet?.rows || [];
-        const totalHours = planRows.reduce((sum: number, r: any) => sum + Number(r["Target Total Hours"] || r["Target Hours"] || 0), 0);
-        const teamSize = Math.max(...planRows.map((r: any) => Number(r["Target Active Annotators"] || 1)), 1);
+        const plannedHoursLabel = productionSheet
+          ? (
+              findColumnLabel(
+                productionSheet,
+                plan.project.productionUnit && plan.project.productionUnit !== "hours"
+                  ? "planned_hours"
+                  : "planned_output",
+              ) ??
+              findColumnLabel(productionSheet, "planned_output")
+            )
+          : undefined;
+        const totalHours = planRows.reduce(
+          (sum: number, row: any) =>
+            sum + Number(plannedHoursLabel ? row[plannedHoursLabel] : 0),
+          0,
+        );
+        const teamSize = Math.max(
+          ...planRows.map((row: any) =>
+            Number(
+              productionSheet
+                ? getSemanticCell(row, productionSheet, "planned_staff") ?? 1
+                : 1,
+            ),
+          ),
+          1,
+        );
+        const dayLabel = productionSheet
+          ? findColumnLabel(productionSheet, "day")
+          : undefined;
         const hasWeekends = planRows.some((r: any) => {
-          const day = String(r["Day"] || "").toLowerCase();
+          const day = String(dayLabel ? r[dayLabel] : "").toLowerCase();
           return day === "sat" || day === "sun" || day === "saturday" || day === "sunday";
         });
         const weekdaysOnly = !hasWeekends;
@@ -452,6 +483,15 @@ export function createApp() {
           settings,
           phases,
           risks,
+          unitLabel:
+            plan.project.productionUnit && plan.project.productionUnit !== "hours"
+              ? String(plan.project.productionUnit)
+                  .replace(/^./, (character: string) => character.toUpperCase())
+              : undefined,
+          totalQuantity:
+            plan.project.productionUnit && plan.project.productionUnit !== "hours"
+              ? Number(plan.project.totalAssets ?? 0)
+              : undefined,
         });
       } else {
         const templateDefinition = await templateService.loadDefinition();

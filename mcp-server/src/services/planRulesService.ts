@@ -5,21 +5,16 @@ import {
   resolvePlanningSettings,
 } from "./planningConstraintsService.js";
 import { isWeekday, parseIsoDate } from "./dateNormalizationService.js";
+import {
+  findColumnLabel,
+  getColumnDefinitions,
+} from "./productionPlanColumns.js";
 export { extractRequestedConstraints } from "./planningConstraintsService.js";
 
 export interface PlanRuleOptions {
   currentDate: string;
   input: Pick<ProductionPlanInput, "projectDescription">;
 }
-
-const ACTUAL_COLUMNS = [
-  "Actual Active Annotators",
-  "Actual Total Hours",
-  "Actual Total Hours per Annotator",
-  "Actual Hours",
-  "Total Variance",
-  "Completion Rate (%)",
-];
 
 function numericValue(row: ProductionPlanRow, column: string, rowNumber: number): number {
   const raw = row[column];
@@ -48,26 +43,155 @@ function splitIds(value: unknown): string[] {
     .filter(Boolean);
 }
 
+const LPB_PHASES = ["Learning", "Performing", "Breakthrough"] as const;
+const LPB_WEIGHTS = [0.2, 0.5, 0.3] as const;
+
+function isLpbModel(model: string | undefined): boolean {
+  return /\bLPB\b/i.test(model ?? "");
+}
+
+function phaseIndexForRow(index: number, totalRows: number): number {
+  return Math.min(
+    LPB_PHASES.length - 1,
+    Math.floor((index / Math.max(totalRows, 1)) * LPB_PHASES.length),
+  );
+}
+
+function lpbPhaseDayCounts(totalRows: number): number[] {
+  const counts = Array.from({ length: LPB_PHASES.length }, () => 0);
+  for (let index = 0; index < totalRows; index += 1) {
+    counts[phaseIndexForRow(index, totalRows)] += 1;
+  }
+  return counts;
+}
+
+function distributeInteger(total: number, count: number): number[] {
+  if (count <= 0) return [];
+  const base = Math.floor(total / count);
+  const extra = total - base * count;
+  return Array.from({ length: count }, (_, index) => base + (index < extra ? 1 : 0));
+}
+
+function allocateWeightedInteger(total: number, counts: number[], weights: readonly number[]): number[] {
+  const activeWeights = weights.map((weight, index) => counts[index]! > 0 ? weight : 0);
+  const totalWeight = activeWeights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight <= 0) return distributeInteger(total, activeWeights.length);
+
+  const exact = activeWeights.map((weight) => (total * weight) / totalWeight);
+  const allocated = exact.map(Math.floor);
+  let remainder = total - allocated.reduce((sum, value) => sum + value, 0);
+  const order = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+  for (let i = 0; i < order.length && remainder > 0; i += 1, remainder -= 1) {
+    allocated[order[i]!.index] += 1;
+  }
+  return allocated;
+}
+
+function distributeLpbInteger(total: number, totalRows: number): number[] {
+  const counts = lpbPhaseDayCounts(totalRows);
+  const phaseTargets = allocateWeightedInteger(Math.round(total), counts, LPB_WEIGHTS);
+  return counts.flatMap((count, index) => distributeInteger(phaseTargets[index] ?? 0, count));
+}
+
+function distributeLpbHours(totalHours: number, totalRows: number): number[] {
+  return distributeLpbInteger(Math.round(totalHours * 100), totalRows).map((value) => value / 100);
+}
+
+function lpbNote(phase: string, phaseDayIndex: number, phaseDayCount: number): string {
+  if (phase === "Learning") {
+    return phaseDayIndex === 0
+      ? "Training day: onboarding, process familiarization, calibration, and coached starter production"
+      : "Training day: coached production, error correction, quality review, and workflow adjustment";
+  }
+  if (phase === "Performing") {
+    return "Full-production day: maximize planned output while monitoring quality and workforce utilization";
+  }
+  if (phaseDayIndex >= phaseDayCount - 1) {
+    return "Final validation day: final QA, completion review, corrections signoff, and delivery preparation";
+  }
+  return phaseDayIndex === 0
+    ? "Review day: backlog clearing, quality checks, and rework triage"
+    : "Maintenance day: corrections, validation, exception resolution, and remaining production";
+}
+
 export class PlanRulesService {
   validate(plan: ProductionPlan, options: PlanRuleOptions): ProductionPlan {
     const sheet = plan.workbook.sheets.find((item) => item.sheetName === "Production Plan");
     if (!sheet) return plan;
+    const definitions = getColumnDefinitions(sheet);
+    const dateColumn = findColumnLabel(sheet, "date") ?? "Date";
+    const monthColumn = findColumnLabel(sheet, "month") ?? "Month";
+    const targetColumn =
+      findColumnLabel(sheet, "planned_output") ??
+      sheet.columns.find((column) => /target|plan/i.test(column)) ??
+      sheet.columns[2] ??
+      "Target Total Hours";
+    const plannedStaffColumn =
+      findColumnLabel(sheet, "planned_staff") ?? "Target Active Annotators";
+    const actualColumns = definitions
+      .filter((column) =>
+        column.semantic === "actual_staff" ||
+        column.semantic === "actual_output" ||
+        column.semantic === "actual_output_per_person" ||
+        column.semantic === "actual_hours" ||
+        column.semantic === "variance" ||
+        column.semantic === "completion_rate",
+      )
+      .map((column) => column.label);
+
     if (sheet.rows.length === 0) {
       console.warn("[planRulesService] Production Plan sheet had 0 rows. Synthesizing schedule rows from project constraints.");
       const settings = resolvePlanningSettings(options.input.projectDescription, options.currentDate);
+      const constraints = extractRequestedConstraints(options.input.projectDescription, options.currentDate);
+      const useLpbModel = isLpbModel(constraints.planningModel);
       const scheduleDates = buildScheduleDates(settings);
-      const targetCol = sheet.columns.find((c) => /target|plan/i.test(c)) ?? sheet.columns[2] ?? "Target Total Hours";
-      const totalUnits = settings.totalHours ?? settings.totalQuantity ?? 100;
-      const dailyTarget = Math.max(1, Math.round(totalUnits / Math.max(scheduleDates.length, 1)));
+      const totalUnits = settings.totalQuantity ?? settings.totalHours ?? 100;
+      const targets = useLpbModel
+        ? distributeLpbInteger(totalUnits, scheduleDates.length)
+        : distributeInteger(Math.round(totalUnits), scheduleDates.length);
+      const hourTargets = useLpbModel
+        ? distributeLpbHours(settings.totalHours, scheduleDates.length)
+        : distributeInteger(Math.round(settings.totalHours * 100), scheduleDates.length).map((value) => value / 100);
+      const lpbCounts = lpbPhaseDayCounts(scheduleDates.length);
+      const definitionsByLabel = new Map(
+        definitions.map((definition) => [definition.label, definition]),
+      );
       let accum = 0;
 
-      scheduleDates.forEach((dateStr) => {
-        accum += dailyTarget;
+      scheduleDates.forEach((dateStr, rowIndex) => {
+        const target = targets[rowIndex] ?? 0;
+        const phaseIndex = phaseIndexForRow(rowIndex, scheduleDates.length);
+        const phase = LPB_PHASES[phaseIndex]!;
+        const phaseStart = lpbCounts.slice(0, phaseIndex).reduce((sum, count) => sum + count, 0);
+        accum += target;
         const rowObj: Record<string, any> = {};
         sheet.columns.forEach((col) => {
-          if (col === "Date") rowObj[col] = dateStr;
-          else if (col === "Month") rowObj[col] = dateStr.slice(0, 7);
-          else if (col === targetCol) rowObj[col] = dailyTarget;
+          const semantic = definitionsByLabel.get(col)?.semantic;
+          if (col === dateColumn) rowObj[col] = dateStr;
+          else if (col === monthColumn) rowObj[col] = dateStr.slice(0, 7);
+          else if (col === targetColumn) rowObj[col] = target;
+          else if (semantic === "sequence") rowObj[col] = rowIndex + 1;
+          else if (semantic === "day") {
+            rowObj[col] = parseIsoDate(dateStr).toLocaleString("en-US", {
+              weekday: "short",
+              timeZone: "UTC",
+            });
+          }
+          else if (semantic === "planned_staff") rowObj[col] = settings.teamSize;
+          else if (semantic === "planned_output_per_person") {
+            rowObj[col] = Number((target / Math.max(settings.teamSize, 1)).toFixed(2));
+          }
+          else if (semantic === "planned_hours") rowObj[col] = hourTargets[rowIndex] ?? 0;
+          else if (semantic === "status") rowObj[col] = "Not Started";
+          else if (useLpbModel && semantic === "phase") rowObj[col] = phase;
+          else if (useLpbModel && semantic === "notes") {
+            rowObj[col] = lpbNote(phase, rowIndex - phaseStart, lpbCounts[phaseIndex] ?? 0);
+          }
+          else if (useLpbModel && /expected\s+completion/i.test(col)) {
+            rowObj[col] = totalUnits > 0 ? Number(((accum / totalUnits) * 100).toFixed(2)) : "";
+          }
           else if (/accumulate|accumulative/i.test(col) && /target|plan/i.test(col)) rowObj[col] = accum;
           else rowObj[col] = "";
         });
@@ -80,7 +204,7 @@ export class PlanRulesService {
 
     sheet.rows.forEach((row, index) => {
       const rowNumber = index + 1;
-      const date = isoDate(row.Date);
+      const date = isoDate(row[dateColumn]);
       if (!date) {
         throw new Error(`Production Plan row ${rowNumber} Date must use YYYY-MM-DD format`);
       }
@@ -99,11 +223,9 @@ export class PlanRulesService {
       if (seenDates.has(date)) throw new Error(`Production Plan contains duplicate date ${date}`);
       seenDates.add(date);
 
-      totalTargetHours += sheet.columns.includes("Target Total Hours")
-        ? numericValue(row, "Target Total Hours", rowNumber)
-        : 0;
+      totalTargetHours += numericValue(row, targetColumn, rowNumber);
 
-      for (const column of ACTUAL_COLUMNS) {
+      for (const column of actualColumns) {
         if (!sheet.columns.includes(column)) continue;
         const value = row[column];
         if (value !== "" && value !== null && value !== undefined) {
@@ -121,28 +243,69 @@ export class PlanRulesService {
         options.currentDate,
       );
       const expectedDates = buildScheduleDates(settings);
-      const actualDates = sheet.rows.map((row) => String(row.Date));
+      const actualDates = sheet.rows.map((row) => String(row[dateColumn]));
       const scheduleMatches = expectedDates.length === actualDates.length &&
         expectedDates.every((date, index) => date === actualDates[index]);
 
       if (!scheduleMatches && expectedDates.length > 0) {
         console.warn(`[planRulesService] Auto-expanding ${actualDates.length} sample rows to complete ${expectedDates.length}-day schedule.`);
-        const targetCol = sheet.columns.find((c) => /target|plan/i.test(c)) ?? sheet.columns[2] ?? "Target Total Hours";
+        const useLpbModel = isLpbModel(constraints.planningModel);
         const totalUnits = settings.totalQuantity ?? (settings.totalHours !== 160 ? settings.totalHours : undefined) ?? 100;
-        const dailyTarget = Math.max(1, Math.round(totalUnits / Math.max(expectedDates.length, 1)));
+        const targets = useLpbModel
+          ? distributeLpbInteger(totalUnits, expectedDates.length)
+          : distributeInteger(Math.round(totalUnits), expectedDates.length);
+        const hourTargets = useLpbModel
+          ? distributeLpbHours(settings.totalHours, expectedDates.length)
+          : distributeInteger(Math.round(settings.totalHours * 100), expectedDates.length).map((value) => value / 100);
+        const lpbCounts = lpbPhaseDayCounts(expectedDates.length);
+        const firstExistingRow = sheet.rows[0] ?? {};
+        const definitionsByLabel = new Map(
+          definitions.map((definition) => [definition.label, definition]),
+        );
         let accum = 0;
 
-        sheet.rows = expectedDates.map((dateStr) => {
-          accum += dailyTarget;
+        sheet.rows = expectedDates.map((dateStr, rowIndex) => {
+          const target = targets[rowIndex] ?? 0;
+          const phaseIndex = phaseIndexForRow(rowIndex, expectedDates.length);
+          const phase = LPB_PHASES[phaseIndex]!;
+          const phaseStart = lpbCounts.slice(0, phaseIndex).reduce((sum, count) => sum + count, 0);
+          accum += target;
           const rowObj: Record<string, any> = {};
           sheet.columns.forEach((col) => {
-            if (col === "Date") rowObj[col] = dateStr;
-            else if (col === "Month") {
+            const semantic = definitionsByLabel.get(col)?.semantic;
+            if (col === dateColumn) rowObj[col] = dateStr;
+            else if (col === monthColumn) {
               const d = parseIsoDate(dateStr);
               const monthName = d.toLocaleString("en-US", { month: "long" });
               rowObj[col] = monthName;
             }
-            else if (col === targetCol) rowObj[col] = dailyTarget;
+            else if (col === targetColumn) rowObj[col] = target;
+            else if (semantic === "sequence") rowObj[col] = rowIndex + 1;
+            else if (semantic === "day") {
+              rowObj[col] = parseIsoDate(dateStr).toLocaleString("en-US", {
+                weekday: "short",
+                timeZone: "UTC",
+              });
+            }
+            else if (semantic === "planned_staff") rowObj[col] = settings.teamSize;
+            else if (semantic === "role_headcount") rowObj[col] = firstExistingRow[col] ?? 0;
+            else if (semantic === "planned_output_per_person") {
+              rowObj[col] = Number(
+                (target / Math.max(settings.teamSize, 1)).toFixed(2),
+              );
+            }
+            else if (semantic === "planned_hours") rowObj[col] = hourTargets[rowIndex] ?? 0;
+            else if (semantic === "status") rowObj[col] = "Not Started";
+            else if (useLpbModel && semantic === "phase") rowObj[col] = phase;
+            else if (useLpbModel && semantic === "notes") {
+              rowObj[col] = lpbNote(phase, rowIndex - phaseStart, lpbCounts[phaseIndex] ?? 0);
+            }
+            else if (useLpbModel && /expected\s+completion/i.test(col)) {
+              rowObj[col] = totalUnits > 0 ? Number(((accum / totalUnits) * 100).toFixed(2)) : "";
+            }
+            else if (semantic === "phase" || semantic === "notes") {
+              rowObj[col] = firstExistingRow[col] ?? "";
+            }
             else if (/accumulate|accumulative/i.test(col) && /target|plan/i.test(col)) rowObj[col] = accum;
             else rowObj[col] = "";
           });
@@ -156,7 +319,7 @@ export class PlanRulesService {
     }
     if (constraints.teamSize !== undefined) {
       const teamValues = sheet.rows.map((row, index) =>
-        numericValue(row, "Target Active Annotators", index + 1),
+        numericValue(row, plannedStaffColumn, index + 1),
       );
       if (teamValues.some((value) => value > constraints.teamSize!)) {
         throw new Error(`Production Plan exceeds requested team size of ${constraints.teamSize}`);
@@ -167,7 +330,6 @@ export class PlanRulesService {
     }
     if (
       constraints.totalHours !== undefined &&
-      sheet.columns.includes("Target Total Hours") &&
       Math.abs(totalTargetHours - constraints.totalHours) > 0.01
     ) {
       throw new Error(
