@@ -10,6 +10,8 @@ export interface ProductionPlanProject {
   deadline: string;
   totalAssets: number;
   assumptions: string[];
+  /** Deterministic planning policy used to create and validate the schedule. */
+  planningModel?: string;
   projectCategory?: string;
   productionUnit?: string;
   feasibilityStatus?: string;

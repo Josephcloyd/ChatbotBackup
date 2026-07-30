@@ -113,6 +113,7 @@ test("builds image-based text capture plans from natural WhatsApp wording", () =
   assert.equal(plan.project.projectCategory, "data collection");
   assert.equal(plan.project.productionUnit, "images");
   assert.equal(plan.project.totalAssets, 350000);
+  assert.equal(plan.project.planningModel, "LPB Model");
   assert.match(plan.summary, /350,000 images/i);
   assert.ok(plan.project.assumptions.some((assumption) => /LPB Model/i.test(assumption)));
 
@@ -125,6 +126,56 @@ test("builds image-based text capture plans from natural WhatsApp wording", () =
   const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
   assert.ok(projectInfo?.rows.some((row) => row.Field === "Planning model" && row.Value === "LPB Model"));
   planRulesService.validate(plan, { currentDate, input: { projectDescription: description } });
+});
+
+test("applies LPB 20-50-30 workload allocation to the AEO social-post plan", () => {
+  const description =
+    "Create a production plan for our AEO Optimization Plan. The goal is to achieve the target number of social media posts engaged, so the main unit of measure for this production plan is number of posts. The target number of posts to be engaged is 20000 posts across different platforms which is expected to be completely achieved within 2.5 months starting today. Apply LPB Model.";
+  const constraints = extractRequestedConstraints(description, currentDate);
+  assert.equal(constraints.unitOfMeasure, "posts");
+  assert.equal(constraints.totalQuantity, 20000);
+  assert.deepEqual(constraints.duration, { value: 2.5, unit: "months" });
+  assert.equal(constraints.startDate, currentDate);
+  assert.equal(constraints.planningModel, "LPB Model");
+
+  const plan = dynamicPlan(description);
+  const production = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  const allocation = plan.workbook.sheets.find((sheet) => sheet.sheetName === "LPB Allocation");
+  assert.ok(production);
+  assert.ok(allocation);
+
+  const stageTotals = new Map([
+    ["LPB-L", 0],
+    ["LPB-P", 0],
+    ["LPB-B", 0],
+  ]);
+  for (const row of production!.rows) {
+    const stage = [...stageTotals.keys()].find((key) => String(row.Notes).includes(key));
+    assert.ok(stage);
+    stageTotals.set(stage, stageTotals.get(stage)! + Number(row["Target Posts"]));
+  }
+  assert.deepEqual(Object.fromEntries(stageTotals), {
+    "LPB-L": 4000,
+    "LPB-P": 10000,
+    "LPB-B": 6000,
+  });
+  assert.deepEqual(
+    allocation!.rows.map((row) => ({
+      stage: row.Stage,
+      percentage: row["Workload Share (%)"],
+      workload: row["Planned Workload"],
+    })),
+    [
+      { stage: "LPB-L", percentage: 20, workload: 4000 },
+      { stage: "LPB-P", percentage: 50, workload: 10000 },
+      { stage: "LPB-B", percentage: 30, workload: 6000 },
+    ],
+  );
+  planRulesService.validate(plan, {
+    currentDate,
+    input: { projectDescription: description },
+    requiredPlanningModel: "LPB Model",
+  });
 });
 
 test("treats approved video recording hours as output duration instead of labor hours", () => {
@@ -195,8 +246,22 @@ test("supports hours-only student enrollment encoding plans", () => {
 });
 
 test("uses LPB Model even when another planning model is named", () => {
-  const constraints = extractRequestedConstraints("Create a plan for 200 records using ABC model.", currentDate);
+  const description = "Create a plan for 200 records using ABC planning model.";
+  const constraints = extractRequestedConstraints(description, currentDate);
   assert.equal(constraints.planningModel, "LPB Model");
+
+  const customProposal = proposal();
+  customProposal.assumptions = [
+    "Use ABC model for the schedule.",
+    "Inputs are available before production starts.",
+  ];
+  customProposal.summary = "An ABC model schedule.";
+  const result = buildDynamicPlan({ projectDescription: description }, customProposal, currentDate);
+  assert.equal(result.settings.planningModel, "LPB Model");
+  assert.equal(result.plan.project.planningModel, "LPB Model");
+  assert.ok(result.plan.project.assumptions.some((assumption) => /LPB Model/i.test(assumption)));
+  assert.ok(result.plan.project.assumptions.every((assumption) => !/ABC model/i.test(assumption)));
+  assert.doesNotMatch(result.plan.summary, /ABC model/i);
 });
 
 test("builds schedules for custom working days only", () => {

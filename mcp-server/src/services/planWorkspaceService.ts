@@ -15,6 +15,7 @@ import {
   type ResolvedPlanningSettings,
 } from "./planningConstraintsService.js";
 import { planRulesService } from "./planRulesService.js";
+import { buildLpbDistribution } from "./lpbModelService.js";
 import { dynamicExcelService } from "./dynamicExcelService.js";
 import { excelService } from "./excelService.js";
 import { templateService } from "./templateService.js";
@@ -398,6 +399,7 @@ function estimateRecalculatedMetrics(metrics: PlanWorkspaceMetrics, changes: Pla
   let proposedDuration = next.durationValue;
   try {
     proposedDuration = buildScheduleDates({
+      planningModel: DEFAULT_PLANNING_MODEL,
       startDate: next.startDate,
       duration: { value: next.durationValue, unit: next.durationUnit },
       totalHours: next.totalHours,
@@ -429,6 +431,7 @@ function proposalWarnings(metrics: PlanWorkspaceMetrics, changes: PlanChangeProp
   let scheduledDays = next.durationValue;
   try {
     scheduledDays = buildScheduleDates({
+      planningModel: DEFAULT_PLANNING_MODEL,
       startDate: next.startDate,
       duration: { value: next.durationValue, unit: next.durationUnit },
       totalHours: next.totalHours,
@@ -843,13 +846,26 @@ function cellValue(value: unknown): ProductionPlanCellValue {
 }
 
 function applyDefaultPlanningModel(plan: ProductionPlan): void {
-  const modelAssumption = `Requested planning model preserved: ${DEFAULT_PLANNING_MODEL}.`;
-  const assumptions = [...(plan.project.assumptions ?? [])];
-  if (!assumptions.some((item) => /LPB Model/i.test(item))) assumptions.push(modelAssumption);
+  const modelAssumption = `Required planning model applied: ${DEFAULT_PLANNING_MODEL}.`;
+  const assumptions = (plan.project.assumptions ?? []).filter((item) =>
+    !/\bmodel\b/i.test(item) ||
+    item.toLowerCase().includes(DEFAULT_PLANNING_MODEL.toLowerCase())
+  );
+  if (!assumptions.some((item) => item.toLowerCase().includes(DEFAULT_PLANNING_MODEL.toLowerCase()))) {
+    assumptions.push(modelAssumption);
+  }
+  plan.project.planningModel = DEFAULT_PLANNING_MODEL;
   plan.project.assumptions = assumptions;
 
-  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
-  if (!projectInfo) return;
+  let projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  if (!projectInfo) {
+    projectInfo = {
+      sheetName: "Project Information",
+      columns: ["Field", "Value"],
+      rows: [],
+    };
+    plan.workbook.sheets.push(projectInfo);
+  }
 
   const planningModelRow = projectInfo.rows.find((row) => String(row.Field ?? "").toLowerCase() === "planning model");
   if (planningModelRow) {
@@ -882,6 +898,7 @@ export function applyProposalToPlanData(
   }
 
   const dates = buildScheduleDates({
+    planningModel: DEFAULT_PLANNING_MODEL,
     startDate: settings.startDate,
     duration: { value: settings.durationValue, unit: settings.durationUnit },
     totalHours: settings.totalHours,
@@ -896,11 +913,16 @@ export function applyProposalToPlanData(
   const perWorkerColumn = metrics.perWorkerColumn;
   const targetTotal = settings.totalQuantity ?? settings.totalHours;
   const targetDecimals = settings.totalQuantity ? 0 : 2;
-  const targetValues = distributeAmount(targetTotal, dates.length, targetDecimals);
-  const hourValues = distributeAmount(settings.totalHours, dates.length, 2);
+  const lpbDistribution = buildLpbDistribution(targetTotal, dates.length, targetDecimals);
+  const targetValues = lpbDistribution.daily.map((allocation) => allocation.target);
+  const hourValues = settings.totalQuantity
+    ? distributeAmount(settings.totalHours, dates.length, 2)
+    : targetValues;
+  const previousRows = sheet.rows;
 
   sheet.columns = columns;
   sheet.rows = dates.map((date, index) => {
+    const lpbDay = lpbDistribution.daily[index]!;
     const row: ProductionPlanRow = {};
     for (const column of columns) row[column] = "";
     if (columns.includes("No.")) row["No."] = index + 1;
@@ -922,9 +944,30 @@ export function applyProposalToPlanData(
     if (columns.includes("Total Variance")) row["Total Variance"] = "";
     if (columns.includes("Completion Rate (%)")) row["Completion Rate (%)"] = "";
     if (columns.includes("Status")) row.Status = "Not Started";
-    if (columns.includes("Notes")) row.Notes = cellValue(sheet.rows[index]?.Notes ?? `Revision ${nextRevisionNumber} recalculated target.`);
+    if (columns.includes("Notes")) {
+      const previousNote = cellValue(previousRows[index]?.Notes ?? `Revision ${nextRevisionNumber} recalculated target.`);
+      row.Notes = `[${lpbDay.stageLabel} ${lpbDay.workloadPercentage}%] ${String(previousNote)}`;
+    }
     return row;
   });
+  let allocationSheet = plan.workbook.sheets.find((item) => item.sheetName === "LPB Allocation");
+  if (!allocationSheet) {
+    allocationSheet = {
+      sheetName: "LPB Allocation",
+      columns: ["Stage", "Workload Share (%)", "Scheduled Days", "Start Date", "End Date", "Planned Workload", "Unit"],
+      rows: [],
+    };
+    plan.workbook.sheets.push(allocationSheet);
+  }
+  allocationSheet.rows = lpbDistribution.stages.map((stage) => ({
+    Stage: stage.stageLabel,
+    "Workload Share (%)": stage.workloadPercentage,
+    "Scheduled Days": stage.scheduledDays,
+    "Start Date": dates[stage.startIndex]!,
+    "End Date": dates[stage.endIndex]!,
+    "Planned Workload": stage.target,
+    Unit: settings.unitOfMeasure ?? plan.project.productionUnit ?? "hours",
+  }));
 
   const revisionNote = `Revision ${nextRevisionNumber}: ${proposal.requestSummary}`;
   const assumptions = [...(plan.project.assumptions ?? [])];
@@ -945,6 +988,7 @@ export function applyProposalToPlanData(
   applyDefaultPlanningModel(plan);
   plan.summary =
     `${plan.project.projectName || "Production plan"} revision ${nextRevisionNumber}: ${proposal.requestSummary}. ` +
+    `LPB workload shares: L 20%, P 50%, B 30%. ` +
     `Planned workload: ${targetTotal.toLocaleString()} ${plan.project.productionUnit ?? "hours"} ` +
     `from ${dates[0]} to ${dates.at(-1)} with ${settings.teamSize} resource(s).`;
 
@@ -952,6 +996,7 @@ export function applyProposalToPlanData(
   return planRulesService.validate(plan, {
     currentDate: validationDate,
     input: { projectDescription: validationDescription(settings) },
+    requiredPlanningModel: DEFAULT_PLANNING_MODEL,
   });
 }
 
@@ -978,6 +1023,7 @@ function extractRisks(plan: ProductionPlan): DynamicRisk[] {
 function dynamicResultFromPlan(plan: ProductionPlan): DynamicPlanResult {
   const metrics = extractPlanWorkspaceMetrics(plan);
   const settings: ResolvedPlanningSettings = {
+    planningModel: DEFAULT_PLANNING_MODEL,
     startDate: metrics.startDate,
     duration: { value: Math.max(metrics.workingDays, 1), unit: "days" },
     totalHours: metrics.totalHours || metrics.totalTarget || 1,

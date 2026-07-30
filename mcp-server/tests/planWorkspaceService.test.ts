@@ -102,6 +102,36 @@ test("builds per-worker total-hours proposal with recalculated metrics", () => {
   assert.equal(proposal.requiresConfirmation, true);
 });
 
+test("revises an existing plan to a half-month duration", () => {
+  const original = samplePlan();
+  const proposal = buildPlanChangeProposal(
+    "plan-1",
+    "revision-1",
+    original,
+    "Change the production duration to .5 months.",
+  );
+  assert.ok(proposal);
+  assert.ok(proposal.changes.some((change) =>
+    change.field === "planning.durationValue" && change.proposedValue === 0.5
+  ));
+  assert.ok(proposal.changes.some((change) =>
+    change.field === "planning.durationUnit" && change.proposedValue === "months"
+  ));
+  assert.equal(proposal.recalculatedMetrics?.proposedDuration, 11);
+
+  const revised = applyProposalToPlanData(original, proposal, 2, "2026-07-29");
+  const production = revised.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
+  const allocation = revised.workbook.sheets.find((sheet) => sheet.sheetName === "LPB Allocation");
+  assert.equal(production?.rows.length, 11);
+  assert.equal(production?.rows[0]?.Date, "2026-08-03");
+  assert.equal(production?.rows.at(-1)?.Date, "2026-08-17");
+  assert.equal(revised.project.deadline, "2026-08-17");
+  assert.deepEqual(
+    allocation?.rows.map((row) => row["Workload Share (%)"]),
+    [20, 50, 30],
+  );
+});
+
 test("applies proposal to a revised immutable plan data copy", () => {
   const original = samplePlan();
   const proposal = buildPlanChangeProposal(

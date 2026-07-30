@@ -5,11 +5,13 @@ import {
   resolvePlanningSettings,
 } from "./planningConstraintsService.js";
 import { isWeekday, parseIsoDate } from "./dateNormalizationService.js";
+import { buildLpbDistribution } from "./lpbModelService.js";
 export { extractRequestedConstraints } from "./planningConstraintsService.js";
 
 export interface PlanRuleOptions {
   currentDate: string;
   input: Pick<ProductionPlanInput, "projectDescription">;
+  requiredPlanningModel?: string;
 }
 
 function numericValue(row: ProductionPlanRow, column: string, rowNumber: number): number {
@@ -58,8 +60,79 @@ function splitIds(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function validatePlanningModel(plan: ProductionPlan, requiredPlanningModel: string): void {
+  if (plan.project.planningModel !== requiredPlanningModel) {
+    throw new Error(`Production plan must use ${requiredPlanningModel}`);
+  }
+
+  if (!plan.project.assumptions.some((assumption) =>
+    assumption.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  )) {
+    throw new Error(`Production plan assumptions must record ${requiredPlanningModel}`);
+  }
+  if (plan.project.assumptions.some((assumption) =>
+    /\bmodel\b/i.test(assumption) &&
+    !assumption.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  )) {
+    throw new Error(`Production plan assumptions conflict with ${requiredPlanningModel}`);
+  }
+  if (
+    /\bmodel\b/i.test(plan.summary) &&
+    !plan.summary.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  ) {
+    throw new Error(`Production plan summary conflicts with ${requiredPlanningModel}`);
+  }
+
+  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  const planningModelRow = projectInfo?.rows.find((row) =>
+    String(row.Field ?? "").trim().toLowerCase() === "planning model"
+  );
+  if (planningModelRow?.Value !== requiredPlanningModel) {
+    throw new Error(`Project Information must record ${requiredPlanningModel}`);
+  }
+}
+
+function validateLpbDistribution(plan: ProductionPlan, sheet: ProductionPlan["workbook"]["sheets"][number]): void {
+  const primaryTargetColumn = targetColumn(sheet.columns);
+  const decimalPlaces = /hours/i.test(primaryTargetColumn) ? 2 : 0;
+  const targets = sheet.rows.map((row, index) =>
+    numericValue(row, primaryTargetColumn, index + 1)
+  );
+  const totalWorkload = targets.reduce((sum, value) => sum + value, 0);
+  const expected = buildLpbDistribution(totalWorkload, sheet.rows.length, decimalPlaces);
+  const tolerance = decimalPlaces === 0 ? 0 : 0.001;
+
+  targets.forEach((target, index) => {
+    if (Math.abs(target - expected.daily[index]!.target) > tolerance) {
+      throw new Error(
+        `Production Plan row ${index + 1} does not follow the LPB 20%-50%-30% workload distribution`,
+      );
+    }
+  });
+
+  const allocationSheet = plan.workbook.sheets.find((item) => item.sheetName === "LPB Allocation");
+  if (!allocationSheet || allocationSheet.rows.length !== expected.stages.length) {
+    throw new Error("Production plan must include the LPB Allocation worksheet");
+  }
+  expected.stages.forEach((stage, index) => {
+    const row = allocationSheet.rows[index]!;
+    if (
+      row.Stage !== stage.stageLabel ||
+      Number(row["Workload Share (%)"]) !== stage.workloadPercentage ||
+      Number(row["Scheduled Days"]) !== stage.scheduledDays ||
+      Math.abs(Number(row["Planned Workload"]) - stage.target) > tolerance
+    ) {
+      throw new Error(`LPB Allocation row ${index + 1} does not match the required workload distribution`);
+    }
+  });
+}
+
 export class PlanRulesService {
   validate(plan: ProductionPlan, options: PlanRuleOptions): ProductionPlan {
+    if (options.requiredPlanningModel) {
+      validatePlanningModel(plan, options.requiredPlanningModel);
+    }
+
     const sheet = plan.workbook.sheets.find((item) => item.sheetName === "Production Plan");
     if (!sheet) return plan;
     if (sheet.rows.length === 0) {
@@ -183,6 +256,9 @@ export class PlanRulesService {
       throw new Error(
         `Requested ${constraints.totalHours} total hours but Production Plan targets sum to ${totalTargetHours}`,
       );
+    }
+    if (options.requiredPlanningModel === "LPB Model") {
+      validateLpbDistribution(plan, sheet);
     }
 
     const sheetNames = new Set(plan.workbook.sheets.map((item) => item.sheetName));
