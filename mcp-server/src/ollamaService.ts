@@ -21,6 +21,23 @@ export interface OllamaResponse {
   [key: string]: unknown;
 }
 
+export function buildOllamaGenerateRequestBody(prompt: string, model: string): string {
+  return JSON.stringify({
+    model,
+    prompt,
+    format: "json",
+    stream: false,
+    // Reasoning models such as Qwen3 can otherwise return only a `thinking`
+    // field and leave `response` empty, which is unusable for JSON parsing.
+    think: false,
+    options: {
+      temperature: 0.3,
+      top_p: 0.9,
+      num_predict: config.ollamaNumPredict,
+    },
+  });
+}
+
 /** Parse either one JSON response or a newline-delimited stream of JSON chunks. */
 export function parseOllamaResponseBody(rawBody: string): OllamaResponse[] {
   if (!rawBody.trim()) {
@@ -105,18 +122,7 @@ export async function generateWithOllama(prompt: string): Promise<string> {
   const modelToUse = await getAvailableOllamaModel();
   console.log(`[ollamaService] Sending prompt to ${modelToUse}...`);
 
-  const body = JSON.stringify({
-    model: modelToUse,
-    prompt,
-    format: "json",
-    stream: false,
-    think: false,
-    options: {
-      temperature: 0.3,   // low temp for structured JSON output
-      top_p: 0.9,
-      num_predict: config.ollamaNumPredict,
-    },
-  });
+  const body = buildOllamaGenerateRequestBody(prompt, modelToUse);
 
   const baseUrls = [
     config.ollamaBaseUrl,

@@ -5,7 +5,7 @@ Chatbot2ProPl is an early-stage production-planning assistant. Its working backe
 It supports two workbook modes:
 
 - `template` preserves and fills the official company workbook.
-- `dynamic` needs no external template and creates a professional workbook with an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation.
+- `dynamic` needs no external template and creates a professional workbook with prompt-specific semantic headers, an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation. The model may name domain columns such as `Records Assigned` or `Validators Scheduled`, while backend metadata keeps calculations independent of display labels.
 
 The repository now includes the Flowboard Next.js dashboard and a local WhatsApp Web demo bot.
 
@@ -117,7 +117,7 @@ To start both apps during the check:
 
 ## Supabase
 
-Apply `mcp-server/supabase/migrations/001_create_production_plans.sql` in the Supabase SQL editor or migration workflow. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
+Apply the SQL files in `mcp-server/supabase/migrations` in numeric order in the Supabase SQL editor or migration workflow. The current app expects the columns and tables added by `002_admin_dashboard_enhancements.sql`. Migration `004_repair_external_identity_column_types.sql` repairs older databases that stored WhatsApp IDs as UUIDs. Applying only `001_create_production_plans.sql` can make plan saves fail. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
 
 ## WhatsApp Web Demo Bot
 

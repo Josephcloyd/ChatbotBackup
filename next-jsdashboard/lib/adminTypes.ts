@@ -1,5 +1,13 @@
 export type CellValue = string | number | boolean | null;
 export type PlanRow = Record<string, CellValue>;
+export interface PlanColumnDefinition {
+  key: string;
+  label: string;
+  semantic: string;
+  dataType: "text" | "integer" | "decimal" | "date" | "percentage";
+  editable: boolean;
+  role?: string;
+}
 
 export type PlanStatus =
   | "draft"
@@ -25,7 +33,14 @@ export interface ProductionPlan {
     deadline: string;
     assumptions: string[];
   };
-  workbook: { sheets: Array<{ sheetName: string; rows: PlanRow[] }> };
+  workbook: {
+    sheets: Array<{
+      sheetName: string;
+      columns?: string[];
+      columnDefinitions?: PlanColumnDefinition[];
+      rows: PlanRow[];
+    }>;
+  };
   summary: string;
 }
 
@@ -66,12 +81,17 @@ export interface HistoryResponse {
   error?: string;
 }
 
+export type UserAccountStatus = "pending" | "active" | "inactive";
+
 export interface OperatorAccount {
   id: string;
   username: string;
+  email?: string;
+  displayName?: string;
   role: FrontendRole;
   databaseRole?: "admin" | "user";
   active?: boolean;
+  status?: UserAccountStatus;
   createdAt: string;
   updatedAt?: string;
   planCount?: number;

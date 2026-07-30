@@ -10,6 +10,10 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ProductionPlanOutput } from "./productionPrompt.js";
+import {
+  findColumnLabel,
+  getSemanticCell,
+} from "./services/productionPlanColumns.js";
 import type {
   PlanChangeProposal,
   PlanConversationMessage,
@@ -148,12 +152,29 @@ export function buildPlanRecord(
   const productionRows = plan.workbook.sheets.find(
     (sheet) => sheet.sheetName === "Production Plan",
   )?.rows ?? [];
+  const productionSheet = plan.workbook.sheets.find(
+    (sheet) => sheet.sheetName === "Production Plan",
+  );
   const startDate = plan.project.startDate || null;
   const endDate = plan.project.deadline || null;
-  const recommendedTeamSize = productionRows.reduce(
-    (largest, row) => Math.max(largest, numberValue(row["Target Active Annotators"])),
-    0,
-  );
+  const recommendedTeamSize = productionSheet
+    ? productionRows.reduce(
+        (largest, row) =>
+          Math.max(largest, numberValue(getSemanticCell(row, productionSheet, "planned_staff"))),
+        0,
+      )
+    : 0;
+  const plannedHoursColumn = productionSheet
+    ? (
+        findColumnLabel(
+          productionSheet,
+          plan.project.productionUnit && plan.project.productionUnit !== "hours"
+            ? "planned_hours"
+            : "planned_output",
+        ) ??
+        findColumnLabel(productionSheet, "planned_output")
+      )
+    : undefined;
 
   return {
     whatsapp_user_id: whatsappUserId,
@@ -164,10 +185,12 @@ export function buildPlanRecord(
       name: sheet.sheetName,
       rowCount: sheet.rows.length,
     })),
-    total_hours_estimate: productionRows.reduce(
-      (total, row) => total + numberValue(row["Target Total Hours"]),
-      0,
-    ),
+    total_hours_estimate: plannedHoursColumn
+      ? productionRows.reduce(
+          (total, row) => total + numberValue(row[plannedHoursColumn]),
+          0,
+        )
+      : 0,
     recommended_team_size: recommendedTeamSize,
     key_risks: plan.project.assumptions,
     next_steps: [],
@@ -231,6 +254,81 @@ export function createServiceRoleClient(): SupabaseClient {
   });
 }
 
+function getObjectField(error: unknown, field: string): string | undefined {
+  if (typeof error !== "object" || error === null || !(field in error)) {
+    return undefined;
+  }
+
+  const value = (error as Record<string, unknown>)[field];
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function inferSupabaseSetupHint(error: unknown): string | undefined {
+  const message = getObjectField(error, "message") ?? "";
+  const code = getObjectField(error, "code") ?? "";
+  const details = getObjectField(error, "details") ?? "";
+  const combined = `${message} ${code} ${details}`.toLowerCase();
+
+  if (
+    combined.includes("plan_generation_runs") ||
+    combined.includes("plan_files") ||
+    combined.includes("user_roles") ||
+    combined.includes("workbook_mode") ||
+    combined.includes("generation_source") ||
+    combined.includes("progress_percentage") ||
+    combined.includes("schema cache") ||
+    code === "42P01" ||
+    code === "PGRST204" ||
+    code === "PGRST205"
+  ) {
+    return "Apply mcp-server/supabase/migrations/002_admin_dashboard_enhancements.sql, then reload the Supabase schema cache if the error persists.";
+  }
+
+  if (
+    code === "22P02" &&
+    combined.includes("invalid input syntax") &&
+    combined.includes("uuid")
+  ) {
+    return "Apply mcp-server/supabase/migrations/004_repair_external_identity_column_types.sql. WhatsApp user and group IDs must be stored as text, not uuid.";
+  }
+
+  if (code === "42501" || combined.includes("permission denied")) {
+    return "Confirm mcp-server/.env uses the Supabase service-role key, not the anon key.";
+  }
+
+  return undefined;
+}
+
+export function formatSupabaseError(prefix: string, error: unknown): string {
+  const explicitHint = getObjectField(error, "hint");
+  const inferredHint = explicitHint ? undefined : inferSupabaseSetupHint(error);
+  const parts = [
+    getObjectField(error, "message") ?? describeUnknownError(error),
+    getObjectField(error, "code") ? `code=${getObjectField(error, "code")}` : undefined,
+    getObjectField(error, "details") ? `details=${getObjectField(error, "details")}` : undefined,
+    explicitHint ? `hint=${explicitHint}` : undefined,
+    inferredHint ? `hint=${inferredHint}` : undefined,
+    getObjectField(error, "status") ? `status=${getObjectField(error, "status")}` : undefined,
+  ].filter(Boolean);
+
+  return `${prefix}: ${parts.join("; ")}`;
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -256,11 +354,7 @@ export async function savePlan(
     .single();
 
   if (error) {
-    try {
-      const fs = await import("node:fs");
-      fs.appendFileSync("c:/Users/User/Documents/College Files/Software Development 2/Github/ChatbotBackup/mcp-server/debug_save_error.log", `[${new Date().toISOString()}] ERROR: ${error.message} (${error.code})\nRecord: ${JSON.stringify(record, null, 2)}\n\n`);
-    } catch (e) {}
-    throw new Error(`Supabase insert failed: ${error.message} (${error.code})`);
+    throw new Error(formatSupabaseError("Supabase insert failed", error));
   }
 
   console.log(`[supabaseService] Plan saved with ID: ${data.id}`);
@@ -284,7 +378,7 @@ export async function getLatestPlan(
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Supabase query failed: ${error.message}`);
+    throw new Error(formatSupabaseError("Supabase query failed", error));
   }
 
   return data as PlanRecord | null;
@@ -306,7 +400,7 @@ export async function getRecentPlans(
 
   if (whatsappUserId) query = query.eq("whatsapp_user_id", whatsappUserId);
   const { data, error } = await query;
-  if (error) throw new Error(`Supabase query failed: ${error.message}`);
+  if (error) throw new Error(formatSupabaseError("Supabase query failed", error));
   return (data ?? []) as PlanRecord[];
 }
 
@@ -368,7 +462,7 @@ export async function uploadWorkbookAndCreateSignedUrl(
     });
 
   if (uploadError) {
-    throw new Error(`Supabase workbook upload failed: ${uploadError.message}`);
+    throw new Error(formatSupabaseError("Supabase workbook upload failed", uploadError));
   }
 
   const { data, error: signedUrlError } = await supabase.storage
@@ -379,7 +473,9 @@ export async function uploadWorkbookAndCreateSignedUrl(
 
   if (signedUrlError || !data?.signedUrl) {
     throw new Error(
-      `Supabase signed URL creation failed: ${signedUrlError?.message ?? "No signed URL returned"}`,
+      signedUrlError
+        ? formatSupabaseError("Supabase signed URL creation failed", signedUrlError)
+        : "Supabase signed URL creation failed: No signed URL returned",
     );
   }
 
@@ -402,7 +498,7 @@ export async function getPlanById(planId: string): Promise<PlanRecord | null> {
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Supabase query failed: ${error.message}`);
+    throw new Error(formatSupabaseError("Supabase query failed", error));
   }
 
   return data as PlanRecord | null;
@@ -473,11 +569,14 @@ export async function deletePlan(planId: string): Promise<void> {
       if (paths.length === 0) continue;
       const { error: removeError } = await supabase.storage.from(bucket).remove(paths);
       if (removeError) {
-        throw new Error(`Failed to delete workbook files for plan ${planId}: ${removeError.message}`);
+        throw new Error(formatSupabaseError(`Failed to delete workbook files for plan ${planId}`, removeError));
       }
     }
   } else {
-    console.warn("[supabaseService] Could not inspect plan_files before deleting plan:", filesError.message);
+    console.warn(
+      "[supabaseService] Could not inspect plan_files before deleting plan:",
+      formatSupabaseError("Supabase query failed", filesError),
+    );
   }
 
   const { error } = await supabase
@@ -486,7 +585,7 @@ export async function deletePlan(planId: string): Promise<void> {
     .eq("id", planId);
 
   if (error) {
-    throw new Error(`Failed to delete plan ${planId} from Supabase: ${error.message}`);
+    throw new Error(formatSupabaseError(`Failed to delete plan ${planId} from Supabase`, error));
   }
 }
 
@@ -583,7 +682,7 @@ export async function updatePlan(planId: string, updates: Record<string, unknown
     .single();
 
   if (error) {
-    throw new Error(`Failed to update plan ${planId} in Supabase: ${error.message}`);
+    throw new Error(formatSupabaseError(`Failed to update plan ${planId} in Supabase`, error));
   }
 
   return data as PlanRecord;
@@ -636,7 +735,7 @@ export async function updatePlanReviewStatus(
     .single();
 
   if (error) {
-    throw new Error(`Failed to update plan status ${planId} in Supabase: ${error.message}`);
+    throw new Error(formatSupabaseError(`Failed to update plan status ${planId} in Supabase`, error));
   }
 
   return data as PlanRecord;
@@ -650,7 +749,7 @@ export async function reassignPlans(fromUsername: string, toUsername: string): P
     .eq("whatsapp_user_id", fromUsername);
 
   if (error) {
-    throw new Error(`Failed to reassign plans from ${fromUsername} to ${toUsername}: ${error.message}`);
+    throw new Error(formatSupabaseError(`Failed to reassign plans from ${fromUsername} to ${toUsername}`, error));
   }
 }
 
@@ -662,7 +761,7 @@ export async function countPlansForUser(username: string): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("whatsapp_user_id", username);
 
-  if (error) throw new Error(`Failed to count plans for ${username}: ${error.message}`);
+  if (error) throw new Error(formatSupabaseError(`Failed to count plans for ${username}`, error));
   return count ?? 0;
 }
 
@@ -675,7 +774,7 @@ export async function listPlanFiles(planId: string): Promise<PlanFileRecord[]> {
     .order("version", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(`Failed to list plan files: ${error.message}`);
+  if (error) throw new Error(formatSupabaseError("Failed to list plan files", error));
   return (data ?? []) as PlanFileRecord[];
 }
 
@@ -889,7 +988,7 @@ export async function recordPlanFile(
     if (error) throw error;
     return data as PlanFileRecord;
   } catch (error) {
-    console.error("[supabaseService] Failed to record plan file:", error instanceof Error ? error.message : String(error));
+    console.error("[supabaseService] Failed to record plan file:", formatSupabaseError("Supabase plan file insert failed", error));
     return null;
   }
 }
@@ -941,7 +1040,7 @@ export async function createGenerationRun(input: {
     if (error) throw error;
     return data.id as string;
   } catch (error) {
-    console.error("[supabaseService] Failed to create generation run:", error instanceof Error ? error.message : String(error));
+    console.error("[supabaseService] Failed to create generation run:", formatSupabaseError("Supabase generation run insert failed", error));
     return null;
   }
 }
@@ -959,7 +1058,7 @@ export async function completeGenerationRun(
       .eq("id", runId);
     if (error) throw error;
   } catch (error) {
-    console.error("[supabaseService] Failed to complete generation run:", error instanceof Error ? error.message : String(error));
+    console.error("[supabaseService] Failed to complete generation run:", formatSupabaseError("Supabase generation run update failed", error));
   }
 }
 
@@ -984,7 +1083,7 @@ export async function listGenerationRuns(filters: {
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(`Failed to list generation runs: ${error.message}`);
+  if (error) throw new Error(formatSupabaseError("Failed to list generation runs", error));
   return (data ?? []) as PlanGenerationRunRecord[];
 }
 

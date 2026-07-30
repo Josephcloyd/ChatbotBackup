@@ -243,6 +243,132 @@ test("writes a styled template-free workbook with formulas and all dynamic sheet
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("uses prompt-specific schedule headers without breaking formulas", async () => {
+  const recordsDescription =
+    "Process 20,000 records over 90 calendar days starting 2026-08-03 using 25 Recorders and 5 Validators. Work only on weekdays.";
+  const recordsProposal: DynamicPlanProposal = {
+    ...proposal,
+    projectName: "Records Processing",
+    totalAssets: 20000,
+    planningSettings: {
+      startDate: "2026-08-03",
+      durationValue: 90,
+      durationUnit: "days",
+      weekdaysOnly: true,
+      totalHours: 15360,
+      teamSize: 30,
+      hoursPerDay: 8,
+      throughputRate: 1.31,
+    },
+    roles: [
+      { roleName: "Recorder", headcount: 25 },
+      { roleName: "Validator", headcount: 5 },
+    ],
+    workbookDesign: {
+      columns: [
+        { label: "Work Date", semantic: "date" },
+        { label: "Total Staff Scheduled", semantic: "planned_staff" },
+        { label: "Records Assigned", semantic: "planned_output" },
+        { label: "Records per Scheduled Employee", semantic: "planned_output_per_person" },
+        { label: "Staff Present", semantic: "actual_staff" },
+        { label: "Records Completed", semantic: "actual_output" },
+        { label: "Records per Staff Member", semantic: "actual_output_per_person" },
+        { label: "Planned Labor Hours", semantic: "planned_hours" },
+        { label: "Actual Labor Hours", semantic: "actual_hours" },
+        { label: "Daily Record Variance", semantic: "variance" },
+        { label: "Record Completion (%)", semantic: "completion_rate" },
+        { label: "Workflow Stage", semantic: "phase" },
+        { label: "Recorders Scheduled", semantic: "role_headcount", role: "Recorder" },
+        { label: "Validators Scheduled", semantic: "role_headcount", role: "Validator" },
+      ],
+    },
+  };
+
+  const result = buildDynamicPlan(
+    { projectDescription: recordsDescription },
+    recordsProposal,
+    "2026-07-29",
+  );
+  const schedule = result.plan.workbook.sheets.find(
+    (sheet) => sheet.sheetName === "Production Plan",
+  )!;
+  assert.ok(schedule.columns.includes("Records Assigned"));
+  assert.ok(schedule.columns.includes("Recorders Scheduled"));
+  assert.ok(schedule.columns.includes("Validators Scheduled"));
+  assert.equal(schedule.rows[0]?.["Recorders Scheduled"], 25);
+  assert.equal(schedule.rows[0]?.["Validators Scheduled"], 5);
+  assert.equal(
+    schedule.rows.reduce(
+      (sum, row) => sum + Number(row["Records Assigned"] ?? 0),
+      0,
+    ),
+    20000,
+  );
+  assert.equal(
+    schedule.columnDefinitions?.find(
+      (column) => column.semantic === "planned_output",
+    )?.label,
+    "Records Assigned",
+  );
+
+  new PlanRulesService().validate(result.plan, {
+    currentDate: "2026-07-29",
+    input: { projectDescription: recordsDescription },
+  });
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), "dynamic-headers-"));
+  try {
+    const outputPath = path.join(directory, "records.xlsx");
+    await new DynamicExcelService(directory).writeDynamicProductionPlan(result, outputPath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(outputPath);
+    const worksheet = workbook.getWorksheet("Production Plan")!;
+    const headers = (worksheet.getRow(1).values as unknown[]).map(String);
+    const targetColumnNumber = headers.indexOf("Records Assigned");
+    const perPersonColumnNumber = headers.indexOf("Records per Scheduled Employee");
+    const staffColumnNumber = headers.indexOf("Total Staff Scheduled");
+    assert.ok(targetColumnNumber > 0);
+    assert.equal(
+      worksheet.getCell(2, perPersonColumnNumber).formula,
+      `IFERROR(${worksheet.getColumn(targetColumnNumber).letter}2/${worksheet.getColumn(staffColumnNumber).letter}2,0)`,
+    );
+    assert.equal(
+      worksheet.getCell(2, headers.indexOf("Recorders Scheduled")).value,
+      25,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("derives role-specific headers when the model omits workbook design", () => {
+  const roleProposal: DynamicPlanProposal = {
+    ...proposal,
+    totalAssets: 20000,
+    planningSettings: {
+      ...proposal.planningSettings,
+      teamSize: 30,
+    },
+    roles: [
+      { roleName: "Recorder", headcount: 25 },
+      { roleName: "Validator", headcount: 5 },
+    ],
+  };
+  const result = buildDynamicPlan(
+    { projectDescription: "Process 20,000 records using Recorders and Validators." },
+    roleProposal,
+    "2026-07-29",
+  );
+  const schedule = result.plan.workbook.sheets[0]!;
+
+  assert.ok(schedule.columns.includes("Total Staff Scheduled"));
+  assert.ok(schedule.columns.includes("Recorders Scheduled"));
+  assert.ok(schedule.columns.includes("Validators Scheduled"));
+  assert.equal(schedule.rows[0]?.["Recorders Scheduled"], 25);
+  assert.equal(schedule.rows[0]?.["Validators Scheduled"], 5);
+});
+
 test("derives stored hour and team estimates from production targets", () => {
   const request = "Create a production plan for 3 members with 120 total hours over 3 weeks, weekdays only.";
   const constraints = extractRequestedConstraints(request);

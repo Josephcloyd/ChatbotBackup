@@ -155,3 +155,89 @@ test("auto-expands sample rows and rejects incorrect target-hour totals", () => 
     /targets sum to 7/,
   );
 });
+
+test("auto-expands LPB sample rows with weighted phases and explicit start date", () => {
+  const rules = new PlanRulesService();
+  const description =
+    "Create a production plan for Image Text collection for Siri AI Text data training. The main unit of measure for the production is: number of images. The total number images would equal to 350000 images, with a timeframe of 6 months. The start date is April 3, 2026. Apply LPB model.";
+  const plan: ProductionPlan = {
+    project: {
+      projectName: "Siri Image Text Collection",
+      projectDescription: description,
+      client: "",
+      startDate: "2026-07-29",
+      deadline: "2027-01-28",
+      totalAssets: 350000,
+      assumptions: [],
+    },
+    workbook: {
+      sheets: [
+        {
+          sheetName: "Production Plan",
+          columns: [
+            "No.",
+            "Date",
+            "Month",
+            "Day",
+            "Target Active Annotators",
+            "Target Images",
+            "Target Images per Annotator",
+            "Actual Active Annotators",
+            "Actual Images",
+            "Actual Images per Annotator",
+            "Target Hours",
+            "Actual Hours",
+            "Total Variance",
+            "Completion Rate (%)",
+            "Status",
+            "LPB Phase",
+            "Expected Completion %",
+            "Notes",
+          ],
+          rows: [
+            {
+              "No.": 1,
+              Date: "2026-07-29",
+              Month: "Jul 2026",
+              Day: "Wed",
+              "Target Active Annotators": 1,
+              "Target Images": 2652,
+              "Target Images per Annotator": 2652,
+              "Actual Active Annotators": "",
+              "Actual Images": "",
+              "Actual Images per Annotator": "",
+              "Target Hours": 1.21,
+              "Actual Hours": "",
+              "Total Variance": "",
+              "Completion Rate (%)": "",
+              Status: "Not Started",
+              "LPB Phase": "Learning",
+              "Expected Completion %": "",
+              Notes: "Training day: onboarding, process familiarization, calibration, and coached starter production",
+            },
+          ],
+        },
+      ],
+    },
+    summary: "Sample plan.",
+  };
+
+  const validated = rules.validate(plan, {
+    currentDate: "2026-07-29",
+    input: { projectDescription: description },
+  });
+  const production = validated.workbook.sheets[0]!;
+  assert.equal(production.rows[0]?.Date, "2026-04-03");
+  assert.equal(production.rows.at(-1)?.["Expected Completion %"], 100);
+
+  const phaseTotals = production.rows.reduce<Record<string, number>>((totals, row) => {
+    const phase = String(row["LPB Phase"] ?? "");
+    totals[phase] = (totals[phase] ?? 0) + Number(row["Target Images"] ?? 0);
+    return totals;
+  }, {});
+  assert.equal(phaseTotals.Learning, 70000);
+  assert.equal(phaseTotals.Performing, 175000);
+  assert.equal(phaseTotals.Breakthrough, 105000);
+  assert.ok(production.rows.some((row) => /Full-production day/i.test(String(row.Notes))));
+  assert.ok(production.rows.some((row) => /Final validation day/i.test(String(row.Notes))));
+});

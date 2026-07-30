@@ -42,11 +42,12 @@ async function createSignature(value: string): Promise<string> {
 export interface SessionPayload {
   id?: string;
   username: string;
+  displayName?: string;
   role: "admin" | "operator";
 }
 
-export async function createSessionToken(username: string, role: string, id?: string): Promise<string> {
-  const payload: SessionPayload = { id, username, role: role === "admin" ? "admin" : "operator" };
+export async function createSessionToken(username: string, role: string, id?: string, displayName?: string): Promise<string> {
+  const payload: SessionPayload = { id, username, displayName, role: role === "admin" ? "admin" : "operator" };
   const serialized = JSON.stringify(payload);
   const base64Payload = btoa(unescape(encodeURIComponent(serialized)))
     .replaceAll("+", "-")

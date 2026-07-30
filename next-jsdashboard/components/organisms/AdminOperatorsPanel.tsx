@@ -5,12 +5,14 @@ import type { FrontendRole, OperatorAccount } from "../../lib/adminTypes";
 
 interface AdminOperatorsPanelProps {
   operators: OperatorAccount[];
-  currentUser: { id?: string; username: string; role: FrontendRole };
+  currentUser: { id?: string; username: string; displayName?: string; role: FrontendRole };
   onDeleteOperator: (op: OperatorAccount) => void;
   onUpdateOperator: (
     op: OperatorAccount,
     updates: { role?: FrontendRole; active?: boolean },
   ) => void;
+  newEmail: string;
+  setNewEmail: (val: string) => void;
   newUsername: string;
   setNewUsername: (val: string) => void;
   newPassword: string;
@@ -18,6 +20,8 @@ interface AdminOperatorsPanelProps {
   newRole: FrontendRole;
   setNewRole: (val: FrontendRole) => void;
   handleCreateOperator: (e: React.FormEvent) => void;
+  notification?: { type: "success" | "error"; message: string } | null;
+  onClearNotification?: () => void;
 }
 
 function displayDate(value: string | undefined): string {
@@ -29,6 +33,8 @@ export function AdminOperatorsPanel({
   currentUser,
   onDeleteOperator,
   onUpdateOperator,
+  newEmail,
+  setNewEmail,
   newUsername,
   setNewUsername,
   newPassword,
@@ -36,9 +42,29 @@ export function AdminOperatorsPanel({
   newRole,
   setNewRole,
   handleCreateOperator,
+  notification,
+  onClearNotification,
 }: AdminOperatorsPanelProps) {
   return (
     <section className="admin-operators-grid">
+      {notification && (
+        <div className={`admin-notification-banner ${notification.type}`}>
+          <span>
+            {notification.type === "success" ? "✓ " : "⚠ "}
+            {notification.message}
+          </span>
+          {onClearNotification && (
+            <button
+              type="button"
+              className="banner-close-btn"
+              onClick={onClearNotification}
+              aria-label="Close notification"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
       <form
         onSubmit={handleCreateOperator}
         className="schedule-card admin-form-card"
@@ -48,11 +74,24 @@ export function AdminOperatorsPanel({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr auto",
+            gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
             gap: "12px",
             alignItems: "end",
           }}
         >
+          <div className="form-group-compact" style={{ margin: 0 }}>
+            <label htmlFor="new-email">Email Address</label>
+            <input
+              id="new-email"
+              type="email"
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
+              required
+              placeholder="user@example.com"
+              className="input-atom editable-placeholder-field"
+            />
+          </div>
+
           <div className="form-group-compact" style={{ margin: 0 }}>
             <label htmlFor="new-username">Username</label>
             <input
@@ -66,14 +105,14 @@ export function AdminOperatorsPanel({
           </div>
 
           <div className="form-group-compact" style={{ margin: 0 }}>
-            <label htmlFor="new-password">Password</label>
+            <label htmlFor="new-password">Temporary Password</label>
             <input
               id="new-password"
               type="password"
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               required
-              placeholder="Enter temporary password"
+              placeholder="Set temporary password"
               className="input-atom editable-placeholder-field"
             />
           </div>
@@ -88,13 +127,18 @@ export function AdminOperatorsPanel({
               }
               className="select-atom editable-placeholder-field"
             >
-              <option value="operator">Operator (stored as DB user)</option>
+              <option value="operator">Operator</option>
               <option value="admin">Administrator</option>
             </select>
           </div>
 
-          <Button type="submit">Create User Account</Button>
+          <Button type="submit">Invite</Button>
         </div>
+
+        <p style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
+          An invitation email will be sent to the specified address. The user must
+          click the link and change their temporary password before signing in.
+        </p>
       </form>
 
       <div className="schedule-card" style={{ padding: "24px" }}>
@@ -106,18 +150,17 @@ export function AdminOperatorsPanel({
         </div>
 
         <div className="table-scroll admin-table-scroll">
-          <table className="admin-table admin-operators-table">
+          <table className="admin-table admin-operators-table" style={{ minWidth: 850 }}>
             <thead>
               <tr>
-                <th>Username</th>
-                <th style={{ width: "160px" }}>Role</th>
-                <th style={{ width: "100px" }}>Status</th>
-                <th>Plans</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th className="text-right" style={{ width: "200px" }}>
-                  Actions
-                </th>
+                <th style={{ minWidth: 120 }}>Username</th>
+                <th style={{ minWidth: 180, maxWidth: 240 }}>Email</th>
+                <th style={{ width: 120 }}>Role</th>
+                <th style={{ width: 90 }}>Status</th>
+                <th style={{ width: 60 }}>Plans</th>
+                <th style={{ width: 110 }}>Created</th>
+                <th style={{ width: 110 }}>Updated</th>
+                <th style={{ width: 190, textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -127,11 +170,29 @@ export function AdminOperatorsPanel({
                   op.id === currentUser.id;
                 return (
                   <tr key={op.id}>
-                    <td className="font-bold">{op.username}</td>
-                    <td>
+                    <td
+                      className="font-bold"
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      {op.username}
+                    </td>
+                    <td
+                      style={{
+                        color: "var(--muted)",
+                        fontSize: 12,
+                        maxWidth: 220,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={op.email ?? undefined}
+                    >
+                      {op.email ?? "—"}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
                       <select
                         className="select-atom compact-select"
-                        style={{ width: "100%", maxWidth: 140 }}
+                        style={{ width: "fit-content", minWidth: 95 }}
                         value={op.role}
                         disabled={isSelf}
                         onChange={(event) =>
@@ -145,46 +206,74 @@ export function AdminOperatorsPanel({
                         <option value="operator">Operator</option>
                         <option value="admin">Admin</option>
                       </select>
-                      <small
-                        className="db-role-note"
-                        style={{ color: "var(--muted)", fontSize: 10 }}
-                      >
-                        DB: {op.role === "admin" ? "admin" : "user"}
-                      </small>
                     </td>
-                    <td>
-                      <span
-                        className={`compact-badge ${op.active === false ? "status-archived" : "status-approved"}`}
-                      >
-                        {op.active === false ? "inactive" : "active"}
-                      </span>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const status = op.status ?? (op.active === false ? "inactive" : "active");
+                        const badgeClass =
+                          status === "pending"
+                            ? "status-pending"
+                            : status === "inactive"
+                            ? "status-archived"
+                            : "status-approved";
+                        const statusLabel =
+                          status === "pending"
+                            ? "Pending"
+                            : status === "inactive"
+                            ? "Inactive"
+                            : "Active";
+                        return (
+                          <span className={`compact-badge ${badgeClass}`}>
+                            {statusLabel}
+                          </span>
+                        );
+                      })()}
                     </td>
-                    <td>{Number(op.planCount ?? 0).toLocaleString()}</td>
-                    <td>{displayDate(op.createdAt)}</td>
-                    <td>{displayDate(op.updatedAt)}</td>
+                    <td style={{ textAlign: "center" }}>
+                      {Number(op.planCount ?? 0).toLocaleString()}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap", paddingRight: 16 }}>
+                      {displayDate(op.createdAt)}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {displayDate(op.updatedAt)}
+                    </td>
                     <td className="text-right actions-cell">
-                      <button
-                        className={`action-btn-text ${op.active === false ? "edit-btn" : ""}`}
-                        onClick={() =>
-                          onUpdateOperator(op, { active: op.active === false })
-                        }
-                        disabled={isSelf}
-                        title={
-                          op.active === false
-                            ? "Activate user"
-                            : "Deactivate user"
-                        }
-                      >
-                        {op.active === false ? "Activate" : "Deactivate"}
-                      </button>
+                      {(() => {
+                        const status = op.status ?? (op.active === false ? "inactive" : "active");
+                        const isInactive = status === "inactive";
+                        const isPending = status === "pending";
+                        const actionText = isPending ? "Activate" : isInactive ? "Reactivate" : "Deactivate";
+                        const btnClass = isInactive || isPending ? "edit-btn" : "deactivate-btn";
+                        return (
+                          <button
+                            className={`action-btn-text ${btnClass}`}
+                            onClick={() =>
+                              onUpdateOperator(op, { active: isInactive || isPending })
+                            }
+                            disabled={isSelf}
+                            title={
+                              isPending
+                                ? "Activate this user account manually"
+                                : isInactive
+                                ? "Reactivate this user account"
+                                : "Deactivate this user account"
+                            }
+                          >
+                            {actionText}
+                          </button>
+                        );
+                      })()}
                       <button
                         className="action-btn delete-btn"
                         onClick={() => onDeleteOperator(op)}
                         disabled={isSelf || Number(op.planCount ?? 0) > 0}
                         title={
-                          Number(op.planCount ?? 0) > 0
-                            ? "Reassign plans before deleting"
-                            : "Delete user"
+                          isSelf
+                            ? "You cannot delete your own account"
+                            : Number(op.planCount ?? 0) > 0
+                            ? "Reassign this user's plans before deleting"
+                            : "Permanently delete this user account"
                         }
                       >
                         <Icon name="trash" />
@@ -195,7 +284,7 @@ export function AdminOperatorsPanel({
               })}
               {operators.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted p-4">
+                  <td colSpan={8} className="text-center text-muted p-4">
                     No users found.
                   </td>
                 </tr>

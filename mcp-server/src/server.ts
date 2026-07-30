@@ -22,9 +22,13 @@ import {
   listGenerationRuns,
   updatePlanReviewStatus,
 } from "./supabaseService.js";
-import { verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername } from "./services/userService.js";
+import { DEFAULT_OPERATOR_USERNAME, verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername, confirmInvitePassword } from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
+import {
+  findColumnLabel,
+  getSemanticCell,
+} from "./services/productionPlanColumns.js";
 import {
   applyPlanWorkspaceProposal,
   comparePlanWorkspaceRevisions,
@@ -245,6 +249,32 @@ export function createApp() {
     }
   });
 
+  app.post("/api/auth/confirm-invite", async (req: Request, res: Response) => {
+    try {
+      const { identifier, temporaryPassword, newPassword } = req.body;
+      if (
+        typeof identifier !== "string" || !identifier.trim() ||
+        typeof temporaryPassword !== "string" || !temporaryPassword.trim() ||
+        typeof newPassword !== "string" || !newPassword.trim()
+      ) {
+        res.status(400).json({ success: false, error: "Email/username, temporary password, and new password are required." });
+        return;
+      }
+      if (newPassword.trim().length < 6) {
+        res.status(400).json({ success: false, error: "New password must be at least 6 characters long." });
+        return;
+      }
+      const user = await confirmInvitePassword(identifier.trim(), temporaryPassword, newPassword.trim());
+      res.json({ success: true, user });
+    } catch (error) {
+      console.error("[server] Error confirming invitation password:", error);
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to confirm invitation and update password.",
+      });
+    }
+  });
+
   app.get("/api/operators", async (_req: Request, res: Response) => {
     try {
       const users = await listUsers();
@@ -267,18 +297,31 @@ export function createApp() {
 
   app.post("/api/operators", async (req: Request, res: Response) => {
     try {
-      const { username, password, role } = req.body;
-      if (typeof username !== "string" || typeof password !== "string") {
-        res.status(400).json({ success: false, error: "Username and password required." });
+      const { email, username, password, role } = req.body;
+      if (typeof email !== "string" || !email.trim()) {
+        res.status(400).json({ success: false, error: "A valid email address is required." });
+        return;
+      }
+      if (typeof username !== "string" || !username.trim()) {
+        res.status(400).json({ success: false, error: "Username is required." });
+        return;
+      }
+      if (typeof password !== "string" || !password.trim()) {
+        res.status(400).json({ success: false, error: "A temporary password is required." });
         return;
       }
       const operatorRole = role === "admin" ? "admin" : "operator";
-      const user = await createUser(username, password, operatorRole);
+      const user = await createUser(email.trim(), username.trim(), password, operatorRole);
       res.json({ success: true, user });
     } catch (error) {
+      console.error("[server] Error creating operator:", error);
+      const rawError = error instanceof Error ? error.message : "Failed to create operator";
+      const userFacingError = rawError === "fetch failed"
+        ? "Unable to reach Supabase Auth server. Please check your network connection or Supabase settings."
+        : rawError;
       res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create operator",
+        error: userFacingError,
       });
     }
   });
@@ -581,10 +624,37 @@ export function createApp() {
         const plan = planRecord.raw_plan;
         const productionSheet = plan.workbook.sheets.find((sheet: any) => sheet.sheetName === "Production Plan");
         const planRows = productionSheet?.rows || [];
-        const totalHours = planRows.reduce((sum: number, r: any) => sum + Number(r["Target Total Hours"] || r["Target Hours"] || 0), 0);
-        const teamSize = Math.max(...planRows.map((r: any) => Number(r["Target Active Annotators"] || 1)), 1);
+        const plannedHoursLabel = productionSheet
+          ? (
+              findColumnLabel(
+                productionSheet,
+                plan.project.productionUnit && plan.project.productionUnit !== "hours"
+                  ? "planned_hours"
+                  : "planned_output",
+              ) ??
+              findColumnLabel(productionSheet, "planned_output")
+            )
+          : undefined;
+        const totalHours = planRows.reduce(
+          (sum: number, row: any) =>
+            sum + Number(plannedHoursLabel ? row[plannedHoursLabel] : 0),
+          0,
+        );
+        const teamSize = Math.max(
+          ...planRows.map((row: any) =>
+            Number(
+              productionSheet
+                ? getSemanticCell(row, productionSheet, "planned_staff") ?? 1
+                : 1,
+            ),
+          ),
+          1,
+        );
+        const dayLabel = productionSheet
+          ? findColumnLabel(productionSheet, "day")
+          : undefined;
         const hasWeekends = planRows.some((r: any) => {
-          const day = String(r["Day"] || "").toLowerCase();
+          const day = String(dayLabel ? r[dayLabel] : "").toLowerCase();
           return day === "sat" || day === "sun" || day === "saturday" || day === "sunday";
         });
         const weekdaysOnly = !hasWeekends;
@@ -614,6 +684,15 @@ export function createApp() {
           settings,
           phases,
           risks,
+          unitLabel:
+            plan.project.productionUnit && plan.project.productionUnit !== "hours"
+              ? String(plan.project.productionUnit)
+                  .replace(/^./, (character: string) => character.toUpperCase())
+              : undefined,
+          totalQuantity:
+            plan.project.productionUnit && plan.project.productionUnit !== "hours"
+              ? Number(plan.project.totalAssets ?? 0)
+              : undefined,
         });
       } else {
         const templateDefinition = await templateService.loadDefinition();
@@ -641,7 +720,7 @@ export function createApp() {
         plans: isTest ? [] : [
           {
             id: "mock-plan-1",
-            whatsapp_user_id: "operator1",
+            whatsapp_user_id: DEFAULT_OPERATOR_USERNAME,
             project_title: "Mock Dynamic Plan",
             summary: "This is a local mock plan since Supabase is not configured.",
             total_hours_estimate: 80,

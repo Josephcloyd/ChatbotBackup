@@ -169,7 +169,7 @@ export function extractNormalizedDateConstraints(
 ): NormalizedDateConstraints {
   const constraints: NormalizedDateConstraints = { interpretations: [] };
   const startPattern = new RegExp(
-    String.raw`\b(?:starting|starts?|from|beginning|begins)\s+(?:on\s+)?(${DATE_EXPRESSION})\b`,
+    String.raw`\b(?:(?:starting|starts?|from|beginning|begins)(?:\s+date\s+of)?|(?:start|starting)\s+date\s+(?:is|:|of))\s+(?:on\s+)?(${DATE_EXPRESSION})\b`,
     "i",
   );
   const endPattern = new RegExp(

@@ -65,10 +65,8 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
   );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPage(0, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, role]);
+  }, [username, role, activePlanId, fetchPage]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;

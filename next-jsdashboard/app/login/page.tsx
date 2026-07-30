@@ -57,15 +57,15 @@ export default function LoginPage() {
         </p>
 
         <div className="auth-fields">
-          <FormGroup label="Username" htmlFor="username">
+          <FormGroup label="Email or Username" htmlFor="username">
             <Input
               id="username"
               type="text"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               required
-              maxLength={50}
-              placeholder="e.g. operator1"
+              maxLength={100}
+              placeholder="e.g. operator1 or user@example.com"
             />
           </FormGroup>
 
