@@ -1,11 +1,11 @@
 # Graph Report - ChatbotBackup  (2026-07-30)
 
 ## Corpus Check
-- 123 files · ~89,251 words
+- 122 files · ~88,195 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 883 nodes · 1742 edges · 53 communities (46 shown, 7 thin omitted)
+- 874 nodes · 1719 edges · 52 communities (45 shown, 7 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
@@ -32,7 +32,7 @@
 - Project Continuation Prompt
 - dynamicPlanService.ts
 - userService.ts
-- HistoryRecord
+- AdminPlansPanel.tsx
 - login/page.tsx
 - Brand.tsx
 - AdminPlanDetailsPanel.tsx
@@ -43,10 +43,10 @@
 - Step-by-Step Continuation Prompt for ChatGPT or Gemini
 - check-everything.ps1
 - graphify reference: extra exports and benchmark
-- plannerService.ts
+- ollamaService.ts
 - ThemeProvider.tsx
 - graphify reference: query, path, explain
-- applyPlanWorkspaceProposal
+- plannerService.ts
 - process_user_logo.js
 - Flowboard Dashboard
 - generate_logos.js
@@ -61,8 +61,7 @@
 - extraction-spec.md
 - next.config.ts
 - next-env.d.ts
-- planWorkspace.ts
-- AdminPlansPanel.tsx
+- DashboardSkeleton.tsx
 
 ## God Nodes (most connected - your core abstractions)
 1. `getClient()` - 36 edges
@@ -72,34 +71,34 @@
 5. `generateProductionPlan()` - 21 edges
 6. `requireAdmin()` - 20 edges
 7. `extractRequestedConstraints()` - 19 edges
-8. `applyProposalToPlanData()` - 17 edges
+8. `applyProposalToPlanData()` - 16 edges
 9. `applyPlanWorkspaceProposal()` - 16 edges
 10. `buildScheduleDates()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `generateProductionPlan()` --calls--> `generateWithOllama()`  [EXTRACTED]
+  mcp-server/src/plannerService.ts → mcp-server/src/ollamaService.ts
+- `generateProductionPlan()` --calls--> `parseOllamaJson()`  [EXTRACTED]
+  mcp-server/src/plannerService.ts → mcp-server/src/ollamaService.ts
 - `PlannerResult` --references--> `ProductionPlanOutput`  [EXTRACTED]
   mcp-server/src/plannerService.ts → mcp-server/src/productionPrompt.ts
 - `generateProductionPlan()` --calls--> `buildDynamicPlan()`  [EXTRACTED]
   mcp-server/src/plannerService.ts → mcp-server/src/services/dynamicPlanService.ts
 - `generateProductionPlan()` --calls--> `validateDynamicProposal()`  [EXTRACTED]
   mcp-server/src/plannerService.ts → mcp-server/src/services/dynamicPlanService.ts
-- `generateProductionPlan()` --calls--> `extractRequestedConstraints()`  [EXTRACTED]
-  mcp-server/src/plannerService.ts → mcp-server/src/services/planningConstraintsService.ts
-- `generateProductionPlan()` --calls--> `createPlanRevision()`  [EXTRACTED]
-  mcp-server/src/plannerService.ts → mcp-server/src/supabaseService.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (53 total, 7 thin omitted)
+## Communities (52 total, 7 thin omitted)
 
 ### Community 0 - "planningConstraintsService.ts"
 Cohesion: 0.09
-Nodes (48): addDays(), collectDate(), DATE_EXPRESSION, DateInterpretation, endOfMonth(), extractNormalizedDateConstraints(), formatIsoDate(), isIsoDate() (+40 more)
+Nodes (49): addDays(), collectDate(), DATE_EXPRESSION, DateInterpretation, endOfMonth(), extractNormalizedDateConstraints(), formatIsoDate(), isIsoDate() (+41 more)
 
 ### Community 1 - "planWorkspaceService.ts"
-Cohesion: 0.11
-Nodes (36): DEFAULT_PLANNING_MODEL, addChange(), applyChangesToSettings(), applyDefaultPlanningModel(), ApplyPlanProposalInput, applyProposalToPlanData(), baseSettingsFromPlan(), buildAssistantResponse() (+28 more)
+Cohesion: 0.06
+Nodes (68): DEFAULT_PLANNING_MODEL, addChange(), applyChangesToSettings(), applyDefaultPlanningModel(), ApplyPlanProposalInput, applyPlanWorkspaceProposal(), applyProposalToPlanData(), asProductionPlan() (+60 more)
 
 ### Community 2 - "whatsappBot.ts"
 Cohesion: 0.06
@@ -119,7 +118,7 @@ Nodes (31): copyRowFormatting(), ExcelService, rowIsAvailable(), ProductionPromp
 
 ### Community 6 - "server.ts"
 Cohesion: 0.13
-Nodes (20): adminContext(), applyProposalSchema, createApp(), createMcpServer(), generationInputSchema, planPatchSchema, reviewSchema, sendWorkspaceError() (+12 more)
+Nodes (23): adminContext(), applyProposalSchema, createApp(), createMcpServer(), generationInputSchema, planPatchSchema, reviewSchema, sendWorkspaceError() (+15 more)
 
 ### Community 7 - "devDependencies"
 Cohesion: 0.07
@@ -139,31 +138,31 @@ Nodes (24): For /graphify add and --watch, For /graphify query, For the commit h
 
 ### Community 11 - "supabaseService.ts"
 Cohesion: 0.09
-Nodes (35): createRevisionWorkbookDownload(), buildPlanRecord(), BuildPlanRecordOptions, CreateConversationMessageInput, createPlanChangeProposal(), CreatePlanRevisionInput, createSignedPlanFileDownload(), editablePlanFields (+27 more)
+Nodes (36): createRevisionWorkbookDownload(), buildPlanRecord(), BuildPlanRecordOptions, CreateConversationMessageInput, createPlanChangeProposal(), CreatePlanRevisionInput, createSignedPlanFileDownload(), deletePlanRevision() (+28 more)
 
 ### Community 12 - "Sidebar.tsx"
 Cohesion: 0.12
 Nodes (15): Input(), InputProps, SelectProps, Textarea(), TextareaProps, StatusIndicator(), StatusIndicatorProps, ModeSwitch() (+7 more)
 
 ### Community 13 - "adminTypes.ts"
-Cohesion: 0.16
-Nodes (19): display(), fileSize(), MessageBubble(), PlanWorkspace(), PlanWorkspaceProps, safeAssistantResponse(), suggestions, CellValue (+11 more)
+Cohesion: 0.15
+Nodes (20): display(), fileSize(), MessageBubble(), PlanWorkspace(), PlanWorkspaceProps, safeAssistantResponse(), suggestions, CellValue (+12 more)
 
 ### Community 14 - "Project Continuation Prompt"
 Cohesion: 0.11
 Nodes (17): Current verified status (July 6, 2026), Highest priority, Immediate objective for this continuation, Implementation update (July 13, 2026), Implementation update (July 6, 2026), Missing, incomplete, or risky areas, Phase 1 — Make the backend reproducible and trustworthy (baseline completed), Phase 2 — Deliver generated workbooks properly (local baseline completed) (+9 more)
 
 ### Community 15 - "dynamicPlanService.ts"
-Cohesion: 0.06
-Nodes (63): outputPath, proposal, result, bodyFont(), COLORS, DynamicExcelService, safeCellValue(), sectionHeader() (+55 more)
+Cohesion: 0.07
+Nodes (54): outputPath, proposal, result, bodyFont(), COLORS, DynamicExcelService, safeCellValue(), sectionHeader() (+46 more)
 
 ### Community 16 - "userService.ts"
 Cohesion: 0.36
 Nodes (15): createUser(), databaseRoleToFrontend(), frontendRoleToDatabase(), getEmail(), getUserAccessByUsername(), getUsername(), isActive(), listUsers() (+7 more)
 
-### Community 17 - "HistoryRecord"
-Cohesion: 0.39
-Nodes (7): AdminPlansPanelProps, AdminRunsPanel(), AdminRunsPanelProps, display(), duration(), HistoryRecord, PlanGenerationRun
+### Community 17 - "AdminPlansPanel.tsx"
+Cohesion: 0.21
+Nodes (13): AdminPlansPanel(), AdminPlansPanelProps, formatDateTime(), SortMode, sourceOf(), statusOf(), AdminRunsPanel(), AdminRunsPanelProps (+5 more)
 
 ### Community 18 - "login/page.tsx"
 Cohesion: 0.21
@@ -182,8 +181,8 @@ Cohesion: 0.53
 Nodes (5): AdminOperatorsPanel(), AdminOperatorsPanelProps, displayDate(), FrontendRole, OperatorAccount
 
 ### Community 22 - "Icon.tsx"
-Cohesion: 0.29
-Nodes (6): Icon(), IconName, IconProps, MetricCard(), MetricCardProps, DashboardMetricsProps
+Cohesion: 0.23
+Nodes (8): Icon(), IconName, IconProps, ThemeToggle(), MetricCard(), MetricCardProps, DashboardMetricsProps, useTheme()
 
 ### Community 23 - "Chatbot2ProPl Production Planner"
 Cohesion: 0.15
@@ -205,21 +204,21 @@ Nodes (8): Add-Result(), Check-Http(), Run-Step(), Section(), Start-App(), Stop-
 Cohesion: 0.22
 Nodes (8): graphify reference: extra exports and benchmark, Step 6b - Wiki (only if --wiki flag), Step 7 - Neo4j export (only if --neo4j or --neo4j-push flag), Step 7a - FalkorDB export (only if --falkordb or --falkordb-push flag), Step 7b - SVG export (only if --svg flag), Step 7c - GraphML export (only if --graphml flag), Step 7d - MCP server (only if --mcp flag), Step 8 - Token reduction benchmark (only if total_words > 5000)
 
-### Community 28 - "plannerService.ts"
-Cohesion: 0.14
-Nodes (24): AppConfig, config, loadConfig(), positiveNumber(), extractOllamaText(), generateWithOllama(), getAvailableOllamaModel(), OllamaResponse (+16 more)
+### Community 28 - "ollamaService.ts"
+Cohesion: 0.24
+Nodes (11): AppConfig, config, loadConfig(), positiveNumber(), extractOllamaText(), generateWithOllama(), getAvailableOllamaModel(), OllamaResponse (+3 more)
 
 ### Community 29 - "ThemeProvider.tsx"
-Cohesion: 0.14
-Nodes (11): metadata, Skeleton(), SkeletonProps, ThemeToggle(), DashboardSkeleton(), skeletonBarHeights, Theme, ThemeContext (+3 more)
+Cohesion: 0.29
+Nodes (5): metadata, Theme, ThemeContext, ThemeContextType, ThemeProvider()
 
 ### Community 30 - "graphify reference: query, path, explain"
 Cohesion: 0.33
 Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
 
-### Community 31 - "applyPlanWorkspaceProposal"
-Cohesion: 0.16
-Nodes (25): applyPlanWorkspaceProposal(), asProductionPlan(), assistantMessageType(), canAccessPlan(), comparePlanWorkspaceRevisions(), deletePlanWorkspaceRevision(), ensureInitialRevision(), generateRevisionWorkbook() (+17 more)
+### Community 31 - "plannerService.ts"
+Cohesion: 0.25
+Nodes (13): buildFriendlyFailure(), generateProductionPlan(), pathBaseName(), PlannerResult, buildProductionPrompt(), buildWhatsAppSummary(), ProductionPlanOutput, buildDynamicPrompt() (+5 more)
 
 ### Community 32 - "process_user_logo.js"
 Cohesion: 0.40
@@ -249,33 +248,29 @@ Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphif
 Cohesion: 0.50
 Nodes (3): fs, path, publicDir
 
-### Community 51 - "planWorkspace.ts"
-Cohesion: 0.17
-Nodes (11): PlanAssistantResponse, planAssistantResponseSchema, PlanChangeProposal, planChangeProposalSchema, PlanConversationIntent, planConversationIntentValues, PlanConversationMessage, planMessageTypeValues (+3 more)
-
-### Community 52 - "AdminPlansPanel.tsx"
-Cohesion: 0.36
-Nodes (7): AdminPlansPanel(), formatDateTime(), SortMode, sourceOf(), statusOf(), GenerationSource, PlanStatus
+### Community 51 - "DashboardSkeleton.tsx"
+Cohesion: 0.40
+Nodes (4): Skeleton(), SkeletonProps, DashboardSkeleton(), skeletonBarHeights
 
 ## Knowledge Gaps
-- **263 isolated node(s):** `name`, `version`, `description`, `type`, `main` (+258 more)
+- **260 isolated node(s):** `name`, `version`, `description`, `type`, `main` (+255 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `generateProductionPlan()` connect `plannerService.ts` to `planningConstraintsService.ts`, `whatsappBot.ts`, `server.ts`, `supabaseService.ts`, `dynamicPlanService.ts`, `applyPlanWorkspaceProposal`?**
+- **Why does `generateProductionPlan()` connect `plannerService.ts` to `planningConstraintsService.ts`, `planWorkspaceService.ts`, `whatsappBot.ts`, `server.ts`, `supabaseService.ts`, `dynamicPlanService.ts`, `ollamaService.ts`?**
   _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Why does `PlanTable()` connect `AdminPlanDetailsPanel.tsx` to `adminTypes.ts`, `devDependencies`?**
   _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **Why does `react` connect `devDependencies` to `AdminPlanDetailsPanel.tsx`?**
-  _High betweenness centrality (0.011) - this node is a cross-community bridge._
+  _High betweenness centrality (0.012) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `description` to the rest of the system?**
-  _263 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _260 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `planningConstraintsService.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.09154437456324249 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08831168831168831 - nodes in this community are weakly interconnected._
 - **Should `planWorkspaceService.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.11201079622132254 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06430745814307458 - nodes in this community are weakly interconnected._
 - **Should `whatsappBot.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.059907834101382486 - nodes in this community are weakly interconnected._

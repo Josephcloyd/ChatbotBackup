@@ -16,7 +16,7 @@
   "14": "Project Continuation Prompt",
   "15": "dynamicPlanService.ts",
   "16": "userService.ts",
-  "17": "HistoryRecord",
+  "17": "AdminPlansPanel.tsx",
   "18": "login/page.tsx",
   "19": "Brand.tsx",
   "20": "AdminPlanDetailsPanel.tsx",
@@ -27,10 +27,10 @@
   "25": "Step-by-Step Continuation Prompt for ChatGPT or Gemini",
   "26": "check-everything.ps1",
   "27": "graphify reference: extra exports and benchmark",
-  "28": "plannerService.ts",
+  "28": "ollamaService.ts",
   "29": "ThemeProvider.tsx",
   "30": "graphify reference: query, path, explain",
-  "31": "applyPlanWorkspaceProposal",
+  "31": "plannerService.ts",
   "32": "process_user_logo.js",
   "33": "Flowboard Dashboard",
   "34": "generate_logos.js",
@@ -50,6 +50,5 @@
   "48": "templates/README.md",
   "49": "eslint.config.mjs",
   "50": "old_dynamicPlanService.ts",
-  "51": "planWorkspace.ts",
-  "52": "AdminPlansPanel.tsx"
+  "51": "DashboardSkeleton.tsx"
 }

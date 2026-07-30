@@ -24,7 +24,10 @@ import {
   type ProductionPlanInput,
   type ProductionPlanOutput,
 } from "./productionPrompt.js";
-import { extractRequestedConstraints } from "./services/planningConstraintsService.js";
+import {
+  DEFAULT_PLANNING_MODEL,
+  extractRequestedConstraints,
+} from "./services/planningConstraintsService.js";
 
 export interface PlannerResult {
   success: boolean;
@@ -120,7 +123,11 @@ export async function generateProductionPlan(
     if (mode === "dynamic") {
       const proposal = validateDynamicProposal(parsedResponse, currentDate);
       const dynamicResult = buildDynamicPlan(input, proposal, currentDate);
-      plan = planRulesService.validate(dynamicResult.plan, { currentDate, input });
+      plan = planRulesService.validate(dynamicResult.plan, {
+        currentDate,
+        input,
+        requiredPlanningModel: DEFAULT_PLANNING_MODEL,
+      });
       workbookPath = await dynamicExcelService.writeDynamicProductionPlan(dynamicResult);
     } else {
       const structurallyValidPlan = validationService.validateProductionPlan(

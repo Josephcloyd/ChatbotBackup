@@ -11,6 +11,9 @@ import {
 
 export type DurationUnit = "days" | "weeks" | "months";
 
+export const DEFAULT_PLANNING_MODEL = "LPB Model" as const;
+export type PlanningModel = typeof DEFAULT_PLANNING_MODEL;
+
 export interface DurationConstraint {
   value: number;
   unit: DurationUnit;
@@ -39,7 +42,7 @@ export interface RequestedConstraints {
   /** Total quantity of units extracted from the prompt (e.g. 350000). */
   totalQuantity?: number;
   /** Named planning model or operating model requested by the user (e.g. "LPB Model"). */
-  planningModel?: string;
+  planningModel?: PlanningModel;
   /** Throughput rate in units per person per hour (e.g. 50 for "50 images/hour"). */
   throughputRate?: number;
   /** Throughput rate in units per person per day (e.g. 400 for "400 images/day"). */
@@ -59,6 +62,7 @@ export interface PlanningDefaults {
 }
 
 export interface ResolvedPlanningSettings {
+  planningModel: PlanningModel;
   startDate: string;
   endDate?: string;
   duration: DurationConstraint;
@@ -71,8 +75,6 @@ export interface ResolvedPlanningSettings {
   holidays?: string[];
   overtimeLimitHoursPerPersonPerDay?: number;
 }
-
-export const DEFAULT_PLANNING_MODEL = "LPB Model";
 
 function toIsoDate(value: string): string | undefined {
   if (isIsoDate(value)) return value;
@@ -174,17 +176,19 @@ export function extractRequestedConstraints(
     twelve: 12,
   };
   const numberToken = String.raw`(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)`;
+  const durationNumberToken = String.raw`(\d+(?:\.\d+)?|\.\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)`;
+  const durationBoundary = String.raw`(?:^|[^\w.])`;
   const tokenNumber = (value: string | undefined): number | undefined => {
     if (!value) return undefined;
     const normalized = value.toLowerCase();
     return numberWordMap[normalized] ?? Number(normalized);
   };
   const durationMatch =
-    description.match(new RegExp(String.raw`\b(?:within|for|over|during)?\s*${numberToken}\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b`, "i")) ??
-    description.match(new RegExp(String.raw`\bnext\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
+    description.match(new RegExp(String.raw`${durationBoundary}(?:within|for|over|during)?\s*${durationNumberToken}\s*[- ]?(?:calendar\s+)?(days?|weeks?|months?)\b`, "i")) ??
+    description.match(new RegExp(String.raw`${durationBoundary}next\s+${durationNumberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
   const weekdayDurationMatch =
-    description.match(new RegExp(String.raw`\b(?:within|for|over|during)?\s*${numberToken}\s+(weekdays?|business\s+days?)\b`, "i")) ??
-    description.match(new RegExp(String.raw`\b(?:for\s+)?(?:the\s+)?next\s+${numberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
+    description.match(new RegExp(String.raw`${durationBoundary}(?:within|for|over|during)?\s*${durationNumberToken}\s+(weekdays?|business\s+days?)\b`, "i")) ??
+    description.match(new RegExp(String.raw`${durationBoundary}(?:for\s+)?(?:the\s+)?next\s+${durationNumberToken}\s+(weekdays?|business\s+days?)\b`, "i"));
   const hoursMatch = description.match(new RegExp(String.raw`\b${numberToken}\s+(?:total\s+|working\s+|productive\s+)?hours?\b`, "i"));
   const videoDurationTargetMatch =
     description.match(/\b(?:total\s+of\s+|target\s+(?:of\s+|is\s+)?|deliver\s+|produce\s+(?:a\s+)?total\s+of\s+)?([\d,]+)(?:\s*([kKmM]))?\s*[- ]?hours?\s+(?:of\s+)?(?:[^.!?\n]{0,90}?\b)?(?:video[-\s]+)?recordings?\b/i) ??
@@ -348,8 +352,11 @@ export function resolvePlanningSettings(
   if (endDate !== undefined && endDate < startDate) {
     throw new Error(`Planning end date ${endDate} is earlier than start date ${startDate}`);
   }
-  if (!Number.isInteger(duration.value) || duration.value <= 0 || duration.value > 730) {
-    throw new Error("Duration must be a whole number between 1 and 730");
+  if (!Number.isFinite(duration.value) || duration.value <= 0 || duration.value > 730) {
+    throw new Error("Duration must be greater than zero and no more than 730");
+  }
+  if (duration.unit !== "months" && !Number.isInteger(duration.value)) {
+    throw new Error("Duration must use whole days or weeks; months may use decimal values such as 0.5");
   }
 
   let totalHours = positive(requested.totalHours, positive(defaults.totalHours, 160, "totalHours"), "totalHours");
@@ -360,6 +367,7 @@ export function resolvePlanningSettings(
     requested.teamSize !== undefined
   ) {
     const scheduledDays = buildScheduleDates({
+      planningModel: DEFAULT_PLANNING_MODEL,
       startDate,
       endDate,
       duration,
@@ -374,6 +382,7 @@ export function resolvePlanningSettings(
   }
 
   return {
+    planningModel: DEFAULT_PLANNING_MODEL,
     startDate,
     endDate,
     duration,
@@ -398,6 +407,18 @@ function addMonthsClamped(date: Date, count: number): Date {
   ).getUTCDate();
   firstOfTarget.setUTCDate(Math.min(day, lastDay));
   return firstOfTarget;
+}
+
+function addPlanningMonths(date: Date, count: number): Date {
+  const wholeMonths = Math.floor(count);
+  const fractionalMonth = count - wholeMonths;
+  const afterWholeMonths = addMonthsClamped(date, wholeMonths);
+  if (fractionalMonth === 0) return afterWholeMonths;
+
+  // Fractional months use a stable 30-day planning month. This preserves the
+  // existing calendar-aware behavior for whole months while making 0.5 = 15 days.
+  const fractionalDays = Math.max(1, Math.round(fractionalMonth * 30));
+  return addDays(afterWholeMonths, fractionalDays);
 }
 
 export function buildScheduleDates(settings: ResolvedPlanningSettings): string[] {
@@ -428,7 +449,7 @@ export function buildScheduleDates(settings: ResolvedPlanningSettings): string[]
 
   const end = settings.duration.unit === "weeks"
     ? addDays(start, settings.duration.value * 7)
-    : addMonthsClamped(start, settings.duration.value);
+    : addPlanningMonths(start, settings.duration.value);
   for (let candidate = start; candidate < end; candidate = addDays(candidate, 1)) {
     if (isScheduledDay(candidate)) dates.push(formatIsoDate(candidate));
   }

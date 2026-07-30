@@ -40,6 +40,7 @@ export function buildWhatsAppSummary(plan: ProductionPlan): string {
     "",
     project.projectName || "Production Plan",
     `Category: ${project.projectCategory ?? "production"}`,
+    `Planning model: ${project.planningModel ?? "not recorded"}`,
     `Schedule: ${project.startDate} to ${project.deadline}`,
     `Planned workload: ${plannedWorkload}`,
     `Daily target: ${project.requiredDailyOutput ?? "see workbook"} ${unit}`,

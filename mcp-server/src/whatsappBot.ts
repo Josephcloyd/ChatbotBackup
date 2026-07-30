@@ -609,6 +609,7 @@ client.on("message", async (message) => {
         const result = await generateProductionPlan({
           whatsappUserId: message.from,
           workbookMode: "dynamic",
+          generationSource: "whatsapp",
           projectDescription,
         });
         await typingIndicator.stop();

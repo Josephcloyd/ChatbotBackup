@@ -77,6 +77,59 @@ test("accepts a future plan matching requested duration and total hours", () => 
   assert.equal(new PlanRulesService().validate(makePlan(), options).summary, "A realistic plan.");
 });
 
+test("requires LPB metadata when the planner enables the LPB policy", () => {
+  const rules = new PlanRulesService();
+  const plan = makePlan();
+  const production = plan.workbook.sheets[0]!;
+  production.rows[0]!["Target Total Hours"] = 2.4;
+  production.rows[1]!["Target Total Hours"] = 6;
+  production.rows.push({
+    ...production.rows[1]!,
+    Date: "2026-07-08",
+    "Target Total Hours": 3.6,
+  });
+  plan.project.deadline = "2026-07-08";
+  plan.project.planningModel = "LPB Model";
+  plan.project.assumptions.push("Required planning model applied: LPB Model.");
+  plan.workbook.sheets.push({
+    sheetName: "Project Information",
+    columns: ["Field", "Value"],
+    rows: [{ Field: "Planning model", Value: "LPB Model" }],
+  });
+  plan.workbook.sheets.push({
+    sheetName: "LPB Allocation",
+    columns: ["Stage", "Workload Share (%)", "Scheduled Days", "Planned Workload"],
+    rows: [
+      { Stage: "LPB-L", "Workload Share (%)": 20, "Scheduled Days": 1, "Planned Workload": 2.4 },
+      { Stage: "LPB-P", "Workload Share (%)": 50, "Scheduled Days": 1, "Planned Workload": 6 },
+      { Stage: "LPB-B", "Workload Share (%)": 30, "Scheduled Days": 1, "Planned Workload": 3.6 },
+    ],
+  });
+  const lpbOptions = {
+    currentDate: "2026-07-06",
+    input: { projectDescription: "Create a 3-day production plan with 12 total hours" },
+    requiredPlanningModel: "LPB Model",
+  };
+
+  assert.equal(
+    rules.validate(plan, lpbOptions).project.planningModel,
+    "LPB Model",
+  );
+
+  plan.project.planningModel = "ABC Model";
+  assert.throws(
+    () => rules.validate(plan, lpbOptions),
+    /must use LPB Model/,
+  );
+
+  plan.project.planningModel = "LPB Model";
+  plan.project.assumptions.push("Use ABC Model.");
+  assert.throws(
+    () => rules.validate(plan, lpbOptions),
+    /assumptions conflict with LPB Model/,
+  );
+});
+
 test("rejects stale dates and fabricated actual values", () => {
   const rules = new PlanRulesService();
   assert.throws(

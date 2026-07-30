@@ -64,6 +64,49 @@ test("resolves starting today without depending on an Ollama-proposed date", () 
   assert.equal(settings.totalHours, 400);
 });
 
+test("supports .5 and 0.5 month production-plan durations", () => {
+  for (const durationText of [".5 months", "0.5 months"]) {
+    const request =
+      `Create a production plan for 100 records over ${durationText}, ` +
+      "using calendar days, starting 2026-08-01.";
+    const constraints = extractRequestedConstraints(request, "2026-07-06");
+    assert.deepEqual(constraints.duration, { value: 0.5, unit: "months" });
+
+    const settings = resolvePlanningSettings(request, "2026-07-06");
+    const result = buildDynamicPlan(
+      { projectDescription: request },
+      {
+        ...proposal,
+        planningSettings: {
+          ...proposal.planningSettings,
+          durationValue: 1,
+          durationUnit: "months",
+          weekdaysOnly: false,
+        },
+      },
+      "2026-07-06",
+    );
+    const rows = result.plan.workbook.sheets[0]!.rows;
+
+    assert.deepEqual(settings.duration, { value: 0.5, unit: "months" });
+    assert.equal(rows.length, 15);
+    assert.equal(rows[0]?.Date, "2026-08-01");
+    assert.equal(rows.at(-1)?.Date, "2026-08-15");
+    new PlanRulesService().validate(result.plan, {
+      currentDate: "2026-07-06",
+      input: { projectDescription: request },
+      requiredPlanningModel: "LPB Model",
+    });
+  }
+});
+
+test("rejects fractional day and week durations", () => {
+  assert.throws(
+    () => resolvePlanningSettings("Create a plan over 1.5 weeks.", "2026-07-06"),
+    /whole days or weeks/,
+  );
+});
+
 test("builds and validates an exact dynamic four-month schedule", () => {
   const result = buildDynamicPlan({ projectDescription: description }, proposal, "2026-07-06");
   const sheet = result.plan.workbook.sheets[0]!;

@@ -5,15 +5,13 @@ import {
   resolvePlanningSettings,
 } from "./planningConstraintsService.js";
 import { isWeekday, parseIsoDate } from "./dateNormalizationService.js";
-import {
-  findColumnLabel,
-  getColumnDefinitions,
-} from "./productionPlanColumns.js";
+import { buildLpbDistribution } from "./lpbModelService.js";
 export { extractRequestedConstraints } from "./planningConstraintsService.js";
 
 export interface PlanRuleOptions {
   currentDate: string;
   input: Pick<ProductionPlanInput, "projectDescription">;
+  requiredPlanningModel?: string;
 }
 
 function numericValue(row: ProductionPlanRow, column: string, rowNumber: number): number {
@@ -62,81 +60,79 @@ function splitIds(value: unknown): string[] {
     .filter(Boolean);
 }
 
-const LPB_PHASES = ["Learning", "Performing", "Breakthrough"] as const;
-const LPB_WEIGHTS = [0.2, 0.5, 0.3] as const;
+function validatePlanningModel(plan: ProductionPlan, requiredPlanningModel: string): void {
+  if (plan.project.planningModel !== requiredPlanningModel) {
+    throw new Error(`Production plan must use ${requiredPlanningModel}`);
+  }
 
-function isLpbModel(model: string | undefined): boolean {
-  return /\bLPB\b/i.test(model ?? "");
-}
+  if (!plan.project.assumptions.some((assumption) =>
+    assumption.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  )) {
+    throw new Error(`Production plan assumptions must record ${requiredPlanningModel}`);
+  }
+  if (plan.project.assumptions.some((assumption) =>
+    /\bmodel\b/i.test(assumption) &&
+    !assumption.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  )) {
+    throw new Error(`Production plan assumptions conflict with ${requiredPlanningModel}`);
+  }
+  if (
+    /\bmodel\b/i.test(plan.summary) &&
+    !plan.summary.toLowerCase().includes(requiredPlanningModel.toLowerCase())
+  ) {
+    throw new Error(`Production plan summary conflicts with ${requiredPlanningModel}`);
+  }
 
-function phaseIndexForRow(index: number, totalRows: number): number {
-  return Math.min(
-    LPB_PHASES.length - 1,
-    Math.floor((index / Math.max(totalRows, 1)) * LPB_PHASES.length),
+  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  const planningModelRow = projectInfo?.rows.find((row) =>
+    String(row.Field ?? "").trim().toLowerCase() === "planning model"
   );
-}
-
-function lpbPhaseDayCounts(totalRows: number): number[] {
-  const counts = Array.from({ length: LPB_PHASES.length }, () => 0);
-  for (let index = 0; index < totalRows; index += 1) {
-    counts[phaseIndexForRow(index, totalRows)] += 1;
+  if (planningModelRow?.Value !== requiredPlanningModel) {
+    throw new Error(`Project Information must record ${requiredPlanningModel}`);
   }
-  return counts;
 }
 
-function distributeInteger(total: number, count: number): number[] {
-  if (count <= 0) return [];
-  const base = Math.floor(total / count);
-  const extra = total - base * count;
-  return Array.from({ length: count }, (_, index) => base + (index < extra ? 1 : 0));
-}
+function validateLpbDistribution(plan: ProductionPlan, sheet: ProductionPlan["workbook"]["sheets"][number]): void {
+  const primaryTargetColumn = targetColumn(sheet.columns);
+  const decimalPlaces = /hours/i.test(primaryTargetColumn) ? 2 : 0;
+  const targets = sheet.rows.map((row, index) =>
+    numericValue(row, primaryTargetColumn, index + 1)
+  );
+  const totalWorkload = targets.reduce((sum, value) => sum + value, 0);
+  const expected = buildLpbDistribution(totalWorkload, sheet.rows.length, decimalPlaces);
+  const tolerance = decimalPlaces === 0 ? 0 : 0.001;
 
-function allocateWeightedInteger(total: number, counts: number[], weights: readonly number[]): number[] {
-  const activeWeights = weights.map((weight, index) => counts[index]! > 0 ? weight : 0);
-  const totalWeight = activeWeights.reduce((sum, weight) => sum + weight, 0);
-  if (totalWeight <= 0) return distributeInteger(total, activeWeights.length);
+  targets.forEach((target, index) => {
+    if (Math.abs(target - expected.daily[index]!.target) > tolerance) {
+      throw new Error(
+        `Production Plan row ${index + 1} does not follow the LPB 20%-50%-30% workload distribution`,
+      );
+    }
+  });
 
-  const exact = activeWeights.map((weight) => (total * weight) / totalWeight);
-  const allocated = exact.map(Math.floor);
-  let remainder = total - allocated.reduce((sum, value) => sum + value, 0);
-  const order = exact
-    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
-    .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
-  for (let i = 0; i < order.length && remainder > 0; i += 1, remainder -= 1) {
-    allocated[order[i]!.index] += 1;
+  const allocationSheet = plan.workbook.sheets.find((item) => item.sheetName === "LPB Allocation");
+  if (!allocationSheet || allocationSheet.rows.length !== expected.stages.length) {
+    throw new Error("Production plan must include the LPB Allocation worksheet");
   }
-  return allocated;
-}
-
-function distributeLpbInteger(total: number, totalRows: number): number[] {
-  const counts = lpbPhaseDayCounts(totalRows);
-  const phaseTargets = allocateWeightedInteger(Math.round(total), counts, LPB_WEIGHTS);
-  return counts.flatMap((count, index) => distributeInteger(phaseTargets[index] ?? 0, count));
-}
-
-function distributeLpbHours(totalHours: number, totalRows: number): number[] {
-  return distributeLpbInteger(Math.round(totalHours * 100), totalRows).map((value) => value / 100);
-}
-
-function lpbNote(phase: string, phaseDayIndex: number, phaseDayCount: number): string {
-  if (phase === "Learning") {
-    return phaseDayIndex === 0
-      ? "Training day: onboarding, process familiarization, calibration, and coached starter production"
-      : "Training day: coached production, error correction, quality review, and workflow adjustment";
-  }
-  if (phase === "Performing") {
-    return "Full-production day: maximize planned output while monitoring quality and workforce utilization";
-  }
-  if (phaseDayIndex >= phaseDayCount - 1) {
-    return "Final validation day: final QA, completion review, corrections signoff, and delivery preparation";
-  }
-  return phaseDayIndex === 0
-    ? "Review day: backlog clearing, quality checks, and rework triage"
-    : "Maintenance day: corrections, validation, exception resolution, and remaining production";
+  expected.stages.forEach((stage, index) => {
+    const row = allocationSheet.rows[index]!;
+    if (
+      row.Stage !== stage.stageLabel ||
+      Number(row["Workload Share (%)"]) !== stage.workloadPercentage ||
+      Number(row["Scheduled Days"]) !== stage.scheduledDays ||
+      Math.abs(Number(row["Planned Workload"]) - stage.target) > tolerance
+    ) {
+      throw new Error(`LPB Allocation row ${index + 1} does not match the required workload distribution`);
+    }
+  });
 }
 
 export class PlanRulesService {
   validate(plan: ProductionPlan, options: PlanRuleOptions): ProductionPlan {
+    if (options.requiredPlanningModel) {
+      validatePlanningModel(plan, options.requiredPlanningModel);
+    }
+
     const sheet = plan.workbook.sheets.find((item) => item.sheetName === "Production Plan");
     if (!sheet) return plan;
     const definitions = getColumnDefinitions(sheet);
@@ -355,6 +351,9 @@ export class PlanRulesService {
       throw new Error(
         `Requested ${constraints.totalHours} total hours but Production Plan targets sum to ${totalTargetHours}`,
       );
+    }
+    if (options.requiredPlanningModel === "LPB Model") {
+      validateLpbDistribution(plan, sheet);
     }
 
     const sheetNames = new Set(plan.workbook.sheets.map((item) => item.sheetName));

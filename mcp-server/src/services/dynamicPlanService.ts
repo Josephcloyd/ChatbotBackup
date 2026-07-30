@@ -14,6 +14,10 @@ import {
   type RequestedConstraints,
   type ResolvedPlanningSettings,
 } from "./planningConstraintsService.js";
+import {
+  buildLpbDistribution,
+  type LpbDistribution,
+} from "./lpbModelService.js";
 
 export interface DynamicPhase {
   name: string;
@@ -347,14 +351,6 @@ function buildColumnProfile(
   };
 }
 
-/** Distribute an integer quantity evenly across N days. Sum is exact. */
-function distributeQuantity(total: number, count: number): number[] {
-  const rounded = Math.round(total);
-  const base = Math.floor(rounded / count);
-  const extra = rounded - base * count;
-  return Array.from({ length: count }, (_, i) => base + (i < extra ? 1 : 0));
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -369,6 +365,27 @@ function number(value: unknown, fallback: number): number {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map((item) => text(item)).filter(Boolean) : [];
+}
+
+function assumptionsForPlanningModel(assumptions: string[], planningModel: string): string[] {
+  const withoutConflictingModelClaims = assumptions.filter((assumption) =>
+    !/\bmodel\b/i.test(assumption) ||
+    assumption.toLowerCase().includes(planningModel.toLowerCase())
+  );
+  const modelAssumption = `Required planning model applied: ${planningModel}.`;
+  return [
+    ...withoutConflictingModelClaims.filter((assumption) =>
+      !assumption.toLowerCase().includes(planningModel.toLowerCase())
+    ),
+    modelAssumption,
+  ];
+}
+
+function summaryForPlanningModel(summary: string, planningModel: string): string {
+  if (/\bmodel\b/i.test(summary) && !summary.toLowerCase().includes(planningModel.toLowerCase())) {
+    return "A structured production plan with auditable targets.";
+  }
+  return summary;
 }
 
 export function buildDynamicPrompt(projectDescription: string, currentDate: string): string {
@@ -420,7 +437,8 @@ Rules:
 - Do not return spreadsheet formulas. Application code owns all formulas and calculations.
 - Never use a start date earlier than the current date.
 - durationUnit must be days, weeks, or months.
-- teamSize and durationValue must be positive whole numbers.
+- teamSize must be a positive whole number.
+- durationValue must be positive. Days and weeks must be whole numbers; months may use decimals such as 0.5.
 - totalHours must be positive.
 - hoursPerDay is the working hours per person per day (almost always 8).
 - Provide practical phases, risks, mitigations, and assumptions specific to the request.
@@ -528,6 +546,7 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
   const teamSize = dynamicRoles.length > 0
     ? dynamicRoles.reduce((sum, r) => sum + r.headcount, 0)
     : Math.round(number(rawSettings.teamSize, 1));
+  const durationValue = number(rawSettings.durationValue, 30);
 
   return {
     projectName: text(value.projectName, "Production Plan"),
@@ -535,7 +554,7 @@ export function validateDynamicProposal(value: unknown, currentDate: string): Dy
     totalAssets: number(value.totalAssets, 0),
     planningSettings: {
       startDate: text(rawSettings.startDate, currentDate),
-      durationValue: Math.round(number(rawSettings.durationValue, 30)),
+      durationValue: durationUnit === "months" ? durationValue : Math.round(durationValue),
       durationUnit,
       weekdaysOnly: typeof rawSettings.weekdaysOnly === "boolean" ? rawSettings.weekdaysOnly : true,
       totalHours: number(rawSettings.totalHours, 160),
@@ -995,6 +1014,7 @@ function buildSupportSheets(
   unitLabel = "Hours",
   totalQuantity?: number,
   roles?: DynamicRole[],
+  lpbDistribution?: LpbDistribution,
   scheduleColumns: {
     target: string;
     date: string;
@@ -1256,13 +1276,26 @@ function buildSupportSheets(
       columns: ["Metric", "Value"],
       rows: summaryRows,
     },
+    ...(lpbDistribution ? [{
+      sheetName: "LPB Allocation",
+      columns: ["Stage", "Workload Share (%)", "Scheduled Days", "Start Date", "End Date", "Planned Workload", "Unit"],
+      rows: lpbDistribution.stages.map((stage) => ({
+        Stage: stage.stageLabel,
+        "Workload Share (%)": stage.workloadPercentage,
+        "Scheduled Days": stage.scheduledDays,
+        "Start Date": String(planRows[stage.startIndex]?.Date ?? ""),
+        "End Date": String(planRows[stage.endIndex]?.Date ?? ""),
+        "Planned Workload": stage.target,
+        Unit: unitLabel.toLowerCase(),
+      })),
+    }] : []),
     {
       sheetName: "Project Information",
       columns: ["Field", "Value"],
       rows: [
         { Field: "Project category", Value: kind },
         { Field: "Production unit", Value: unitLabel.toLowerCase() },
-        { Field: "Planning model", Value: requested.planningModel ?? "Not specified" },
+        { Field: "Planning model", Value: settings.planningModel },
         { Field: "Feasibility status", Value: feasibility },
         { Field: "Requires clarification", Value: assumedProductivity ? "true" : "false" },
         { Field: "Clarification questions", Value: assumedProductivity ? `What confirmed productivity rate should be used for ${unitLabel.toLowerCase()} per hour?` : "" },
@@ -1414,6 +1447,19 @@ export function buildDynamicPlan(
   const effectiveRisks = proposal.risks.length ? proposal.risks : defaultRisks(kind);
   const totalQuantity = settings.totalQuantity ?? (settings.unitOfMeasure && proposal.totalAssets > 0 ? Math.round(proposal.totalAssets) : undefined);
   const unitOfMeasure = settings.unitOfMeasure ?? requested.unitOfMeasure;
+  const resourceLabel = resourceLabelFor(kind, unitOfMeasure);
+  const resourcePlural = pluralResourceLabel(resourceLabel);
+
+  // Select column profile based on detected unit of measure.
+  const { columns: planColumns, isQuantity, unitLabel } = selectColumnProfile(totalQuantity != null ? unitOfMeasure : undefined, resourceLabel, resourcePlural);
+  const lpbDistribution = buildLpbDistribution(
+    isQuantity && totalQuantity != null ? totalQuantity : settings.totalHours,
+    dates.length,
+    isQuantity ? 0 : 2,
+  );
+  const hours = isQuantity
+    ? distributeHours(settings.totalHours, dates.length)
+    : lpbDistribution.daily.map((allocation) => allocation.target);
   const workbookColumns = proposal.workbookDesign?.columns ?? [];
   const lpbAutoColumns: DynamicColumnProposal[] = [];
   if (useLpbModel && !workbookColumns.some((column) => column.semantic === "phase")) {
@@ -1482,10 +1528,9 @@ export function buildDynamicPlan(
     }
   }
 
+  // Apply the deterministic LPB 20%-50%-30% workload split across the schedule.
   const quantities = isQuantity && totalQuantity != null
-    ? useLpbModel
-      ? distributeWeightedQuantity(totalQuantity, phaseCounts, [...LPB_WEIGHTS])
-      : distributeQuantity(totalQuantity, dates.length)
+    ? lpbDistribution.daily.map((allocation) => allocation.target)
     : null;
   const availableHours = settings.teamSize * dates.length * 8;
   const hasDeterministicCapacity =
@@ -1510,11 +1555,30 @@ export function buildDynamicPlan(
 
   let cumulativeTarget = 0;
   const rows: ProductionPlanRow[] = dates.map((date, index) => {
+    const lpbDay = lpbDistribution.daily[index]!;
     const targetVal = quantities != null ? quantities[index]! : hours[index]!;
     cumulativeTarget += Number(targetVal);
     const perAnnotVal = quantities != null
       ? Math.round(quantities[index]! / settings.teamSize)
       : Number((hours[index]! / settings.teamSize).toFixed(2));
+    return {
+      "No.": index + 1,
+      Date: date,
+      Month: monthName(date),
+      Day: new Date(`${date}T00:00:00Z`).toLocaleString("en-US", { weekday: "short", timeZone: "UTC" }),
+      [teamKey]: settings.teamSize,
+      [targetKey]: targetVal,
+      [targetPerResourceKey]: perResourceVal,
+      [actualTeamKey]: "",
+      [actualKey]: "",
+      [actualPerResourceKey]: "",
+      "Target Hours": hours[index]!,   // capacity reference — always present
+      "Actual Hours": "",
+      "Total Variance": "",
+      "Completion Rate (%)": "",
+      Status: "Not Started",
+      Notes: `[${lpbDay.stageLabel} ${lpbDay.workloadPercentage}%] ${taskFor(kind, phaseForIndex(phases, index, dates.length), requested)}`,
+    };
     const phasePosition = phasePositionForIndex(phases.length, index, dates.length);
     const phase = phases[phasePosition.phaseIndex] ?? phaseForIndex(phases, index, dates.length);
     const row: ProductionPlanRow = {};
@@ -1566,10 +1630,8 @@ export function buildDynamicPlan(
 
   // ── Assumptions ───────────────────────────────────────────────────────────
   const distributionNote = isQuantity && totalQuantity != null
-    ? useLpbModel
-      ? `${totalQuantity.toLocaleString()} ${unitLabel.toLowerCase()} distributed with LPB allocation: Learning 20%, Performing 50%, Breakthrough 30%.`
-      : `${totalQuantity.toLocaleString()} ${unitLabel.toLowerCase()} distributed across ${dates.length} scheduled days.`
-    : `Total target hours are distributed across ${dates.length} scheduled days.`;
+    ? `${totalQuantity.toLocaleString()} ${unitLabel.toLowerCase()} distributed using LPB workload shares: L 20%, P 50%, B 30%.`
+    : `Total target hours are distributed using LPB workload shares: L 20%, P 50%, B 30%.`;
 
   const throughputAssumption =
     isQuantity && effectiveThroughputRate !== undefined
@@ -1588,9 +1650,7 @@ export function buildDynamicPlan(
       : undefined;
 
   const assumptions = [
-    ...proposal.assumptions,
-    ...(requested.planningModel ? [`Requested planning model preserved: ${requested.planningModel}.`] : []),
-    ...(useLpbModel ? ["LPB phase boundaries divide scheduled workdays into approximately equal thirds with output/effort targets of 20%, 50%, and 30%."] : []),
+    ...assumptionsForPlanningModel(proposal.assumptions, settings.planningModel),
     settings.workingDays?.length
       ? `Custom working days were used: ${settings.workingDays.join(", ")} where Sunday is 0.`
       : `${settings.weekdaysOnly ? "Weekdays only" : "Calendar days"} scheduling was used.`,
@@ -1602,8 +1662,7 @@ export function buildDynamicPlan(
   ];
   const supportSheets = buildSupportSheets(
     rows, phases, effectiveRisks, settings, requested, kind,
-    unitLabel, totalQuantity, proposal.roles,
-    { target: targetKey, date: dateKey, notes: notesKey, hours: plannedHoursKey, phase: phaseKey },
+    unitLabel, totalQuantity, proposal.roles, lpbDistribution
   );
   const plannedDeadline = dates.at(-1)!;
   const staffing = analyzeStaffingChanges(input.projectDescription, rows, settings);
@@ -1835,6 +1894,7 @@ export function buildDynamicPlan(
       deadline: dates.at(-1)!,
       totalAssets: totalQuantity ?? proposal.totalAssets,
       assumptions,
+      planningModel: settings.planningModel,
       projectCategory: kind,
       productionUnit: unitLabel.toLowerCase(),
       feasibilityStatus: feasibility,
@@ -1853,7 +1913,7 @@ export function buildDynamicPlan(
       ],
     },
     summary:
-      `${proposal.summary} Feasibility: ${feasibility}. ` +
+      `${summaryForPlanningModel(proposal.summary, settings.planningModel)} Planning model: ${settings.planningModel} with L/P/B workload shares of 20%/50%/30%. Feasibility: ${feasibility}. ` +
       `Planned workload: ${isQuantity && totalQuantity ? totalQuantity.toLocaleString() : settings.totalHours} ${unitLabel.toLowerCase()} ` +
       `from ${dates[0]} to ${dates.at(-1)} with ${settings.teamSize} resource(s). ` +
       `Required daily output: ${requiredDailyOutput} ${unitLabel.toLowerCase()}; utilization: ${utilizationPercent}%.`,
