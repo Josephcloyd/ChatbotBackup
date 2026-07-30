@@ -117,6 +117,36 @@ function endOfMonth(currentDate: string): string {
   return formatIsoDate(result);
 }
 
+function parseSlashDate(expression: string): string | undefined {
+  const isoMatch = expression.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    const d = new Date(Date.UTC(year, month, day));
+    if (d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day) {
+      return formatIsoDate(d);
+    }
+  }
+
+  const slashMatch = expression.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/);
+  if (slashMatch) {
+    const part1 = Number(slashMatch[1]);
+    const part2 = Number(slashMatch[2]);
+    const year = Number(slashMatch[3]);
+
+    let month = part1 > 12 ? part2 - 1 : part1 - 1;
+    let day = part1 > 12 ? part1 : part2;
+
+    const d = new Date(Date.UTC(year, month, day));
+    if (d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day) {
+      return formatIsoDate(d);
+    }
+  }
+
+  return undefined;
+}
+
 export function normalizeDateExpression(
   expression: string,
   currentDate: string,
@@ -124,6 +154,8 @@ export function normalizeDateExpression(
   const normalized = expression.trim().replace(/\s+/g, " ").toLowerCase();
   if (!normalized) return undefined;
   if (isIsoDate(normalized)) return normalized;
+  const fromSlash = parseSlashDate(normalized);
+  if (fromSlash) return fromSlash;
   if (normalized === "today") return currentDate;
   if (normalized === "tomorrow") return formatIsoDate(addDays(parseIsoDate(currentDate), 1));
   if (normalized === "next week") {
@@ -169,13 +201,14 @@ export function extractNormalizedDateConstraints(
 ): NormalizedDateConstraints {
   const constraints: NormalizedDateConstraints = { interpretations: [] };
   const startPattern = new RegExp(
-    String.raw`\b(?:(?:starting|starts?|from|beginning|begins)(?:\s+date\s+of)?|(?:start|starting)\s+date\s+(?:is|:|of))\s+(?:on\s+)?(${DATE_EXPRESSION})\b`,
+    String.raw`\b(?:(?:starting|starts?|from|beginning|begins)(?:\s+date\s+of)?|(?:start\s*date|startdate)\s*(?:is|:|of|to|as|=|set\s+to)?)\s*(?:on\s+)?(${DATE_EXPRESSION})\b`,
     "i",
   );
   const endPattern = new RegExp(
-    String.raw`\b(?:by|until|through|ending|ends)\s+(?:on\s+|the\s+)?(${DATE_EXPRESSION})\b`,
+    String.raw`\b(?:by|until|through|ending|ends|(?:end\s*date|deadline)\s*(?:is|:|of|to|as|=|set\s+to)?)\s*(?:on\s+|the\s+)?(${DATE_EXPRESSION})\b`,
     "i",
   );
+
 
   collectDate(constraints, "startDate", description.match(startPattern)?.[1], currentDate);
   collectDate(constraints, "endDate", description.match(endPattern)?.[1], currentDate);

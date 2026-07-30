@@ -185,11 +185,12 @@ function targetColumn(columns: string[]): string {
   return columns.find((column) => column === "Target Total Hours")
     ?? columns.find((column) =>
       (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
-      !/accumulate|accumulative|annotators|recorders|operators|workers|team|resource|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(column)
+      !/active|accumulate|accumulative|annotator|annotators|recorder|recorders|operator|operators|worker|workers|staff|headcount|team|resource|resources|per\s+(?:annotator|person|worker|recorder|operator|resource|staff)|actual|balance|status|variance|completion/i.test(column)
     )
     ?? columns[5]
     ?? "Target Total Hours";
 }
+
 
 function inferUnitLabel(plan: ProductionPlan, target: string): string {
   const fromProject = plan.project?.productionUnit;
@@ -747,6 +748,9 @@ export async function sendPlanWorkspaceMessage(
     throw new PlanWorkspaceError(409, "This plan has a newer revision. Reload the workspace before sending another message.", "revision_conflict");
   }
 
+  const existingMessages = await listPlanConversationMessages(planId);
+
+
   const userMessage = await createPlanConversationMessage({
     planId,
     revisionId: currentRevision.id,
@@ -757,12 +761,18 @@ export async function sendPlanWorkspaceMessage(
     metadata: { revisionNumber: currentRevision.revision_number },
   });
 
+  const previousUserTexts = existingMessages
+    .filter((m) => m.role === "user")
+    .map((m) => m.content);
+  const combinedContext = [...previousUserTexts, text].join("\n");
+
   const assistantResponse = buildAssistantResponse(
     planId,
     currentRevision,
     asProductionPlan(currentRevision.plan_data),
-    text,
+    combinedContext,
   );
+
   if (assistantResponse.proposal) {
     await createPlanChangeProposal(assistantResponse.proposal, user.id ?? user.username);
   }
@@ -942,11 +952,61 @@ export function applyProposalToPlanData(
     requiredDailyOutput: round2(targetTotal / dates.length),
     utilizationPercent: utilization,
   };
+
+  const taskSheet = plan.workbook.sheets.find((item) => item.sheetName === "Task Breakdown");
+  if (taskSheet) {
+    const oldBaseStart = basePlan.project?.startDate ? new Date(`${basePlan.project.startDate}T00:00:00Z`).getTime() : null;
+    const newBaseStart = new Date(`${dates[0]!}T00:00:00Z`);
+
+    taskSheet.rows = taskSheet.rows.map((row) => {
+      const taskObj = { ...row };
+      const rawStart = typeof row["Planned Start"] === "string" ? row["Planned Start"].trim() : "";
+      const rawEnd = typeof row["Planned End"] === "string" ? row["Planned End"].trim() : "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawStart) && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd)) {
+        const startDateObj = new Date(`${rawStart}T00:00:00Z`);
+        const endDateObj = new Date(`${rawEnd}T00:00:00Z`);
+        const durationMs = endDateObj.getTime() - startDateObj.getTime();
+
+        let dayOffset = 0;
+        if (oldBaseStart && !Number.isNaN(oldBaseStart)) {
+          dayOffset = Math.round((startDateObj.getTime() - oldBaseStart) / (1000 * 60 * 60 * 24));
+        }
+        if (dayOffset < 0) dayOffset = 0;
+
+        let newStart = new Date(newBaseStart);
+        newStart.setUTCDate(newStart.getUTCDate() + dayOffset);
+        let newEnd = new Date(newStart.getTime() + durationMs);
+
+        if (settings.weekdaysOnly) {
+          while (newStart.getUTCDay() === 0 || newStart.getUTCDay() === 6) {
+            newStart.setUTCDate(newStart.getUTCDate() + 1);
+          }
+          while (newEnd.getUTCDay() === 0 || newEnd.getUTCDay() === 6) {
+            newEnd.setUTCDate(newEnd.getUTCDate() + 1);
+          }
+        }
+
+        const projectEndObj = new Date(`${dates.at(-1)!}T00:00:00Z`);
+        if (newEnd > projectEndObj) {
+          taskObj["Planned End"] = dates.at(-1)!;
+          if (newStart > projectEndObj) taskObj["Planned Start"] = dates.at(-1)!;
+          else taskObj["Planned Start"] = newStart.toISOString().slice(0, 10);
+        } else {
+          taskObj["Planned Start"] = newStart.toISOString().slice(0, 10);
+          taskObj["Planned End"] = newEnd.toISOString().slice(0, 10);
+        }
+
+      }
+      return taskObj;
+    });
+  }
+
   applyDefaultPlanningModel(plan);
   plan.summary =
     `${plan.project.projectName || "Production plan"} revision ${nextRevisionNumber}: ${proposal.requestSummary}. ` +
     `Planned workload: ${targetTotal.toLocaleString()} ${plan.project.productionUnit ?? "hours"} ` +
     `from ${dates[0]} to ${dates.at(-1)} with ${settings.teamSize} resource(s).`;
+
 
   const validationDate = dates[0]! < currentDate ? dates[0]! : currentDate;
   return planRulesService.validate(plan, {

@@ -26,8 +26,11 @@ function inferredSemantic(label: string): ProductionPlanColumnSemantic {
   if (/actual/.test(normalized) && /(?:staff|team|worker|annotator|resource|recorder|validator|developer|operator)/.test(normalized)) {
     return "actual_staff";
   }
-  if (/(?:target|planned|scheduled)/.test(normalized) && /(?:staff|team|worker|annotator|resource)/.test(normalized)) {
+  if (/(?:target|planned|scheduled|active)/.test(normalized) && /(?:staff|team|worker|workers|annotator|annotators|resource|resources|operator|operators|headcount|recorder|recorders|validator|validators|developer|developers)/.test(normalized)) {
     return "planned_staff";
+  }
+  if (/(?:target|planned|assigned|scheduled)/.test(normalized) && /(?:output|units|tasks|records|documents|images|posts|volume|items|hours)/.test(normalized)) {
+    return "planned_output";
   }
   if (/actual/.test(normalized) && /total\s+hours?/.test(normalized)) return "actual_output";
   if (/(?:target|planned)/.test(normalized) && /total\s+hours?/.test(normalized)) return "planned_output";
@@ -35,6 +38,7 @@ function inferredSemantic(label: string): ProductionPlanColumnSemantic {
   if (/(?:target|planned|capacity)/.test(normalized) && /hours?/.test(normalized)) return "planned_hours";
   if (/actual/.test(normalized)) return "actual_output";
   if (/(?:target|planned|assigned|scheduled)/.test(normalized)) return "planned_output";
+
 
   return "custom";
 }

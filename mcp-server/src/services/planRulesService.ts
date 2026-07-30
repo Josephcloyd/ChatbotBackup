@@ -28,9 +28,10 @@ function numericValue(row: ProductionPlanRow, column: string, rowNumber: number)
 function targetColumn(columns: string[]): string {
   return columns.find((column) =>
     (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
-    !/active|accumulate|accumulative|annotators|recorders|operators|workers|team|resource|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(column)
+    !/active|accumulate|accumulative|annotator|annotators|recorder|recorders|operator|operators|worker|workers|staff|headcount|team|resource|resources|per\s+(?:annotator|person|worker|recorder|operator|resource|staff)|actual|balance|status|variance|completion/i.test(column)
   ) ?? columns.find((column) => /target\s+(?:total\s+)?hours/i.test(column)) ?? columns[2] ?? "Target Total Hours";
 }
+
 
 function teamColumn(columns: string[]): string {
   return columns.find((column) =>
@@ -144,9 +145,14 @@ export class PlanRulesService {
     const monthColumn = findColumnLabel(sheet, "month") ?? "Month";
     const targetColumn =
       findColumnLabel(sheet, "planned_output") ??
-      sheet.columns.find((column) => /target|plan/i.test(column)) ??
+      findColumnLabel(sheet, "planned_hours") ??
+      sheet.columns.find((column) =>
+        (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
+        !/active|accumulate|accumulative|annotator|annotators|recorder|recorders|operator|operators|worker|workers|staff|headcount|team|resource|resources|per\s+(?:annotator|person|worker|recorder|operator|resource|staff)|actual|balance|status|variance|completion/i.test(column)
+      ) ??
       sheet.columns[2] ??
       "Target Total Hours";
+
     const plannedStaffColumn =
       findColumnLabel(sheet, "planned_staff") ?? "Target Active Annotators";
     const actualColumns = definitions
@@ -352,10 +358,12 @@ export class PlanRulesService {
       constraints.totalHours !== undefined &&
       Math.abs(totalTargetHours - constraints.totalHours) > 0.01
     ) {
+      const unitLabel = constraints.unitOfMeasure ?? "total target units";
       throw new Error(
-        `Requested ${constraints.totalHours} total hours but Production Plan targets sum to ${totalTargetHours}`,
+        `Requested ${constraints.totalHours} ${unitLabel} but Production Plan targets sum to ${totalTargetHours}`,
       );
     }
+
 
     const sheetNames = new Set(plan.workbook.sheets.map((item) => item.sheetName));
     const taskSheet = plan.workbook.sheets.find((item) => item.sheetName === "Task Breakdown");

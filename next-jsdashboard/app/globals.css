@@ -1330,6 +1330,8 @@ a {
   transition: height 0.4s ease-out;
 }
 
+
+
 .bar-column > span {
   padding-top: 8px;
   color: #526378;
@@ -2836,23 +2838,101 @@ td {
   --danger: #ff6b6b;
 }
 
+[data-theme="dark"] .plan-review-area,
+[data-theme="dark"] .plan-communication-area {
+  background: var(--panel, #133020);
+  border-color: var(--line, #2a3a30);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
 [data-theme="dark"] .brand-light .brand-mark {
   border: 1px solid rgba(255, 179, 71, 0.4);
   color: #ffb347;
   background: rgba(255, 179, 71, 0.12);
 }
 
-[data-theme="dark"] .metric-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
+[data-theme="dark"] .metric-card,
+[data-theme="dark"] .admin-summary-card,
+[data-theme="dark"] .workspace-metrics-grid > div {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .metric-card small,
+[data-theme="dark"] .admin-summary-card span,
+[data-theme="dark"] .workspace-metrics-grid span {
+  color: #a4bba8 !important;
+}
+
+[data-theme="dark"] .metric-card strong,
+[data-theme="dark"] .admin-summary-card strong,
+[data-theme="dark"] .workspace-metrics-grid strong {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .metric-card em {
+  color: #85d6b0 !important;
+  opacity: 0.85;
+}
+
+[data-theme="dark"] .kpi-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: #85d6b0;
 }
 
 [data-theme="dark"] .chart-card,
 [data-theme="dark"] .assumptions-card,
 [data-theme="dark"] .schedule-card,
 [data-theme="dark"] .history-card {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .chart-card h3,
+[data-theme="dark"] .chart-card h4,
+[data-theme="dark"] .assumptions-card h3,
+[data-theme="dark"] .assumptions-card h4,
+[data-theme="dark"] .section-subtitle {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .chart-card .legend {
+  color: #a4bba8 !important;
+}
+
+[data-theme="dark"] .chart-card .legend i {
+  background: #ffb347 !important;
+}
+
+[data-theme="dark"] .bar-chart .bar-column .bar-value {
+  color: #ffc370 !important;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .bar-chart .bar-column span {
+  color: #a4bba8 !important;
+}
+
+[data-theme="dark"] .bar-chart .bar-track {
+  background: transparent !important;
+}
+
+
+[data-theme="dark"] .bar-chart .bar-track > div {
+  background: linear-gradient(180deg, #ffc370 0%, #d97706 100%) !important;
+  box-shadow: 0 0 14px rgba(255, 195, 112, 0.45) !important;
+}
+
+
+[data-theme="dark"] .assumptions-card ul li span,
+[data-theme="dark"] .assumption-bullet {
+  color: #85d6b0 !important;
+  font-weight: 800;
+}
+
+[data-theme="dark"] .assumptions-card ul li p,
+[data-theme="dark"] .assumption-item p {
+  color: #e6f4ec !important;
 }
 
 [data-theme="dark"] .welcome-card {
@@ -2865,17 +2945,60 @@ td {
 }
 
 [data-theme="dark"] .summary-strip {
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(4, 98, 65, 0.35) 0%, rgba(10, 23, 15, 0.75) 100%);
+  border: 1px solid rgba(65, 114, 86, 0.45);
+  color: #f5eedb;
+}
+
+[data-theme="dark"] .summary-strip p {
+  color: #e6f4ec !important;
+}
+
+[data-theme="dark"] .summary-strip .date-range {
+  color: #a4bba8 !important;
 }
 
 [data-theme="dark"] .completion-ring {
-  background: conic-gradient(var(--green) 0deg, rgba(255, 255, 255, 0.05) 0);
+  background: conic-gradient(#417256 0deg, rgba(255, 255, 255, 0.08) 0);
+  border: 1px solid rgba(133, 214, 176, 0.2);
 }
 
 [data-theme="dark"] .completion-ring:after {
-  background: var(--panel);
+  background: #133020;
 }
+
+[data-theme="dark"] .completion-ring strong {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .completion-ring span {
+  color: #a4bba8 !important;
+}
+
+[data-theme="dark"] .workspace-tab-group {
+  background: #0a170f;
+  border-color: #2a3a30;
+}
+
+[data-theme="dark"] .workspace-tab-btn {
+  color: #a4bba8;
+}
+
+[data-theme="dark"] .workspace-tab-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .workspace-tab-btn.active {
+  background: #133020;
+  color: #85d6b0;
+  border: 1px solid #2a3a30;
+}
+
+[data-theme="dark"] .eyebrow {
+  color: #85d6b0 !important;
+}
+
 
 [data-theme="dark"] th {
   background: rgba(255, 255, 255, 0.05);
@@ -3224,9 +3347,14 @@ td {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  margin: 0 0 20px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--line);
 }
 
 .workspace-tab-group {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   gap: 4px;
   padding: 4px;
@@ -3234,6 +3362,7 @@ td {
   border: 1px solid var(--line, #d3cbb6);
   border-radius: 10px;
 }
+
 
 .workspace-tab-btn {
   display: flex;

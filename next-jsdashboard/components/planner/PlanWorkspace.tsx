@@ -195,7 +195,7 @@ export function PlanWorkspace({
   onDownloadFile,
 }: PlanWorkspaceProps) {
   const [draft, setDraft] = useState("");
-  const [viewMode, setViewMode] = useState<"both" | "details" | "chat">("both");
+  const [viewMode, setViewMode] = useState<"details" | "chat">("details");
   const [showRevisionHistory, setShowRevisionHistory] = useState(false);
 
   const currentRevision = workspace?.currentRevision;
@@ -213,20 +213,13 @@ export function PlanWorkspace({
     setDraft("");
   }
 
-  const showDetails = viewMode === "both" || viewMode === "details";
-  const showChat = viewMode === "both" || viewMode === "chat";
+  const showDetails = viewMode === "details";
+  const showChat = viewMode === "chat";
 
   return (
     <div className="plan-workspace-container">
-      <div className="workspace-nav-bar mb-4">
+      <div className="workspace-nav-bar">
         <div className="workspace-tab-group">
-          <button
-            type="button"
-            className={`workspace-tab-btn ${viewMode === "both" ? "active" : ""}`}
-            onClick={() => setViewMode("both")}
-          >
-            <Icon name="grid" /> Dual View
-          </button>
           <button
             type="button"
             className={`workspace-tab-btn ${viewMode === "details" ? "active" : ""}`}
@@ -244,21 +237,19 @@ export function PlanWorkspace({
         </div>
       </div>
 
+
       <section className={`plan-workspace view-mode-${viewMode}`}>
         {showDetails && (
           <div className="plan-review-area">
-            <div className="workspace-section-header">
+            <div className="workspace-section-header compact">
               <div>
                 <span className="eyebrow">PLAN DETAILS</span>
-                <h2>{plan.project_title}</h2>
               </div>
               <div className="workspace-header-actions">
                 {currentRevision && <span className="revision-badge">Revision {currentRevision.revision_number}</span>}
-                <span className={`compact-badge status-${plan.status ?? "generated"}`}>
-                  {(plan.status ?? "generated").replace("_", " ")}
-                </span>
               </div>
             </div>
+
 
             {loading ? (
               <div className="workspace-loading">Loading workspace...</div>
