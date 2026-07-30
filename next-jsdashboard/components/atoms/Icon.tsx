@@ -16,7 +16,8 @@ export type IconName =
   | "moon"
   | "x"
   | "arrowUp"
-  | "file";
+  | "file"
+  | "archive";
 
 interface IconProps {
   name: IconName;
@@ -26,6 +27,14 @@ interface IconProps {
 
 export function Icon({ name, className, style }: IconProps) {
   const paths: Record<IconName, React.ReactNode> = {
+    archive: (
+      <>
+        <rect x="2" y="3" width="20" height="5" rx="1" />
+        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+        <path d="M10 12h4" />
+      </>
+    ),
+
     spark: (
       <path d="m12 3 1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8L12 3Zm6 11 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14Z" />
     ),

@@ -914,7 +914,28 @@ export default function Dashboard() {
     }
   }
 
+  async function handleToggleArchivePlan(planRecord: HistoryRecord) {
+    const isArchived = planRecord.status === "archived";
+    try {
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(planRecord.id)}/review`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: isArchived ? "restore" : "archive" }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to update plan status");
+      fetchPlans();
+    } catch (caught) {
+      console.error("Failed to archive/restore plan:", caught);
+    }
+  }
+
   async function handleUpdatePlan(e: React.FormEvent) {
+
     e.preventDefault();
     if (!editPlan || !editValues) return;
     const nextErrors = validateEdit(editValues);
@@ -1239,7 +1260,9 @@ export default function Dashboard() {
                     setEditErrors({});
                     setEditMessage("");
                   }}
+                  onArchivePlan={handleToggleArchivePlan}
                 />
+
 
                 {planDetailsOpen && planToShow && (
                   <div className="modal-overlay" role="presentation">

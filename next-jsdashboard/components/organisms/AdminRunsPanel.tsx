@@ -38,10 +38,41 @@ export function AdminRunsPanel({
   const [modelName, setModelName] = useState("");
   const [date, setDate] = useState("");
   const [planId, setPlanId] = useState("");
+
   const modelNames = useMemo(
-    () => [...new Set(runs.map((run) => run.model_name).filter(Boolean))],
+    () => [...new Set(runs.map((run) => run.model_name).filter(Boolean))].sort(),
     [runs],
   );
+
+  const filteredRuns = useMemo(() => {
+    return runs.filter((run) => {
+      if (status && run.status !== status) return false;
+      if (modelName && run.model_name !== modelName) return false;
+      if (planId && run.plan_id !== planId) return false;
+      if (date && run.started_at && !run.started_at.startsWith(date)) return false;
+      return true;
+    });
+  }, [runs, status, modelName, date, planId]);
+
+  function handleStatusChange(val: string) {
+    setStatus(val);
+    onRefresh({ status: val, modelName, date, planId });
+  }
+
+  function handleModelChange(val: string) {
+    setModelName(val);
+    onRefresh({ status, modelName: val, date, planId });
+  }
+
+  function handleDateChange(val: string) {
+    setDate(val);
+    onRefresh({ status, modelName, date: val, planId });
+  }
+
+  function handlePlanChange(val: string) {
+    setPlanId(val);
+    onRefresh({ status, modelName, date, planId: val });
+  }
 
   function applyFilters() {
     onRefresh({ status, modelName, date, planId });
@@ -71,7 +102,7 @@ export function AdminRunsPanel({
               id="run-status-filter"
               className="select-atom"
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              onChange={(event) => handleStatusChange(event.target.value)}
               aria-label="Filter run status"
             >
               <option value="">All statuses</option>
@@ -88,7 +119,7 @@ export function AdminRunsPanel({
               id="run-model-filter"
               className="select-atom"
               value={modelName}
-              onChange={(event) => setModelName(event.target.value)}
+              onChange={(event) => handleModelChange(event.target.value)}
               aria-label="Filter model"
             >
               <option value="">All models</option>
@@ -106,7 +137,7 @@ export function AdminRunsPanel({
               className="input-atom"
               type="date"
               value={date}
-              onChange={(event) => setDate(event.target.value)}
+              onChange={(event) => handleDateChange(event.target.value)}
               aria-label="Filter date"
             />
           </div>
@@ -116,7 +147,7 @@ export function AdminRunsPanel({
               id="run-plan-filter"
               className="select-atom"
               value={planId}
-              onChange={(event) => setPlanId(event.target.value)}
+              onChange={(event) => handlePlanChange(event.target.value)}
               aria-label="Filter plan"
             >
               <option value="">All plans</option>
@@ -148,15 +179,13 @@ export function AdminRunsPanel({
                 <th>Status</th>
                 <th>Attempt</th>
                 <th>Duration</th>
-                <th>Input tokens</th>
-                <th>Output tokens</th>
                 <th>Validation errors</th>
                 <th>Started</th>
                 <th>Completed</th>
               </tr>
             </thead>
             <tbody>
-              {runs.map((run) => (
+              {filteredRuns.map((run) => (
                 <React.Fragment key={run.id}>
                   <tr>
                     <td>{display(run.project_title)}</td>
@@ -170,15 +199,13 @@ export function AdminRunsPanel({
                     </td>
                     <td>{display(run.attempt_number)}</td>
                     <td>{duration(run.duration_ms)}</td>
-                    <td>{display(run.input_tokens)}</td>
-                    <td>{display(run.output_tokens)}</td>
                     <td>{display(run.validation_error_count)}</td>
                     <td>{display(run.started_at)}</td>
                     <td>{display(run.completed_at)}</td>
                   </tr>
                   {run.error_message && (
                     <tr>
-                      <td colSpan={12}>
+                      <td colSpan={10}>
                         <details>
                           <summary>Error message</summary>
                           <p className="modal-text">{run.error_message}</p>
@@ -188,9 +215,9 @@ export function AdminRunsPanel({
                   )}
                 </React.Fragment>
               ))}
-              {runs.length === 0 && (
+              {filteredRuns.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="text-center text-muted p-4">
+                  <td colSpan={10} className="text-center text-muted p-4">
                     No generation runs found.
                   </td>
                 </tr>
@@ -198,6 +225,7 @@ export function AdminRunsPanel({
             </tbody>
           </table>
         </div>
+
       )}
     </section>
   );

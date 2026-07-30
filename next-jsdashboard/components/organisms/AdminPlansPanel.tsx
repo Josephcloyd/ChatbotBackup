@@ -17,7 +17,9 @@ interface AdminPlansPanelProps {
   onDeletePlan: (plan: HistoryRecord) => void;
   onDeleteSelectedPlans: (plans: HistoryRecord[]) => void;
   onEditPlan: (plan: HistoryRecord) => void;
+  onArchivePlan?: (plan: HistoryRecord) => void;
 }
+
 
 function statusOf(plan: HistoryRecord): PlanStatus {
   return plan.status ?? "generated";
@@ -45,7 +47,9 @@ export function AdminPlansPanel({
   onDeletePlan,
   onDeleteSelectedPlans,
   onEditPlan,
+  onArchivePlan,
 }: AdminPlansPanelProps) {
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -288,7 +292,7 @@ export function AdminPlansPanel({
       <div className="table-scroll admin-table-scroll">
         <table
           className="admin-table admin-plans-table"
-          style={{ minWidth: 950 }}
+          style={{ minWidth: 1020 }}
         >
           <thead>
             <tr>
@@ -303,11 +307,9 @@ export function AdminPlansPanel({
               <th style={{ minWidth: 200, maxWidth: 260 }}>Title</th>
               <th style={{ width: 180, minWidth: 160 }}>Operator</th>
               <th style={{ width: 110 }}>Status</th>
-              <th style={{ width: 120 }}>Estimated hours</th>
-              <th style={{ width: 90 }}>Team size</th>
               <th style={{ width: 90 }}>Source</th>
               <th style={{ width: 140 }}>Created at</th>
-              <th style={{ width: 150, textAlign: "center" }}>Actions</th>
+              <th style={{ width: 175, textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -393,17 +395,12 @@ export function AdminPlansPanel({
                     {statusOf(item).replace("_", " ")}
                   </span>
                 </td>
-                <td className="numeric-cell" data-label="Estimated hours">
-                  {Number(item.total_hours_estimate || 0).toLocaleString()}
-                </td>
-                <td className="numeric-cell" data-label="Team size">
-                  {item.recommended_team_size ?? "—"}
-                </td>
                 <td data-label="Source" style={{ whiteSpace: "nowrap" }}>
                   <span className={`compact-badge source-${sourceOf(item)}`}>
                     {sourceOf(item)}
                   </span>
                 </td>
+
                 <td data-label="Created at" style={{ whiteSpace: "nowrap" }}>
                   <span className="date-cell">
                     {formatDateTime(item.created_at)}
@@ -411,39 +408,57 @@ export function AdminPlansPanel({
                 </td>
                 <td
                   data-label="Actions"
-                  style={{ textAlign: "center" }}
+                  style={{ textAlign: "center", whiteSpace: "nowrap", minWidth: 175 }}
                   className="actions-cell"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <button
-                    type="button"
-                    className="action-btn view-btn"
-                    onClick={() => onViewPlan(item.id)}
-                    title="View plan"
-                    aria-label={`View ${item.project_title}`}
-                  >
-                    <Icon name="eye" />
-                  </button>
-                  <button
-                    type="button"
-                    className="action-btn edit-btn"
-                    onClick={() => onEditPlan(item)}
-                    title="Edit plan"
-                    aria-label={`Edit ${item.project_title}`}
-                  >
-                    <Icon name="edit" />
-                  </button>
-                  <button
-                    type="button"
-                    className="action-btn delete-btn"
-                    onClick={() => onDeletePlan(item)}
-                    title="Delete plan"
-                    aria-label={`Delete ${item.project_title}`}
-                  >
-                    <Icon name="trash" />
-                  </button>
+                  <div style={{ display: "inline-flex", gap: "4px", justifyContent: "center", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="action-btn view-btn"
+                      style={{ margin: 0 }}
+                      onClick={() => onViewPlan(item.id)}
+                      title="View plan"
+                      aria-label={`View ${item.project_title}`}
+                    >
+                      <Icon name="eye" />
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn edit-btn"
+                      style={{ margin: 0 }}
+                      onClick={() => onEditPlan(item)}
+                      title="Edit plan"
+                      aria-label={`Edit ${item.project_title}`}
+                    >
+                      <Icon name="edit" />
+                    </button>
+                    {onArchivePlan && (
+                      <button
+                        type="button"
+                        className={`action-btn ${statusOf(item) === "archived" ? "edit-btn" : "view-btn"}`}
+                        style={{ margin: 0 }}
+                        onClick={() => onArchivePlan(item)}
+                        title={statusOf(item) === "archived" ? "Restore plan" : "Archive plan"}
+                        aria-label={statusOf(item) === "archived" ? `Restore ${item.project_title}` : `Archive ${item.project_title}`}
+                      >
+                        <Icon name={statusOf(item) === "archived" ? "clock" : "archive"} />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="action-btn delete-btn"
+                      style={{ margin: 0 }}
+                      onClick={() => onDeletePlan(item)}
+                      title="Delete plan"
+                      aria-label={`Delete ${item.project_title}`}
+                    >
+                      <Icon name="trash" />
+                    </button>
+                  </div>
                 </td>
               </tr>
+
             ))}
             {filteredPlans.length === 0 && (
               <tr>
