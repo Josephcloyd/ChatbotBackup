@@ -6,7 +6,7 @@
 
 $ErrorActionPreference = "Continue"
 
-$RepoRoot = "C:\Users\Joseph Clyde\OneDrive\Desktop\Cloy's\GitHub\ChatbotBackup"
+$RepoRoot = $PSScriptRoot
 $BackendDir = Join-Path $RepoRoot "mcp-server"
 $DashboardDir = Join-Path $RepoRoot "next-jsdashboard"
 

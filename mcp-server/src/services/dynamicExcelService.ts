@@ -3,18 +3,29 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DynamicPlanResult } from "./dynamicPlanService.js";
+import {
+  findColumnDefinition,
+  getColumnDefinitions,
+} from "./productionPlanColumns.js";
+import type {
+  ProductionPlanColumnDefinition,
+  ProductionPlanColumnSemantic,
+} from "../types/productionPlan.js";
 
 const COLORS = {
-  navy: "FF17324D",
-  blue: "FF2563EB",
-  paleBlue: "FFEAF2FF",
-  paleGreen: "FFE8F5E9",
-  paleYellow: "FFFFF7D6",
-  paleRed: "FFFDECEC",
-  white: "FFFFFFFF",
-  gray: "FF64748B",
-  lightGray: "FFF1F5F9",
-  border: "FFD7E0EA",
+  primary:     "FF133020", // Dark Serpent
+  accent:      "FF046241", // Castleton Green
+  accentDark:  "FF034E34", // Castleton Green dark
+  saffron:     "FFFFB347", // Saffron
+  earthYellow: "FFFFC370", // Earth Yellow
+  paper:       "FFF5EEDB", // Paper background
+  paleGreen:   "FFE8F5EE", // Light green tint
+  paleAmber:   "FFFFF8E1", // Light amber tint
+  paleRed:     "FFFDECEC",
+  white:       "FFFFFFFF",
+  sage:        "FF708E7C", // Sage
+  lightGray:   "FFF9F7F7", // Sea Salt
+  border:      "FFD3CBB6", // Warm border
 };
 
 function title(sheet: ExcelJS.Worksheet, range: string, value: string): void {
@@ -22,7 +33,7 @@ function title(sheet: ExcelJS.Worksheet, range: string, value: string): void {
   const cell = sheet.getCell(range.split(":")[0]!);
   cell.value = value;
   cell.font = { name: "Aptos Display", size: 20, bold: true, color: { argb: COLORS.white } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navy } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.primary } };
   cell.alignment = { vertical: "middle", horizontal: "left" };
 }
 
@@ -30,7 +41,7 @@ function sectionHeader(row: ExcelJS.Row): void {
   row.height = 24;
   row.eachCell((cell) => {
     cell.font = { name: "Aptos", bold: true, color: { argb: COLORS.white } };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.navy } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.primary } };
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = { bottom: { style: "thin", color: { argb: COLORS.border } } };
   });
@@ -46,6 +57,13 @@ function setWidths(sheet: ExcelJS.Worksheet, widths: number[]): void {
   widths.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
 }
 
+function safeCellValue(value: unknown): unknown {
+  if (typeof value === "string" && /^[=+\-@]/.test(value.trim())) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 function writeGenericSheet(workbook: ExcelJS.Workbook, sheetDefinition: {
   sheetName: string;
   columns: string[];
@@ -57,7 +75,7 @@ function writeGenericSheet(workbook: ExcelJS.Workbook, sheetDefinition: {
   });
   sheet.addRow(sheetDefinition.columns);
   sheetDefinition.rows.forEach((row) => {
-    sheet.addRow(sheetDefinition.columns.map((column) => row[column] ?? ""));
+    sheet.addRow(sheetDefinition.columns.map((column) => safeCellValue(row[column] ?? "")));
   });
   sectionHeader(sheet.getRow(1));
   sheet.autoFilter = {
@@ -87,10 +105,32 @@ export class DynamicExcelService {
     workbook.calcProperties.fullCalcOnLoad = true;
 
     const { plan, settings, phases, risks } = result;
+    const isQuantityMode = result.unitLabel !== undefined;
     const productionSheet = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan");
     if (!productionSheet) throw new Error("Dynamic plan is missing the Production Plan sheet");
+    const columnDefinitions = getColumnDefinitions(productionSheet);
+    const requiredColumn = (
+      semantic: ProductionPlanColumnSemantic,
+    ): ProductionPlanColumnDefinition => {
+      const column = findColumnDefinition(productionSheet, semantic);
+      if (!column) throw new Error(`Dynamic plan is missing required ${semantic} column`);
+      return column;
+    };
+    const columnNumber = (semantic: ProductionPlanColumnSemantic): number => {
+      const required = requiredColumn(semantic);
+      return columnDefinitions.findIndex((column) => column.label === required.label) + 1;
+    };
+    const columnLetter = (semantic: ProductionPlanColumnSemantic): string =>
+      workbook.getWorksheet("Production Plan")?.getColumn(columnNumber(semantic)).letter ??
+      String.fromCharCode(64 + columnNumber(semantic));
+    const primaryTargetColumn = requiredColumn("planned_output");
+    const primaryActualColumn = requiredColumn("actual_output");
+    const plannedStaffColumn = requiredColumn("planned_staff");
+    const dateColumn = requiredColumn("date");
+    const monthColumn = requiredColumn("month");
     const planRows = productionSheet.rows;
     const lastPlanRow = planRows.length + 1;
+
 
     const summary = workbook.addWorksheet("Overview", {
       views: [{ showGridLines: false }],
@@ -110,7 +150,7 @@ export class DynamicExcelService {
     summary.getRow(9).values = ["Schedule", settings.weekdaysOnly ? "Weekdays only" : "Calendar days", "Scheduled Days", planRows.length];
     for (const cellAddress of ["A4", "A5", "A8", "A9", "C8", "C9", "E4"]) {
       const cell = summary.getCell(cellAddress);
-      cell.font = { bold: true, color: { argb: COLORS.gray } };
+      cell.font = { bold: true, color: { argb: COLORS.sage } };
     }
     summary.getCell("B8").numFmt = "yyyy-mm-dd";
     summary.getCell("D8").numFmt = "yyyy-mm-dd";
@@ -119,35 +159,43 @@ export class DynamicExcelService {
     summary.mergeCells("C11:D11");
     summary.mergeCells("E11:F11");
     summary.mergeCells("G11:H11");
-    summary.getCell("A11").value = "PLANNED HOURS";
+    const metricLabel = result.unitLabel ? result.unitLabel.toUpperCase() : "HOURS";
+    summary.getCell("A11").value = `PLANNED ${metricLabel}`;
     summary.getCell("C11").value = "TEAM SIZE";
-    summary.getCell("E11").value = "ACTUAL HOURS";
+    summary.getCell("E11").value = `ACTUAL ${metricLabel}`;
     summary.getCell("G11").value = "COMPLETION";
     for (const address of ["A11", "C11", "E11", "G11"]) {
       const cell = summary.getCell(address);
       cell.font = { bold: true, color: { argb: COLORS.white } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.blue } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.accent } };
       cell.alignment = { horizontal: "center" };
     }
     summary.mergeCells("A12:B13");
     summary.mergeCells("C12:D13");
     summary.mergeCells("E12:F13");
     summary.mergeCells("G12:H13");
-    summary.getCell("A12").value = { formula: `SUM('Production Plan'!F2:F${lastPlanRow})`, result: settings.totalHours };
-    summary.getCell("C12").value = { formula: `MAX('Production Plan'!E2:E${lastPlanRow})`, result: settings.teamSize };
-    summary.getCell("E12").value = { formula: `SUM('Production Plan'!I2:I${lastPlanRow})`, result: 0 };
-    summary.getCell("G12").value = { formula: `IF(COUNT('Production Plan'!I2:I${lastPlanRow})=0,"",IFERROR(E12/A12,""))`, result: "" };
+    const plannedResult = result.unitLabel != null && result.totalQuantity != null
+      ? result.totalQuantity
+      : settings.totalHours;
+    const valueFmt = result.unitLabel ? "#,##0" : "#,##0.00";
+    const targetLetter = columnLetter("planned_output");
+    const staffLetter = columnLetter("planned_staff");
+    const actualLetter = columnLetter("actual_output");
+    summary.getCell("A12").value = { formula: `SUM('Production Plan'!${targetLetter}2:${targetLetter}${lastPlanRow})`, result: plannedResult };
+    summary.getCell("C12").value = { formula: `MAX('Production Plan'!${staffLetter}2:${staffLetter}${lastPlanRow})`, result: settings.teamSize };
+    summary.getCell("E12").value = { formula: `SUM('Production Plan'!${actualLetter}2:${actualLetter}${lastPlanRow})`, result: 0 };
+    summary.getCell("G12").value = { formula: `IF(COUNT('Production Plan'!${actualLetter}2:${actualLetter}${lastPlanRow})=0,"",IFERROR(E12/A12,""))`, result: "" };
     for (const address of ["A12", "C12", "E12", "G12"]) {
       const cell = summary.getCell(address);
-      cell.font = { size: 20, bold: true, color: { argb: COLORS.navy } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleBlue } };
+      cell.font = { size: 20, bold: true, color: { argb: COLORS.primary } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleAmber } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
     }
-    summary.getCell("A12").numFmt = "#,##0.00";
-    summary.getCell("E12").numFmt = "#,##0.00";
+    summary.getCell("A12").numFmt = valueFmt;
+    summary.getCell("E12").numFmt = valueFmt;
     summary.getCell("G12").numFmt = "0.0%";
     summary.getCell("A16").value = "Plan Summary";
-    summary.getCell("A16").font = { bold: true, size: 12, color: { argb: COLORS.navy } };
+    summary.getCell("A16").font = { bold: true, size: 12, color: { argb: COLORS.primary } };
     summary.mergeCells("A17:H19");
     summary.getCell("A17").value = plan.summary;
     summary.getCell("A17").alignment = { wrapText: true, vertical: "top" };
@@ -161,60 +209,139 @@ export class DynamicExcelService {
       pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
     });
     production.addRow(productionSheet.columns);
+    const excelColumn = (semantic: ProductionPlanColumnSemantic): number =>
+      columnNumber(semantic);
+    const excelLetter = (semantic: ProductionPlanColumnSemantic): string =>
+      production.getColumn(excelColumn(semantic)).letter;
+    const dateLetter = excelLetter("date");
+    const targetOutputLetter = excelLetter("planned_output");
+    const plannedStaffLetter = excelLetter("planned_staff");
+    const actualStaffLetter = excelLetter("actual_staff");
+    const actualOutputLetter = excelLetter("actual_output");
+
     planRows.forEach((source, index) => {
       const excelRow = index + 2;
-      const date = new Date(`${String(source.Date)}T00:00:00Z`);
-      const targetHours = Number(source["Target Total Hours"]);
-      const teamSize = Number(source["Target Active Annotators"]);
-      const row = production.addRow([
-        index + 1,
-        date,
-        { formula: `TEXT(B${excelRow},"mmm yyyy")`, result: String(source.Month) },
-        { formula: `TEXT(B${excelRow},"ddd")`, result: String(source.Day) },
-        teamSize,
-        targetHours,
-        { formula: `IFERROR(F${excelRow}/E${excelRow},0)`, result: Number((targetHours / teamSize).toFixed(2)) },
-        null,
-        null,
-        { formula: `IF(OR(H${excelRow}="",I${excelRow}=""),"",I${excelRow}/H${excelRow})`, result: "" },
-        { formula: `F${excelRow}`, result: targetHours },
-        { formula: `IF(I${excelRow}="","",I${excelRow})`, result: "" },
-        { formula: `IF(I${excelRow}="","",I${excelRow}-F${excelRow})`, result: "" },
-        { formula: `IF(I${excelRow}="","",IFERROR(I${excelRow}/F${excelRow},""))`, result: "" },
-        { formula: `IF(I${excelRow}="","Not Started",IF(I${excelRow}>=F${excelRow},"Complete","In Progress"))`, result: "Not Started" },
-        null,
-      ]);
+      const date = new Date(`${String(source[dateColumn.label])}T00:00:00Z`);
+      const targetValue = Number(source[primaryTargetColumn.label] ?? 0);
+      const teamSize = Number(source[plannedStaffColumn.label] ?? 0);
+      const rowValues = columnDefinitions.map((column) => {
+        if (column.semantic === "sequence") return index + 1;
+        if (column.semantic === "date") return date;
+        if (column.semantic === "month") {
+          return {
+            formula: `TEXT(${dateLetter}${excelRow},"mmm yyyy")`,
+            result: String(source[column.label] ?? ""),
+          };
+        }
+        if (column.semantic === "day") {
+          return {
+            formula: `TEXT(${dateLetter}${excelRow},"ddd")`,
+            result: String(source[column.label] ?? ""),
+          };
+        }
+        if (column.semantic === "planned_output_per_person") {
+          return {
+            formula: `IFERROR(${targetOutputLetter}${excelRow}/${plannedStaffLetter}${excelRow},0)`,
+            result: Number(
+              (targetValue / Math.max(teamSize, 1)).toFixed(isQuantityMode ? 0 : 2),
+            ),
+          };
+        }
+        if (column.semantic === "actual_staff" || column.semantic === "actual_output") {
+          return null;
+        }
+        if (column.semantic === "actual_output_per_person") {
+          return {
+            formula: `IF(OR(${actualStaffLetter}${excelRow}="",${actualOutputLetter}${excelRow}=""),"",${actualOutputLetter}${excelRow}/${actualStaffLetter}${excelRow})`,
+            result: "",
+          };
+        }
+        if (column.semantic === "actual_hours") return null;
+        if (column.semantic === "variance") {
+          return {
+            formula: `IF(${actualOutputLetter}${excelRow}="","",${actualOutputLetter}${excelRow}-${targetOutputLetter}${excelRow})`,
+            result: "",
+          };
+        }
+        if (column.semantic === "completion_rate") {
+          return {
+            formula: `IF(${actualOutputLetter}${excelRow}="","",IFERROR(${actualOutputLetter}${excelRow}/${targetOutputLetter}${excelRow},""))`,
+            result: "",
+          };
+        }
+        if (column.semantic === "status") {
+          return {
+            formula: `IF(${actualOutputLetter}${excelRow}="","Not Started",IF(${actualOutputLetter}${excelRow}>=${targetOutputLetter}${excelRow},"Complete","In Progress"))`,
+            result: "Not Started",
+          };
+        }
+        return safeCellValue(source[column.label] ?? "");
+      });
+      const row = production.addRow(rowValues);
+
       row.height = 20;
-      for (const column of [5, 6, 7, 11]) {
-        row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleGreen } };
-      }
-      for (const column of [8, 9, 16]) {
-        row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleYellow } };
-      }
+      columnDefinitions.forEach((column, columnIndex) => {
+        if (
+          column.semantic === "planned_staff" ||
+          column.semantic === "role_headcount" ||
+          column.semantic === "planned_output" ||
+          column.semantic === "planned_output_per_person" ||
+          column.semantic === "planned_hours"
+        ) {
+          row.getCell(columnIndex + 1).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: COLORS.paleGreen },
+          };
+        } else if (column.editable) {
+          row.getCell(columnIndex + 1).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: COLORS.paleAmber },
+          };
+        }
+      });
     });
     sectionHeader(production.getRow(1));
-    production.autoFilter = { from: "A1", to: "P1" };
-    production.getColumn(2).numFmt = "yyyy-mm-dd";
-    for (const column of [6, 7, 9, 10, 11, 12, 13]) production.getColumn(column).numFmt = "#,##0.00";
-    production.getColumn(14).numFmt = "0.0%";
+    production.autoFilter = {
+      from: "A1",
+      to: `${production.getColumn(columnDefinitions.length).letter}1`,
+    };
+    columnDefinitions.forEach((column, index) => {
+      const worksheetColumn = production.getColumn(index + 1);
+      if (column.dataType === "date") worksheetColumn.numFmt = "yyyy-mm-dd";
+      else if (column.dataType === "percentage") worksheetColumn.numFmt = "0.0%";
+      else if (column.dataType === "integer") worksheetColumn.numFmt = "#,##0";
+      else if (column.dataType === "decimal") worksheetColumn.numFmt = "#,##0.00";
+
+      const maxContentWidth = Math.max(
+        column.label.length,
+        ...planRows.map((row) => String(row[column.label] ?? "").length),
+      );
+      worksheetColumn.width = Math.min(Math.max(maxContentWidth + 2, 12), 34);
+      worksheetColumn.alignment = { wrapText: true, vertical: "top" };
+    });
+
+    const actualStaffColumnNumber = excelColumn("actual_staff");
+    const actualOutputColumnNumber = excelColumn("actual_output");
     for (let row = 2; row <= lastPlanRow; row += 1) {
-      production.getCell(row, 8).dataValidation = {
+      production.getCell(row, actualStaffColumnNumber).dataValidation = {
         type: "whole", operator: "between", formulae: [0, settings.teamSize], allowBlank: true,
         showErrorMessage: true, errorTitle: "Invalid team size", error: `Enter a value from 0 to ${settings.teamSize}.`,
       };
-      production.getCell(row, 9).dataValidation = {
+      production.getCell(row, actualOutputColumnNumber).dataValidation = {
         type: "decimal", operator: "greaterThanOrEqual", formulae: [0], allowBlank: true,
-        showErrorMessage: true, errorTitle: "Invalid hours", error: "Actual hours cannot be negative.",
+        showErrorMessage: true, errorTitle: "Invalid value", error: `${primaryActualColumn.label} cannot be negative.`,
       };
     }
+    const statusLetter = excelLetter("status");
     production.addConditionalFormatting({
-      ref: `O2:O${lastPlanRow}`,
+      ref: `${statusLetter}2:${statusLetter}${lastPlanRow}`,
       rules: [
         { type: "containsText", operator: "containsText", text: "Complete", priority: 1, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleGreen } } } },
-        { type: "containsText", operator: "containsText", text: "In Progress", priority: 2, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleYellow } } } },
+        { type: "containsText", operator: "containsText", text: "In Progress", priority: 2, style: { fill: { type: "pattern", pattern: "solid", fgColor: { argb: COLORS.paleAmber } } } },
       ],
     });
-    setWidths(production, [7, 13, 14, 10, 18, 18, 22, 18, 18, 22, 14, 14, 14, 16, 15, 28]);
 
     for (const sheet of plan.workbook.sheets) {
       if (sheet.sheetName === "Production Plan") continue;
@@ -222,26 +349,32 @@ export class DynamicExcelService {
     }
 
     const monthly = workbook.addWorksheet("Monthly Summary", { views: [{ state: "frozen", ySplit: 1, showGridLines: false }] });
-    monthly.addRow(["Month", "Planned Hours", "Actual Hours", "Variance", "Completion Rate"]);
+    const monthlyMetricLabel = result.unitLabel ?? "Hours";
+    monthly.addRow(["Month", `Planned ${monthlyMetricLabel}`, `Actual ${monthlyMetricLabel}`, "Variance", "Completion Rate"]);
     const monthTargets = new Map<string, number>();
     planRows.forEach((row) => {
-      const month = String(row.Month);
-      monthTargets.set(month, (monthTargets.get(month) ?? 0) + Number(row["Target Total Hours"]));
+      const month = String(row[monthColumn.label] ?? "Unscheduled");
+      monthTargets.set(
+        month,
+        (monthTargets.get(month) ?? 0) + Number(row[primaryTargetColumn.label] ?? 0),
+      );
     });
+    const monthLetter = excelLetter("month");
     [...monthTargets.entries()].forEach(([month, target], index) => {
       const row = index + 2;
       monthly.addRow([
         month,
-        { formula: `SUMIF('Production Plan'!$C$2:$C$${lastPlanRow},A${row},'Production Plan'!$F$2:$F$${lastPlanRow})`, result: Number(target.toFixed(2)) },
-        { formula: `SUMIF('Production Plan'!$C$2:$C$${lastPlanRow},A${row},'Production Plan'!$I$2:$I$${lastPlanRow})`, result: 0 },
-        { formula: `IF(COUNT('Production Plan'!$I$2:$I$${lastPlanRow})=0,"",C${row}-B${row})`, result: "" },
+        { formula: `SUMIF('Production Plan'!$${monthLetter}$2:$${monthLetter}$${lastPlanRow},A${row},'Production Plan'!$${targetOutputLetter}$2:$${targetOutputLetter}$${lastPlanRow})`, result: Number(target.toFixed(2)) },
+        { formula: `SUMIF('Production Plan'!$${monthLetter}$2:$${monthLetter}$${lastPlanRow},A${row},'Production Plan'!$${actualOutputLetter}$2:$${actualOutputLetter}$${lastPlanRow})`, result: 0 },
+        { formula: `IF(COUNT('Production Plan'!$${actualOutputLetter}$2:$${actualOutputLetter}$${lastPlanRow})=0,"",C${row}-B${row})`, result: "" },
         { formula: `IF(C${row}=0,"",IFERROR(C${row}/B${row},""))`, result: "" },
       ]);
     });
     sectionHeader(monthly.getRow(1));
-    monthly.getColumn(2).numFmt = "#,##0.00";
-    monthly.getColumn(3).numFmt = "#,##0.00";
-    monthly.getColumn(4).numFmt = "#,##0.00";
+    const monthlyValueFormat = isQuantityMode ? "#,##0" : "#,##0.00";
+    monthly.getColumn(2).numFmt = monthlyValueFormat;
+    monthly.getColumn(3).numFmt = monthlyValueFormat;
+    monthly.getColumn(4).numFmt = monthlyValueFormat;
     monthly.getColumn(5).numFmt = "0.0%";
     monthly.autoFilter = { from: "A1", to: "E1" };
     setWidths(monthly, [20, 18, 18, 18, 18]);

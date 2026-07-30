@@ -1,16 +1,13 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import { FLOWBOARD_AUTH_COOKIE, isValidSessionToken } from "@/lib/flowboardAuth";
+import { NextRequest, NextResponse } from "next/server";
+import { FLOWBOARD_AUTH_COOKIE, getSessionPayload } from "@/lib/flowboardAuth";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(FLOWBOARD_AUTH_COOKIE)?.value;
-  const hasValidSession = await isValidSessionToken(token);
+  const session = await getSessionPayload(token);
+  const hasValidSession = session !== null;
 
-  if (pathname === "/login") {
-    if (hasValidSession) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
-
+  if (pathname === "/login" || pathname === "/accept-invite") {
     return NextResponse.next();
   }
 
@@ -19,6 +16,23 @@ export async function proxy(request: NextRequest) {
   }
 
   if (hasValidSession) {
+    // Restrict Admin APIs
+    const isRevisionWorkspaceRoute = /^\/api\/planner\/plans\/[^/]+\/revisions(?:\/|$)/.test(pathname);
+    const isAdminPlannerRoute =
+      pathname.startsWith("/api/planner/operators") ||
+      pathname.startsWith("/api/planner/runs") ||
+      (pathname.startsWith("/api/planner/plans") &&
+        !isRevisionWorkspaceRoute &&
+        (["DELETE", "PATCH"].includes(request.method) ||
+          pathname.includes("/review") ||
+          pathname.includes("/files")));
+
+    if (isAdminPlannerRoute && session.role !== "admin") {
+      return NextResponse.json(
+        { success: false, error: "Access denied. Administrator privileges required." },
+        { status: 403 },
+      );
+    }
     return NextResponse.next();
   }
 

@@ -5,7 +5,7 @@ Chatbot2ProPl is an early-stage production-planning assistant. Its working backe
 It supports two workbook modes:
 
 - `template` preserves and fills the official company workbook.
-- `dynamic` needs no external template and creates a professional workbook with an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation.
+- `dynamic` needs no external template and creates a professional workbook with prompt-specific semantic headers, an executive summary, editable production schedule, monthly rollups, phases, risks, assumptions, formulas, and input validation. The model may name domain columns such as `Records Assigned` or `Validators Scheduled`, while backend metadata keeps calculations independent of display labels.
 
 The repository now includes the Flowboard Next.js dashboard and a local WhatsApp Web demo bot.
 
@@ -80,11 +80,16 @@ Node does not automatically load `.env` in every runtime. Either export the vari
 | `SUPABASE_SERVICE_ROLE_KEY` | none | Optional server-only database key |
 | `SUPABASE_WORKBOOK_BUCKET` | none | Optional Supabase Storage bucket for generated workbooks |
 | `SUPABASE_SIGNED_URL_EXPIRES_IN_SECONDS` | `3600` | Optional workbook signed URL lifetime |
+| `WHATSAPP_CLIENT_ID` | auto/reuse existing | Local WhatsApp Web session name under `.wwebjs_auth`; leave blank unless setting up a new session intentionally |
 | `WHATSAPP_ALLOWED_GROUP_ID` | none | Optional exact WhatsApp group ID to allow |
 | `WHATSAPP_ALLOWED_GROUP_NAME` | `test bot` | Temporary group-name fallback before the group ID is known |
 | `WHATSAPP_BOT_MENTION_NAME` | `wil alt` | Display-name mention the bot responds to |
 | `WHATSAPP_BOT_MENTION_ID` | none | Optional comma-separated mention IDs for the bot |
 | `WHATSAPP_LOG_FULL_GROUP_ID` | `1` in example | Prints full group IDs during first-run setup |
+| `WHATSAPP_CHROME_PATH` | auto-detected | Optional path to Chrome when it is installed somewhere unusual |
+| `WHATSAPP_HEADLESS` | `1` | Keeps Chrome hidden during WhatsApp bot runs; set to `0` for QR/login troubleshooting |
+| `WHATSAPP_AUTH_TIMEOUT_MS` | `120000` | Startup wait time for WhatsApp Web internals |
+| `WHATSAPP_USER_AGENT` | modern Windows Chrome | Optional override for WhatsApp Web browser user agent |
 
 Never place `SUPABASE_SERVICE_ROLE_KEY` in browser code or commit a real `.env` file.
 
@@ -112,7 +117,7 @@ To start both apps during the check:
 
 ## Supabase
 
-Apply `mcp-server/supabase/migrations/001_create_production_plans.sql` in the Supabase SQL editor or migration workflow. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
+Apply the SQL files in `mcp-server/supabase/migrations` in numeric order in the Supabase SQL editor or migration workflow. The current app expects the columns and tables added by `002_admin_dashboard_enhancements.sql`. Migration `004_repair_external_identity_column_types.sql` repairs older databases that stored WhatsApp IDs as UUIDs. Applying only `001_create_production_plans.sql` can make plan saves fail. The service-role key is used only by the backend. Database failure is non-fatal: workbook generation still succeeds.
 
 ## WhatsApp Web Demo Bot
 
@@ -138,6 +143,19 @@ Plan generation test:
 ```text
 @wil alt plan: Create a 1-week production plan for a student enrollment encoding project with 8 total hours.
 ```
+
+If startup prints `WhatsApp client disconnected: LOGOUT`, `Execution context was destroyed`, or `EBUSY ... first_party_sets.db`, the local WhatsApp Web session is stale or locked by Chrome. Close the bot, close Chrome/WhatsApp Web, then delete these ignored local folders from `mcp-server`:
+
+```powershell
+Remove-Item -LiteralPath .wwebjs_auth\session-production-planner-v2 -Recurse -Force
+Remove-Item -LiteralPath .wwebjs_cache -Recurse -Force
+```
+
+Then remove the old linked device in WhatsApp under `Linked devices`, rerun `npm.cmd run whatsapp:dev`, and scan the QR again.
+
+If the bot asks for QR even though WhatsApp still shows it as linked, check `WHATSAPP_CLIENT_ID`. Changing that value changes the local session folder. Leave it blank to let the bot reuse an existing `session-production-planner-demo` or `session-production-planner-v2` folder automatically.
+
+On a new collaborator machine, QR is expected once because `.wwebjs_auth` is local and is not pushed to Git. By default, `WHATSAPP_HEADLESS=1` keeps Chrome hidden and the QR code prints in the terminal. If the terminal reaches `Failed to initialize: TimeoutError`, temporarily set `WHATSAPP_HEADLESS=0` to debug the WhatsApp Web screen, then close Chrome, remove the stale folders above, and run `npm.cmd run whatsapp:dev` again.
 
 ## Verification
 

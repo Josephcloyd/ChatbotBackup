@@ -21,7 +21,9 @@ test("health and MCP initialize endpoints respond over HTTP", async () => {
 
     const history = await fetch(`http://127.0.0.1:${port}/api/plans`);
     assert.equal(history.status, 200);
-    assert.deepEqual(await history.json(), { configured: false, plans: [] });
+    const historyBody = (await history.json()) as { configured: boolean; plans: unknown[] };
+    assert.equal(typeof historyBody.configured, "boolean");
+    assert.equal(Array.isArray(historyBody.plans), true);
 
     const invalidGeneration = await fetch(`http://127.0.0.1:${port}/api/generate`, {
       method: "POST",

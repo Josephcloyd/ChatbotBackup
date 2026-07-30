@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { fileURLToPath } from "node:url";
+import path from "node:path";
 
 export interface TemplateColumnDefinition {
   header: string;
@@ -30,9 +31,50 @@ export interface TemplateWorkbookDefinition {
   sheets: TemplateSheetDefinition[];
 }
 
-const DEFAULT_TEMPLATE_PATH = fileURLToPath(
-  new URL("../templates/ProductionPlanTemplate.xlsx", import.meta.url),
-);
+export interface TemplateOption {
+  id: string;
+  name: string;
+  filename: string;
+}
+
+const TEMPLATES_DIR = fileURLToPath(new URL("../templates", import.meta.url));
+export const DEFAULT_TEMPLATE_FILENAME = "HourBased_Annotation_Production_Plan_Template.xlsx";
+
+export const KNOWN_TEMPLATES: TemplateOption[] = [
+  {
+    id: "HourBased_Annotation_Production_Plan_Template.xlsx",
+    name: "Hour-Based Annotation Plan",
+    filename: "HourBased_Annotation_Production_Plan_Template.xlsx",
+  },
+  {
+    id: "CollectionBased_Production_Plan_Template.xlsx",
+    name: "Collection-Based Plan",
+    filename: "CollectionBased_Production_Plan_Template.xlsx",
+  },
+  {
+    id: "Drumming_Production_Plan_Template.xlsx",
+    name: "Drumming Production Plan",
+    filename: "Drumming_Production_Plan_Template.xlsx",
+  },
+  {
+    id: "StatusBased_Production_Plan_Template.xlsx",
+    name: "Status-Based Plan",
+    filename: "StatusBased_Production_Plan_Template.xlsx",
+  },
+];
+
+export function resolveTemplatePath(templateName?: string): string {
+  if (!templateName || !templateName.trim()) {
+    return path.join(TEMPLATES_DIR, DEFAULT_TEMPLATE_FILENAME);
+  }
+  const cleanName = templateName.trim();
+  const filename = cleanName.endsWith(".xlsx") ? cleanName : `${cleanName}.xlsx`;
+  return path.join(TEMPLATES_DIR, filename);
+}
+
+export function listAvailableTemplates(): TemplateOption[] {
+  return KNOWN_TEMPLATES;
+}
 
 function headerText(cell: ExcelJS.Cell): string {
   return cell.text.trim();
@@ -77,20 +119,21 @@ function detectHeaderRow(worksheet: ExcelJS.Worksheet): ExcelJS.Row | null {
 }
 
 export class TemplateService {
-  constructor(public readonly templatePath = DEFAULT_TEMPLATE_PATH) {}
+  constructor(public readonly templatePath = resolveTemplatePath()) {}
 
-  async loadDefinition(): Promise<TemplateWorkbookDefinition> {
+  async loadDefinition(overrideTemplateName?: string): Promise<TemplateWorkbookDefinition> {
+    const targetPath = overrideTemplateName ? resolveTemplatePath(overrideTemplateName) : this.templatePath;
     const workbook = new ExcelJS.Workbook();
 
     try {
-      await workbook.xlsx.readFile(this.templatePath);
+      await workbook.xlsx.readFile(targetPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Unable to open production plan template at ${this.templatePath}: ${message}`);
+      throw new Error(`Unable to open production plan template at ${targetPath}: ${message}`);
     }
 
     return {
-      templatePath: this.templatePath,
+      templatePath: targetPath,
       sheets: workbook.worksheets.map((worksheet) => {
         const headerRow = detectHeaderRow(worksheet);
         const columns: TemplateColumnDefinition[] = [];
@@ -138,3 +181,4 @@ export class TemplateService {
 }
 
 export const templateService = new TemplateService();
+

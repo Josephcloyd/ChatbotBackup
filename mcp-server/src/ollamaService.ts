@@ -21,6 +21,23 @@ export interface OllamaResponse {
   [key: string]: unknown;
 }
 
+export function buildOllamaGenerateRequestBody(prompt: string, model: string): string {
+  return JSON.stringify({
+    model,
+    prompt,
+    format: "json",
+    stream: false,
+    // Reasoning models such as Qwen3 can otherwise return only a `thinking`
+    // field and leave `response` empty, which is unusable for JSON parsing.
+    think: false,
+    options: {
+      temperature: 0.3,
+      top_p: 0.9,
+      num_predict: config.ollamaNumPredict,
+    },
+  });
+}
+
 /** Parse either one JSON response or a newline-delimited stream of JSON chunks. */
 export function parseOllamaResponseBody(rawBody: string): OllamaResponse[] {
   if (!rawBody.trim()) {
@@ -76,56 +93,106 @@ export function extractOllamaText(payloads: OllamaResponse[]): string {
 }
 
 /**
+ * Fetch available models from Ollama and select the preferred or first available one.
+ */
+export async function getAvailableOllamaModel(): Promise<string> {
+  const configuredModel = config.ollamaModel;
+  try {
+    const response = await fetch(`${config.ollamaBaseUrl}/api/tags`);
+    if (!response.ok) return configuredModel;
+    const data = await response.json() as { models?: { name: string }[] };
+    const availableModels = data.models?.map(m => m.name) || [];
+    
+    if (availableModels.length === 0) return configuredModel;
+    if (availableModels.includes(configuredModel)) return configuredModel;
+    
+    console.warn(`[ollamaService] Configured model ${configuredModel} not found. Falling back to ${availableModels[0]}`);
+    return availableModels[0];
+  } catch (error) {
+    console.error("[ollamaService] Failed to fetch Ollama tags:", error);
+    return configuredModel;
+  }
+}
+
+/**
  * Send a prompt to Ollama and return the completed text response.
  * Uses non-streaming (stream: false) for simplicity.
  */
 export async function generateWithOllama(prompt: string): Promise<string> {
-  const url = `${config.ollamaBaseUrl}/api/generate`;
+  const modelToUse = await getAvailableOllamaModel();
+  console.log(`[ollamaService] Sending prompt to ${modelToUse}...`);
 
-  console.log(`[ollamaService] Sending prompt to ${config.ollamaModel}...`);
+  const body = buildOllamaGenerateRequestBody(prompt, modelToUse);
 
-  const body = JSON.stringify({
-    model: config.ollamaModel,
-    prompt,
-    format: "json",
-    think: false,
-    stream: false,
-    options: {
-      temperature: 0.3,   // low temp for structured JSON output
-      top_p: 0.9,
-      num_predict: config.ollamaNumPredict,
-    },
-  });
+  const baseUrls = [
+    config.ollamaBaseUrl,
+    config.ollamaBaseUrl.includes("127.0.0.1")
+      ? config.ollamaBaseUrl.replace("127.0.0.1", "localhost")
+      : config.ollamaBaseUrl.includes("localhost")
+        ? config.ollamaBaseUrl.replace("localhost", "127.0.0.1")
+        : undefined,
+  ].filter((u): u is string => Boolean(u));
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    signal: AbortSignal.timeout(config.ollamaTimeoutMs),
-  });
+  let lastError: Error | undefined;
 
-  const rawBody = await response.text();
+  for (const baseUrl of baseUrls) {
+    const url = `${baseUrl}/api/generate`;
+    const maxRetries = 2;
 
-  if (!response.ok) {
-    throw new Error(`Ollama request failed (${response.status}): ${rawBody}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Connection": "close",
+          },
+          body,
+          signal: AbortSignal.timeout(config.ollamaTimeoutMs),
+        });
+
+        const rawBody = await response.text();
+
+        if (!response.ok) {
+          throw new Error(`Ollama request failed (${response.status}): ${rawBody}`);
+        }
+
+        const payloads = parseOllamaResponseBody(rawBody);
+        const unmodifiedPayload = payloads.length === 1 ? payloads[0] : payloads;
+        console.log(
+          "[ollamaService] Unmodified Ollama JSON response:",
+          JSON.stringify(unmodifiedPayload, null, 2),
+        );
+
+        const finalPayload = payloads.at(-1);
+        console.log(
+          `[ollamaService] Response received, chunks=${payloads.length}, done=${String(finalPayload?.done)}`,
+        );
+        return extractOllamaText(payloads);
+      } catch (error) {
+        lastError = error as Error;
+        const errMsg = lastError.message;
+        const causeMsg = lastError.cause ? ` (cause: ${String(lastError.cause)})` : "";
+        console.warn(`[ollamaService] Attempt ${attempt}/${maxRetries} to ${url} failed: ${errMsg}${causeMsg}`);
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+    }
   }
 
-  const payloads = parseOllamaResponseBody(rawBody);
-  const unmodifiedPayload = payloads.length === 1 ? payloads[0] : payloads;
-  console.log(
-    "[ollamaService] Unmodified Ollama JSON response:",
-    JSON.stringify(unmodifiedPayload, null, 2),
-  );
-
-  const finalPayload = payloads.at(-1);
-  console.log(
-    `[ollamaService] Response received, chunks=${payloads.length}, done=${String(finalPayload?.done)}`,
-  );
-  return extractOllamaText(payloads);
+  const detailedMsg = lastError?.message || "Unknown error";
+  if (detailedMsg === "fetch failed" || lastError?.name === "TypeError") {
+    throw new Error(
+      `Cannot connect to local Ollama server at ${config.ollamaBaseUrl}. Please ensure Ollama is running locally ('ollama serve') and model '${modelToUse}' is pulled.`
+    );
+  }
+  throw lastError ?? new Error("Ollama generation failed");
 }
 
 /**
- * Parse the JSON output from Ollama, stripping any accidental markdown fences.
+ * Parse the JSON output from Ollama, stripping any accidental markdown fences
+ * and gracefully repairing truncated JSON if output tokens ran out.
  */
 export function parseOllamaJson<T>(rawText: string): T {
   if (typeof rawText !== "string" || !rawText.trim()) {
@@ -150,5 +217,52 @@ export function parseOllamaJson<T>(rawText: string): T {
     cleaned = cleaned.slice(0, lastBrace + 1);
   }
 
-  return JSON.parse(cleaned) as T;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch (initialError) {
+    console.warn("[ollamaService] Initial JSON parse failed, attempting truncated JSON repair...");
+    try {
+      const repaired = repairTruncatedJson(cleaned);
+      return JSON.parse(repaired) as T;
+    } catch {
+      throw initialError;
+    }
+  }
+}
+
+function repairTruncatedJson(jsonString: string): string {
+  let str = jsonString.trim();
+
+  // Remove any incomplete trailing key or property
+  str = str.replace(/,\s*"[^"]*"?\s*:\s*"?[^"]*$/s, "");
+  str = str.replace(/,\s*"[^"]*"$/s, "");
+
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (char === '"' && (i === 0 || str[i - 1] !== "\\")) {
+      inString = !inString;
+    } else if (!inString) {
+      if (char === "{") openBraces++;
+      else if (char === "}") openBraces--;
+      else if (char === "[") openBrackets++;
+      else if (char === "]") openBrackets--;
+    }
+  }
+
+  if (inString) str += '"';
+
+  while (openBrackets > 0) {
+    str += "]";
+    openBrackets--;
+  }
+  while (openBraces > 0) {
+    str += "}";
+    openBraces--;
+  }
+
+  return str;
 }

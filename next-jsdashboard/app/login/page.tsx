@@ -1,11 +1,19 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AuthLayout } from "../../components/templates/AuthLayout";
+import { Brand } from "../../components/molecules/Brand";
+import { FormGroup } from "../../components/molecules/FormGroup";
+import { Input } from "../../components/atoms/Input";
+import { Button } from "../../components/atoms/Button";
+import { Icon } from "../../components/atoms/Icon";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +26,7 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await response.json();
@@ -37,103 +45,83 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{
-      minHeight: "100vh",
-      display: "grid",
-      placeItems: "center",
-      padding: "24px",
-      background: "#0f172a",
-      color: "#e5e7eb",
-      fontFamily: "Arial, sans-serif",
-    }}>
-      <form onSubmit={handleSubmit} style={{
-        width: "100%",
-        maxWidth: "420px",
-        padding: "28px",
-        borderRadius: "20px",
-        background: "#111827",
-        border: "1px solid rgba(255,255,255,0.12)",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
-      }}>
-        <p style={{
-          margin: "0 0 8px",
-          color: "#93c5fd",
-          fontSize: "12px",
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          fontWeight: 700,
-        }}>
-          Protected Access
+    <AuthLayout>
+      <form onSubmit={handleSubmit} className="auth-form-card">
+        <div className="auth-brand-wrapper">
+          <Brand variant="light" />
+        </div>
+
+        <h1 className="auth-title">Production Planner</h1>
+        <p className="auth-subtitle">
+          Log in with your operator or administrator credentials to manage schedules.
         </p>
 
-        <h1 style={{ margin: "0 0 10px", fontSize: "28px" }}>
-          Sign in to Flowboard
-        </h1>
+        <div className="auth-fields">
+          <FormGroup label="Email or Username" htmlFor="username">
+            <Input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              maxLength={100}
+              placeholder="e.g. operator1 or user@example.com"
+            />
+          </FormGroup>
 
-        <p style={{ margin: "0 0 22px", color: "#9ca3af", lineHeight: 1.6 }}>
-          Enter your local Flowboard access password to continue.
-        </p>
-
-        <label htmlFor="password" style={{
-          display: "block",
-          marginBottom: "8px",
-          fontSize: "14px",
-          fontWeight: 700,
-        }}>
-          Password
-        </label>
-
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-          required
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "13px 14px",
-            borderRadius: "12px",
-            border: "1px solid rgba(255,255,255,0.16)",
-            background: "#020617",
-            color: "#f9fafb",
-            outline: "none",
-            fontSize: "16px",
-          }}
-        />
+          <FormGroup label="Password" htmlFor="password">
+            <div style={{ position: "relative" }}>
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+                maxLength={50}
+                placeholder="••••••••"
+                style={{ paddingRight: "3.5rem" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "0.75rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--color-text-dim, #6b7280)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                <Icon name={showPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+              </button>
+            </div>
+          </FormGroup>
+        </div>
 
         {error && (
-          <div role="alert" style={{
-            marginTop: "14px",
-            padding: "12px",
-            borderRadius: "12px",
-            background: "rgba(239,68,68,0.12)",
-            color: "#fecaca",
-            border: "1px solid rgba(248,113,113,0.35)",
-          }}>
+          <div role="alert" className="error-box mt-4">
             {error}
           </div>
         )}
 
-        <button
+        <Button
           type="submit"
-          disabled={loading || password.trim().length === 0}
-          style={{
-            width: "100%",
-            marginTop: "18px",
-            padding: "13px 16px",
-            borderRadius: "12px",
-            border: 0,
-            background: loading ? "#475569" : "#2563eb",
-            color: "white",
-            fontWeight: 800,
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
+          className="w-full mt-6"
+          isLoading={loading}
+          disabled={username.trim().length === 0 || password.trim().length === 0}
         >
-          {loading ? "Checking..." : "Continue"}
-        </button>
+          Sign In
+        </Button>
       </form>
-    </main>
+    </AuthLayout>
   );
 }
