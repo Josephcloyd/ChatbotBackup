@@ -3892,6 +3892,14 @@ td {
   grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
 }
 
+.plan-view-modal .kpi-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.plan-view-modal .admin-two-column {
+  grid-template-columns: 1fr;
+}
+
 .plan-view-modal .plan-review-area,
 .plan-view-modal .plan-communication-area {
   box-shadow: none;
