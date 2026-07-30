@@ -1,6 +1,10 @@
 import React, { useMemo, useState } from "react";
 import { Icon } from "../atoms/Icon";
-import type { HistoryRecord, GenerationSource, PlanStatus } from "../../lib/adminTypes";
+import type {
+  HistoryRecord,
+  GenerationSource,
+  PlanStatus,
+} from "../../lib/adminTypes";
 
 type SortMode = "newest" | "oldest" | "highest_hours";
 const PLAN_OVERVIEW_LIMIT = 15;
@@ -47,15 +51,21 @@ export function AdminPlansPanel({
   const [sourceFilter, setSourceFilter] = useState("");
   const [operatorFilter, setOperatorFilter] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
-  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set());
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const operators = useMemo(
-    () => [...new Set(plans.map((plan) => plan.whatsapp_user_id).filter(Boolean))].sort(),
+    () =>
+      [
+        ...new Set(plans.map((plan) => plan.whatsapp_user_id).filter(Boolean)),
+      ].sort(),
     [plans],
   );
 
   const summary = useMemo(() => {
-    const countByStatus = (status: PlanStatus) => plans.filter((plan) => statusOf(plan) === status).length;
+    const countByStatus = (status: PlanStatus) =>
+      plans.filter((plan) => statusOf(plan) === status).length;
     return {
       totalPlans: plans.length,
       generated: countByStatus("generated"),
@@ -67,19 +77,40 @@ export function AdminPlansPanel({
   const filteredPlans = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return plans
-      .filter((plan) => !needle || plan.project_title.toLowerCase().includes(needle))
+      .filter(
+        (plan) => !needle || plan.project_title.toLowerCase().includes(needle),
+      )
       .filter((plan) => !statusFilter || statusOf(plan) === statusFilter)
       .filter((plan) => !sourceFilter || sourceOf(plan) === sourceFilter)
-      .filter((plan) => !operatorFilter || plan.whatsapp_user_id === operatorFilter)
+      .filter(
+        (plan) => !operatorFilter || plan.whatsapp_user_id === operatorFilter,
+      )
       .sort((left, right) => {
-        if (sortMode === "oldest") return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
-        if (sortMode === "highest_hours") return Number(right.total_hours_estimate || 0) - Number(left.total_hours_estimate || 0);
-        return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+        if (sortMode === "oldest")
+          return (
+            new Date(left.created_at).getTime() -
+            new Date(right.created_at).getTime()
+          );
+        if (sortMode === "highest_hours")
+          return (
+            Number(right.total_hours_estimate || 0) -
+            Number(left.total_hours_estimate || 0)
+          );
+        return (
+          new Date(right.created_at).getTime() -
+          new Date(left.created_at).getTime()
+        );
       });
   }, [plans, search, statusFilter, sourceFilter, operatorFilter, sortMode]);
 
-  const visiblePlans = useMemo(() => filteredPlans.slice(0, PLAN_OVERVIEW_LIMIT), [filteredPlans]);
-  const hiddenFilteredCount = Math.max(filteredPlans.length - visiblePlans.length, 0);
+  const visiblePlans = useMemo(
+    () => filteredPlans.slice(0, PLAN_OVERVIEW_LIMIT),
+    [filteredPlans],
+  );
+  const hiddenFilteredCount = Math.max(
+    filteredPlans.length - visiblePlans.length,
+    0,
+  );
 
   function clearFilters() {
     setSearch("");
@@ -89,8 +120,12 @@ export function AdminPlansPanel({
     setSortMode("newest");
   }
 
-  const selectedPlans = visiblePlans.filter((plan) => selectedPlanIds.has(plan.id));
-  const allVisibleSelected = visiblePlans.length > 0 && visiblePlans.every((plan) => selectedPlanIds.has(plan.id));
+  const selectedPlans = visiblePlans.filter((plan) =>
+    selectedPlanIds.has(plan.id),
+  );
+  const allVisibleSelected =
+    visiblePlans.length > 0 &&
+    visiblePlans.every((plan) => selectedPlanIds.has(plan.id));
 
   function togglePlan(planId: string) {
     setSelectedPlanIds((current) => {
@@ -134,7 +169,9 @@ export function AdminPlansPanel({
           <h3>All Generated Production Schedules</h3>
         </div>
         <span className="rows-count">
-          {visiblePlans.length} shown{hiddenFilteredCount ? ` / ${filteredPlans.length} matching` : ""} / {plans.length} loaded
+          {visiblePlans.length} shown
+          {hiddenFilteredCount ? ` / ${filteredPlans.length} matching` : ""} /{" "}
+          {plans.length} loaded
         </span>
       </div>
 
@@ -162,40 +199,74 @@ export function AdminPlansPanel({
         <div className="admin-filter-grid">
           <div className="admin-filter-field">
             <label htmlFor="plan-status-filter">Status</label>
-            <select id="plan-status-filter" className="select-atom" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filter by status">
+            <select
+              id="plan-status-filter"
+              className="select-atom"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              aria-label="Filter by status"
+            >
               <option value="">All statuses</option>
               {["generated", "archived", "failed"].map((status) => (
-                <option value={status} key={status}>{status.replace("_", " ")}</option>
+                <option value={status} key={status}>
+                  {status.replace("_", " ")}
+                </option>
               ))}
             </select>
           </div>
           <div className="admin-filter-field">
             <label htmlFor="plan-source-filter">Source</label>
-            <select id="plan-source-filter" className="select-atom" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)} aria-label="Filter by generation source">
+            <select
+              id="plan-source-filter"
+              className="select-atom"
+              value={sourceFilter}
+              onChange={(event) => setSourceFilter(event.target.value)}
+              aria-label="Filter by generation source"
+            >
               <option value="">All sources</option>
               {["whatsapp", "dashboard", "api", "admin"].map((source) => (
-                <option value={source} key={source}>{source}</option>
+                <option value={source} key={source}>
+                  {source}
+                </option>
               ))}
             </select>
           </div>
           <div className="admin-filter-field">
             <label htmlFor="plan-operator-filter">Operator</label>
-            <select id="plan-operator-filter" className="select-atom" value={operatorFilter} onChange={(event) => setOperatorFilter(event.target.value)} aria-label="Filter by operator">
+            <select
+              id="plan-operator-filter"
+              className="select-atom"
+              value={operatorFilter}
+              onChange={(event) => setOperatorFilter(event.target.value)}
+              aria-label="Filter by operator"
+            >
               <option value="">All operators</option>
               {operators.map((operator) => (
-                <option value={operator} key={operator}>{operator}</option>
+                <option value={operator} key={operator}>
+                  {operator}
+                </option>
               ))}
             </select>
           </div>
           <div className="admin-filter-field">
             <label htmlFor="plan-sort">Sort</label>
-            <select id="plan-sort" className="select-atom" value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} aria-label="Sort plans">
+            <select
+              id="plan-sort"
+              className="select-atom"
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as SortMode)}
+              aria-label="Sort plans"
+            >
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
               <option value="highest_hours">Highest hours</option>
             </select>
           </div>
-          <button className="download-button admin-clear-button" type="button" onClick={clearFilters}>
+          <button
+            className="download-button admin-clear-button"
+            type="button"
+            onClick={clearFilters}
+          >
             Clear filters
           </button>
         </div>
@@ -214,7 +285,10 @@ export function AdminPlansPanel({
       </div>
 
       <div className="table-scroll admin-table-scroll">
-        <table className="admin-table admin-plans-table" style={{ minWidth: 950 }}>
+        <table
+          className="admin-table admin-plans-table"
+          style={{ minWidth: 950 }}
+        >
           <thead>
             <tr>
               <th style={{ width: 36 }}>
@@ -242,7 +316,10 @@ export function AdminPlansPanel({
                 className={activePlanId === item.id ? "active-row" : ""}
                 onClick={() => onSelectPlan(item.id)}
               >
-                <td data-label="Select" onClick={(event) => event.stopPropagation()}>
+                <td
+                  data-label="Select"
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={selectedPlanIds.has(item.id)}
@@ -250,7 +327,11 @@ export function AdminPlansPanel({
                     aria-label={`Select ${item.project_title}`}
                   />
                 </td>
-                <td className="plan-title-cell" data-label="Title" style={{ maxWidth: 260 }}>
+                <td
+                  className="plan-title-cell"
+                  data-label="Title"
+                  style={{ maxWidth: 260 }}
+                >
                   <span
                     className="plan-title-main"
                     style={{
@@ -273,13 +354,25 @@ export function AdminPlansPanel({
                       display: "block",
                       maxWidth: 250,
                     }}
-                    title={item.summary || item.project_description || undefined}
+                    title={
+                      item.summary || item.project_description || undefined
+                    }
                   >
                     {item.summary || item.project_description || "Add summary"}
                   </span>
                 </td>
-                <td data-label="Operator" style={{ maxWidth: 180, overflow: "hidden" }}>
-                  <span className="cell-stack" style={{ display: "flex", flexDirection: "column", maxWidth: "100%" }}>
+                <td
+                  data-label="Operator"
+                  style={{ maxWidth: 180, overflow: "hidden" }}
+                >
+                  <span
+                    className="cell-stack"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      maxWidth: "100%",
+                    }}
+                  >
                     <strong
                       style={{
                         overflow: "hidden",
@@ -294,21 +387,58 @@ export function AdminPlansPanel({
                     </strong>
                   </span>
                 </td>
-                <td data-label="Status" style={{ whiteSpace: "nowrap" }}><span className={`compact-badge status-${statusOf(item)}`}>{statusOf(item).replace("_", " ")}</span></td>
-                <td className="numeric-cell" data-label="Estimated hours">{Number(item.total_hours_estimate || 0).toLocaleString()}</td>
-                <td className="numeric-cell" data-label="Team size">{item.recommended_team_size ?? "—"}</td>
-                <td data-label="Source" style={{ whiteSpace: "nowrap" }}><span className={`compact-badge source-${sourceOf(item)}`}>{sourceOf(item)}</span></td>
-                <td data-label="Created at" style={{ whiteSpace: "nowrap" }}>
-                  <span className="date-cell">{formatDateTime(item.created_at)}</span>
+                <td data-label="Status" style={{ whiteSpace: "nowrap" }}>
+                  <span className={`compact-badge status-${statusOf(item)}`}>
+                    {statusOf(item).replace("_", " ")}
+                  </span>
                 </td>
-                <td data-label="Actions" style={{ textAlign: "center" }} className="actions-cell" onClick={(event) => event.stopPropagation()}>
-                  <button type="button" className="action-btn view-btn" onClick={() => onViewPlan(item.id)} title="View plan" aria-label={`View ${item.project_title}`}>
+                <td className="numeric-cell" data-label="Estimated hours">
+                  {Number(item.total_hours_estimate || 0).toLocaleString()}
+                </td>
+                <td className="numeric-cell" data-label="Team size">
+                  {item.recommended_team_size ?? "—"}
+                </td>
+                <td data-label="Source" style={{ whiteSpace: "nowrap" }}>
+                  <span className={`compact-badge source-${sourceOf(item)}`}>
+                    {sourceOf(item)}
+                  </span>
+                </td>
+                <td data-label="Created at" style={{ whiteSpace: "nowrap" }}>
+                  <span className="date-cell">
+                    {formatDateTime(item.created_at)}
+                  </span>
+                </td>
+                <td
+                  data-label="Actions"
+                  style={{ textAlign: "center" }}
+                  className="actions-cell"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="action-btn view-btn"
+                    onClick={() => onViewPlan(item.id)}
+                    title="View plan"
+                    aria-label={`View ${item.project_title}`}
+                  >
                     <Icon name="eye" />
                   </button>
-                  <button type="button" className="action-btn edit-btn" onClick={() => onEditPlan(item)} title="Edit plan" aria-label={`Edit ${item.project_title}`}>
+                  <button
+                    type="button"
+                    className="action-btn edit-btn"
+                    onClick={() => onEditPlan(item)}
+                    title="Edit plan"
+                    aria-label={`Edit ${item.project_title}`}
+                  >
                     <Icon name="edit" />
                   </button>
-                  <button type="button" className="action-btn delete-btn" onClick={() => onDeletePlan(item)} title="Delete plan" aria-label={`Delete ${item.project_title}`}>
+                  <button
+                    type="button"
+                    className="action-btn delete-btn"
+                    onClick={() => onDeletePlan(item)}
+                    title="Delete plan"
+                    aria-label={`Delete ${item.project_title}`}
+                  >
                     <Icon name="trash" />
                   </button>
                 </td>
@@ -324,7 +454,8 @@ export function AdminPlansPanel({
             {hiddenFilteredCount > 0 && (
               <tr className="table-limit-row">
                 <td colSpan={9}>
-                  Showing the first {PLAN_OVERVIEW_LIMIT} matching records. Refine filters to narrow the overview.
+                  Showing the first {PLAN_OVERVIEW_LIMIT} matching records.
+                  Refine filters to narrow the overview.
                 </td>
               </tr>
             )}

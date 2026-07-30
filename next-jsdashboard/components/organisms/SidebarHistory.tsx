@@ -18,10 +18,18 @@ function formatRelativeDate(iso: string): string {
   if (diffDays === 0) return "Today";
   if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
-export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: SidebarHistoryProps) {
+export function SidebarHistory({
+  username,
+  role,
+  activePlanId,
+  onSelectPlan,
+}: SidebarHistoryProps) {
   const [plans, setPlans] = useState<HistoryRecord[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -43,7 +51,9 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
           offset: String(pageOffset),
         });
         if (role === "operator") params.set("userId", username);
-        const res = await fetch(`/api/planner/plans?${params.toString()}`, { cache: "no-store" });
+        const res = await fetch(`/api/planner/plans?${params.toString()}`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error("Failed to load history");
         const data = await res.json();
         const incoming: HistoryRecord[] = data.plans ?? [];
@@ -96,7 +106,8 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
         {plans.map((plan) => {
           const isActive = plan.id === activePlanId;
           const prompt = plan.project_description ?? plan.project_title ?? "";
-          const snippet = prompt.length > 60 ? `${prompt.slice(0, 60)}\u2026` : prompt;
+          const snippet =
+            prompt.length > 60 ? `${prompt.slice(0, 60)}\u2026` : prompt;
           return (
             <button
               key={plan.id}
@@ -106,20 +117,32 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
               role="listitem"
               aria-current={isActive ? "true" : undefined}
             >
-              <span className="sidebar-history-title">{plan.project_title || "Untitled Plan"}</span>
-              {snippet && <span className="sidebar-history-snippet">{snippet}</span>}
+              <span className="sidebar-history-title">
+                {plan.project_title || "Untitled Plan"}
+              </span>
+              {snippet && (
+                <span className="sidebar-history-snippet">{snippet}</span>
+              )}
               <span className="sidebar-history-meta">
                 <span>{formatRelativeDate(plan.created_at)}</span>
                 {plan.workbook_mode && (
-                  <span className={`sidebar-history-mode sidebar-history-mode--${plan.workbook_mode === "official_template" ? "template" : "dynamic"}`}>
-                    {plan.workbook_mode === "official_template" ? "Template" : "Dynamic"}
+                  <span
+                    className={`sidebar-history-mode sidebar-history-mode--${plan.workbook_mode === "official_template" ? "template" : "dynamic"}`}
+                  >
+                    {plan.workbook_mode === "official_template"
+                      ? "Template"
+                      : "Dynamic"}
                   </span>
                 )}
               </span>
             </button>
           );
         })}
-        <div ref={sentinelRef} className="sidebar-history-sentinel" aria-hidden="true" />
+        <div
+          ref={sentinelRef}
+          className="sidebar-history-sentinel"
+          aria-hidden="true"
+        />
         {loading && (
           <div className="sidebar-history-loading" aria-live="polite">
             <span className="sidebar-history-spinner" />
@@ -129,9 +152,7 @@ export function SidebarHistory({ username, role, activePlanId, onSelectPlan }: S
         {!hasMore && plans.length > 0 && (
           <p className="sidebar-history-end">All plans loaded</p>
         )}
-        {error && (
-          <p className="sidebar-history-error">{error}</p>
-        )}
+        {error && <p className="sidebar-history-error">{error}</p>}
       </div>
     </div>
   );

@@ -54,19 +54,29 @@ function numberValue(value: CellValue | undefined): number {
 
 function normalizedUnit(plan: ProductionPlan | undefined): string {
   const unit = (plan?.project as { productionUnit?: string })?.productionUnit;
-  return typeof unit === "string" && unit.trim() ? unit.trim().toLowerCase() : "hours";
+  return typeof unit === "string" && unit.trim()
+    ? unit.trim().toLowerCase()
+    : "hours";
 }
 
 function isLaborHoursColumn(column: string): boolean {
-  return /^target\s+(?:total\s+)?hours$/i.test(column) || /^target\s+hours$/i.test(column);
+  return (
+    /^target\s+(?:total\s+)?hours$/i.test(column) ||
+    /^target\s+hours$/i.test(column)
+  );
 }
 
-function selectTargetColumn(keys: string[], plan: ProductionPlan | undefined): string | undefined {
+function selectTargetColumn(
+  keys: string[],
+  plan: ProductionPlan | undefined,
+): string | undefined {
   const unit = normalizedUnit(plan);
   const targetColumns = keys.filter(
     (key) =>
       (/^target\b/i.test(key) || /^plan\b/i.test(key)) &&
-      !/active|accumulate|accumulative|annotators|recorders|operators|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(key),
+      !/active|accumulate|accumulative|annotators|recorders|operators|per\s+(?:annotator|person|worker|recorder|operator|resource)|actual|balance|status|variance|completion/i.test(
+        key,
+      ),
   );
 
   if (unit !== "hours") {
@@ -79,45 +89,84 @@ function selectTargetColumn(keys: string[], plan: ProductionPlan | undefined): s
     if (nonLabor) return nonLabor;
   }
 
-  return targetColumns.find((key) => !/^target\s+hours$/i.test(key)) ?? targetColumns[0];
+  return (
+    targetColumns.find((key) => !/^target\s+hours$/i.test(key)) ??
+    targetColumns[0]
+  );
 }
 
 function selectTeamColumn(keys: string[]): string | undefined {
-  return keys.find((key) => /^target\s+active\s+(?:annotators|recorders|operators|resources|workers|team members)$/i.test(key))
-    ?? keys.find((key) => /^target\s+active\b/i.test(key))
-    ?? keys.find((key) => /\b(?:team|staff|workers|resources)\b/i.test(key) && !/actual|per\s+/i.test(key));
+  return (
+    keys.find((key) =>
+      /^target\s+active\s+(?:annotators|recorders|operators|resources|workers|team members)$/i.test(
+        key,
+      ),
+    ) ??
+    keys.find((key) => /^target\s+active\b/i.test(key)) ??
+    keys.find(
+      (key) =>
+        /\b(?:team|staff|workers|resources)\b/i.test(key) &&
+        !/actual|per\s+/i.test(key),
+    )
+  );
 }
 
-function selectPerResourceColumn(keys: string[], targetCol: string | undefined): string | undefined {
+function selectPerResourceColumn(
+  keys: string[],
+  targetCol: string | undefined,
+): string | undefined {
   if (!targetCol) return undefined;
   const targetStem = targetCol.replace(/^target\s+/i, "").toLowerCase();
-  return keys.find((key) =>
-    /^target\b/i.test(key) &&
-    /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(key) &&
-    key.toLowerCase().includes(targetStem),
-  ) ?? keys.find((key) => /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(key));
+  return (
+    keys.find(
+      (key) =>
+        /^target\b/i.test(key) &&
+        /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(
+          key,
+        ) &&
+        key.toLowerCase().includes(targetStem),
+    ) ??
+    keys.find((key) =>
+      /per\s+(?:annotator|person|worker|recorder|operator|resource|team member)/i.test(
+        key,
+      ),
+    )
+  );
 }
 
 export default function Dashboard() {
   const router = useRouter();
 
   // Session & UI States
-  const [user, setUser] = useState<{ id?: string; username: string; displayName?: string; role: FrontendRole } | null>(null);
-  const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">("plans");
+  const [user, setUser] = useState<{
+    id?: string;
+    username: string;
+    displayName?: string;
+    role: FrontendRole;
+  } | null>(null);
+  const [adminTab, setAdminTab] = useState<"plans" | "operators" | "runs">(
+    "plans",
+  );
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [planDetailsOpen, setPlanDetailsOpen] = useState(false);
 
   // Core Data States
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"dynamic" | "template">("dynamic");
-  const [selectedTemplate, setSelectedTemplate] = useState("HourBased_Annotation_Production_Plan_Template.xlsx");
+  const [selectedTemplate, setSelectedTemplate] = useState(
+    "HourBased_Annotation_Production_Plan_Template.xlsx",
+  );
   const [result, setResult] = useState<GenerationResult | null>(null);
-  const [history, setHistory] = useState<HistoryResponse>({ configured: false, plans: [] });
+  const [history, setHistory] = useState<HistoryResponse>({
+    configured: false,
+    plans: [],
+  });
   const [operators, setOperators] = useState<OperatorAccount[]>([]);
   const [planFiles, setPlanFiles] = useState<PlanFileRecord[]>([]);
   const [planFilesLoading, setPlanFilesLoading] = useState(false);
   const [planFilesError, setPlanFilesError] = useState("");
-  const [workspaceData, setWorkspaceData] = useState<PlanWorkspaceResponse | null>(null);
+  const [workspaceData, setWorkspaceData] =
+    useState<PlanWorkspaceResponse | null>(null);
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState("");
   const [workspaceSending, setWorkspaceSending] = useState(false);
@@ -134,7 +183,9 @@ export default function Dashboard() {
   // Admin Modal States
   const [editPlan, setEditPlan] = useState<HistoryRecord | null>(null);
   const [editValues, setEditValues] = useState<EditPlanFormValues | null>(null);
-  const [editErrors, setEditErrors] = useState<Partial<Record<keyof EditPlanFormValues, string>>>({});
+  const [editErrors, setEditErrors] = useState<
+    Partial<Record<keyof EditPlanFormValues, string>>
+  >({});
   const [editSaving, setEditSaving] = useState(false);
   const [editMessage, setEditMessage] = useState("");
 
@@ -142,9 +193,14 @@ export default function Dashboard() {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<FrontendRole>("operator");
-  const [operatorNotification, setOperatorNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [operatorNotification, setOperatorNotification] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
-  const [deleteOpUser, setDeleteOpUser] = useState<OperatorAccount | null>(null);
+  const [deleteOpUser, setDeleteOpUser] = useState<OperatorAccount | null>(
+    null,
+  );
   const [reassignTarget, setReassignTarget] = useState("");
   const [deletePlan, setDeletePlan] = useState<HistoryRecord | null>(null);
   const [deletePlanSaving, setDeletePlanSaving] = useState(false);
@@ -201,25 +257,35 @@ export default function Dashboard() {
       .catch(() => setOperators([]));
   }, [user]);
 
-  const fetchPlanFiles = useCallback((planId: string | null) => {
-    if (!planId || user?.role !== "admin") {
-      setPlanFiles([]);
-      return;
-    }
-    setPlanFilesLoading(true);
-    setPlanFilesError("");
-    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/files`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.success) throw new Error(data.error ?? "Failed to load workbook files");
-        setPlanFiles(data.files ?? []);
-      })
-      .catch((caught) => {
+  const fetchPlanFiles = useCallback(
+    (planId: string | null) => {
+      if (!planId || user?.role !== "admin") {
         setPlanFiles([]);
-        setPlanFilesError(caught instanceof Error ? caught.message : "Failed to load workbook files");
+        return;
+      }
+      setPlanFilesLoading(true);
+      setPlanFilesError("");
+      fetch(`/api/planner/plans/${encodeURIComponent(planId)}/files`, {
+        cache: "no-store",
       })
-      .finally(() => setPlanFilesLoading(false));
-  }, [user]);
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.success)
+            throw new Error(data.error ?? "Failed to load workbook files");
+          setPlanFiles(data.files ?? []);
+        })
+        .catch((caught) => {
+          setPlanFiles([]);
+          setPlanFilesError(
+            caught instanceof Error
+              ? caught.message
+              : "Failed to load workbook files",
+          );
+        })
+        .finally(() => setPlanFilesLoading(false));
+    },
+    [user],
+  );
 
   const fetchWorkspace = useCallback((planId: string | null) => {
     const requestId = workspaceRequestRef.current + 1;
@@ -231,10 +297,13 @@ export default function Dashboard() {
       return;
     }
     setWorkspaceLoading(true);
-    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/workspace`, { cache: "no-store" })
+    fetch(`/api/planner/plans/${encodeURIComponent(planId)}/workspace`, {
+      cache: "no-store",
+    })
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to load plan workspace");
+        if (!res.ok || !data.success)
+          throw new Error(data.error ?? "Failed to load plan workspace");
         return data as PlanWorkspaceResponse;
       })
       .then((data) => {
@@ -243,30 +312,50 @@ export default function Dashboard() {
       })
       .catch((caught) => {
         if (workspaceRequestRef.current !== requestId) return;
-        setWorkspaceError(caught instanceof Error ? caught.message : "Failed to load plan workspace");
+        setWorkspaceError(
+          caught instanceof Error
+            ? caught.message
+            : "Failed to load plan workspace",
+        );
       })
       .finally(() => {
-        if (workspaceRequestRef.current === requestId) setWorkspaceLoading(false);
+        if (workspaceRequestRef.current === requestId)
+          setWorkspaceLoading(false);
       });
   }, []);
 
-  const fetchRuns = useCallback((filters: { status?: string; modelName?: string; date?: string; planId?: string } = {}) => {
-    if (user?.role !== "admin") return;
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    setRunsLoading(true);
-    setRunsError("");
-    fetch(`/api/planner/runs?${params.toString()}`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.success) throw new Error(data.error ?? "Failed to load AI runs");
-        setRuns(data.runs ?? []);
-      })
-      .catch((caught) => setRunsError(caught instanceof Error ? caught.message : "Failed to load AI runs"))
-      .finally(() => setRunsLoading(false));
-  }, [user]);
+  const fetchRuns = useCallback(
+    (
+      filters: {
+        status?: string;
+        modelName?: string;
+        date?: string;
+        planId?: string;
+      } = {},
+    ) => {
+      if (user?.role !== "admin") return;
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      setRunsLoading(true);
+      setRunsError("");
+      fetch(`/api/planner/runs?${params.toString()}`, { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.success)
+            throw new Error(data.error ?? "Failed to load AI runs");
+          setRuns(data.runs ?? []);
+        })
+        .catch((caught) =>
+          setRunsError(
+            caught instanceof Error ? caught.message : "Failed to load AI runs",
+          ),
+        )
+        .finally(() => setRunsLoading(false));
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -329,33 +418,49 @@ export default function Dashboard() {
   }, [result, activePlanId]);
 
   const rows = useMemo(
-    () => plan?.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan")?.rows ?? [],
+    () =>
+      plan?.workbook.sheets.find(
+        (sheet) => sheet.sheetName === "Production Plan",
+      )?.rows ?? [],
     [plan],
   );
 
   const metrics = useMemo(() => {
-    const planSheet = plan?.workbook.sheets.find((s) => s.sheetName === "Production Plan");
+    const planSheet = plan?.workbook.sheets.find(
+      (s) => s.sheetName === "Production Plan",
+    );
     const firstRow = planSheet?.rows[0];
     const keys = firstRow ? Object.keys(firstRow) : [];
     const semanticLabel = (semantic: string) =>
-      planSheet?.columnDefinitions?.find((column) => column.semantic === semantic)?.label;
+      planSheet?.columnDefinitions?.find(
+        (column) => column.semantic === semantic,
+      )?.label;
 
     // 1. Daily target column (e.g., "Plan no. of Posts", "Target Total Hours", "Target Images")
-    const dailyTargetCol = semanticLabel("planned_output") ?? keys.find(
-      (k) =>
-        (/plan|target/i.test(k) || /posts|images|records|documents|units|hours/i.test(k)) &&
-        !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(k),
-    );
+    const dailyTargetCol =
+      semanticLabel("planned_output") ??
+      keys.find(
+        (k) =>
+          (/plan|target/i.test(k) ||
+            /posts|images|records|documents|units|hours/i.test(k)) &&
+          !/accumulate|accumulative|annotators|per\s+annotator|per\s+person|actual|balance|status/i.test(
+            k,
+          ),
+      );
 
     // 2. Accumulative running total column (e.g., "Target Accumulative")
-    const accumCol = keys.find((k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k));
+    const accumCol = keys.find(
+      (k) => /accumulate|accumulative/i.test(k) && !/actual/i.test(k),
+    );
 
     // 3. Team size column
-    const teamCol = semanticLabel("planned_staff") ??
+    const teamCol =
+      semanticLabel("planned_staff") ??
       keys.find((k) => /annotator|team|staff|worker|resource/i.test(k));
 
     // 4. Per annotator column
-    const perAnnotCol = semanticLabel("planned_output_per_person") ??
+    const perAnnotCol =
+      semanticLabel("planned_output_per_person") ??
       keys.find((k) => /per\s+(?:annotator|person|worker)/i.test(k));
     const monthCol = semanticLabel("month") ?? "Month";
 
@@ -363,10 +468,16 @@ export default function Dashboard() {
     const monthly = new Map<string, number>();
 
     if (dailyTargetCol) {
-      totalPlanned = rows.reduce((sum, row) => sum + numberValue(row[dailyTargetCol]), 0);
+      totalPlanned = rows.reduce(
+        (sum, row) => sum + numberValue(row[dailyTargetCol]),
+        0,
+      );
       rows.forEach((row) => {
         const month = String(row[monthCol] ?? "Unscheduled");
-        monthly.set(month, (monthly.get(month) ?? 0) + numberValue(row[dailyTargetCol]));
+        monthly.set(
+          month,
+          (monthly.get(month) ?? 0) + numberValue(row[dailyTargetCol]),
+        );
       });
     } else if (accumCol && rows.length > 0) {
       // If only accumulative column exists, take the last row's accumulative value as totalPlanned
@@ -385,31 +496,44 @@ export default function Dashboard() {
         prevMonthEndAccum = endAccum;
       });
     } else {
-      totalPlanned = (plan?.project as { totalAssets?: number })?.totalAssets ?? 0;
+      totalPlanned =
+        (plan?.project as { totalAssets?: number })?.totalAssets ?? 0;
     }
 
     const teamSize = teamCol
-      ? rows.reduce((largest, row) => Math.max(largest, numberValue(row[teamCol])), 0)
+      ? rows.reduce(
+          (largest, row) => Math.max(largest, numberValue(row[teamCol])),
+          0,
+        )
       : 0;
 
     const chosenTargetCol = dailyTargetCol ?? accumCol ?? "Target Total Hours";
     const chosenPerAnnotCol = perAnnotCol ?? chosenTargetCol;
-    const unitLabel = normalizedUnit(plan) !== "hours"
-      ? normalizedUnit(plan)
-      : chosenTargetCol.replace(/target\s*|plan\s*|no\.\s*of\s*/i, "").trim().toLowerCase() || "units";
+    const unitLabel =
+      normalizedUnit(plan) !== "hours"
+        ? normalizedUnit(plan)
+        : chosenTargetCol
+            .replace(/target\s*|plan\s*|no\.\s*of\s*/i, "")
+            .trim()
+            .toLowerCase() || "units";
 
     return {
       totalPlanned,
       teamSize,
       scheduledDays: rows.length,
-      monthly: [...monthly.entries()].map(([month, value]) => ({ month, value })),
+      monthly: [...monthly.entries()].map(([month, value]) => ({
+        month,
+        value,
+      })),
       targetCol: chosenTargetCol,
       perAnnotCol: chosenPerAnnotCol,
       unitLabel,
     };
   }, [rows, plan]);
 
-  const activePlanRecord = activePlanId ? history.plans.find((item) => item.id === activePlanId) : undefined;
+  const activePlanRecord = activePlanId
+    ? history.plans.find((item) => item.id === activePlanId)
+    : undefined;
 
   const planToShow = useMemo<HistoryRecord | undefined>(() => {
     if (workspaceData?.plan) {
@@ -468,13 +592,20 @@ export default function Dashboard() {
         }),
       });
       const data = (await response.json()) as GenerationResult;
-      if (!response.ok || !data.success) throw new Error(data.error ?? data.whatsappSummary ?? "Plan generation failed");
+      if (!response.ok || !data.success)
+        throw new Error(
+          data.error ?? data.whatsappSummary ?? "Plan generation failed",
+        );
       setResult(data);
       if (data.planId) setActivePlanId(data.planId);
       setPlanDetailsOpen(true);
       fetchPlans();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to generate the plan");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to generate the plan",
+      );
     } finally {
       setLoading(false);
     }
@@ -485,29 +616,47 @@ export default function Dashboard() {
     setWorkspaceSending(true);
     setWorkspaceError("");
     try {
-      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/messages`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message,
-          revisionId: workspaceData.currentRevision.id,
-        }),
-      });
-      const data = await res.json() as {
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/messages`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            message,
+            revisionId: workspaceData.currentRevision.id,
+          }),
+        },
+      );
+      const data = (await res.json()) as {
         success: boolean;
         error?: string;
         userMessage?: PlanWorkspaceResponse["conversation"][number];
         assistantMessage?: PlanWorkspaceResponse["conversation"][number];
       };
-      if (!res.ok || !data.success || !data.userMessage || !data.assistantMessage) {
+      if (
+        !res.ok ||
+        !data.success ||
+        !data.userMessage ||
+        !data.assistantMessage
+      ) {
         throw new Error(data.error ?? "Message failed");
       }
-      setWorkspaceData((current) => current ? {
-        ...current,
-        conversation: [...current.conversation, data.userMessage!, data.assistantMessage!],
-      } : current);
+      setWorkspaceData((current) =>
+        current
+          ? {
+              ...current,
+              conversation: [
+                ...current.conversation,
+                data.userMessage!,
+                data.assistantMessage!,
+              ],
+            }
+          : current,
+      );
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to send message");
+      setWorkspaceError(
+        caught instanceof Error ? caught.message : "Unable to send message",
+      );
     } finally {
       setWorkspaceSending(false);
     }
@@ -518,24 +667,31 @@ export default function Dashboard() {
     setApplyingProposalId(proposal.id);
     setWorkspaceError("");
     try {
-      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          proposalId: proposal.id,
-          basedOnRevisionId: proposal.basedOnRevisionId,
-          confirmed: true,
-        }),
-      });
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            proposalId: proposal.id,
+            basedOnRevisionId: proposal.basedOnRevisionId,
+            confirmed: true,
+          }),
+        },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to apply proposal");
-      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to apply proposal");
+      if (data.workspace)
+        setWorkspaceData(data.workspace as PlanWorkspaceResponse);
       else fetchWorkspace(activePlanId);
       setResult(null);
       fetchPlans();
       fetchPlanFiles(activePlanId);
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to apply proposal");
+      setWorkspaceError(
+        caught instanceof Error ? caught.message : "Unable to apply proposal",
+      );
     } finally {
       setApplyingProposalId("");
     }
@@ -546,20 +702,26 @@ export default function Dashboard() {
     setApplyingProposalId(proposal.id);
     setWorkspaceError("");
     try {
-      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          proposalId: proposal.id,
-          basedOnRevisionId: proposal.basedOnRevisionId,
-          confirmed: false,
-        }),
-      });
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/revisions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            proposalId: proposal.id,
+            basedOnRevisionId: proposal.basedOnRevisionId,
+            confirmed: false,
+          }),
+        },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to cancel proposal");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to cancel proposal");
       fetchWorkspace(activePlanId);
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to cancel proposal");
+      setWorkspaceError(
+        caught instanceof Error ? caught.message : "Unable to cancel proposal",
+      );
     } finally {
       setApplyingProposalId("");
     }
@@ -575,22 +737,29 @@ export default function Dashboard() {
         { method: "POST" },
       );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to restore revision");
-      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to restore revision");
+      if (data.workspace)
+        setWorkspaceData(data.workspace as PlanWorkspaceResponse);
       else fetchWorkspace(activePlanId);
       setResult(null);
       fetchPlans();
       fetchPlanFiles(activePlanId);
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to restore revision");
+      setWorkspaceError(
+        caught instanceof Error ? caught.message : "Unable to restore revision",
+      );
     } finally {
       setRestoringRevisionId("");
     }
   }
 
   async function handleDeleteRevision(revision: PlanRevision) {
-    if (!activePlanId || revision.id === workspaceData?.currentRevision.id) return;
-    const confirmed = window.confirm(`Delete revision ${revision.revision_number} from history?`);
+    if (!activePlanId || revision.id === workspaceData?.currentRevision.id)
+      return;
+    const confirmed = window.confirm(
+      `Delete revision ${revision.revision_number} from history?`,
+    );
     if (!confirmed) return;
     setDeletingRevisionId(revision.id);
     setWorkspaceError("");
@@ -600,12 +769,16 @@ export default function Dashboard() {
         { method: "DELETE" },
       );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete revision");
-      if (data.workspace) setWorkspaceData(data.workspace as PlanWorkspaceResponse);
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to delete revision");
+      if (data.workspace)
+        setWorkspaceData(data.workspace as PlanWorkspaceResponse);
       else fetchWorkspace(activePlanId);
       fetchPlanFiles(activePlanId);
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Unable to delete revision");
+      setWorkspaceError(
+        caught instanceof Error ? caught.message : "Unable to delete revision",
+      );
     } finally {
       setDeletingRevisionId("");
     }
@@ -619,30 +792,53 @@ export default function Dashboard() {
       planning_end_date: planRecord.planning_end_date ?? "",
       actual_start_date: planRecord.actual_start_date ?? "",
       actual_end_date: planRecord.actual_end_date ?? "",
-      actual_hours: planRecord.actual_hours === null || planRecord.actual_hours === undefined ? "" : String(planRecord.actual_hours),
-      requested_team_size: planRecord.requested_team_size === null || planRecord.requested_team_size === undefined ? "" : String(planRecord.requested_team_size),
+      actual_hours:
+        planRecord.actual_hours === null ||
+        planRecord.actual_hours === undefined
+          ? ""
+          : String(planRecord.actual_hours),
+      requested_team_size:
+        planRecord.requested_team_size === null ||
+        planRecord.requested_team_size === undefined
+          ? ""
+          : String(planRecord.requested_team_size),
     };
   }
 
-  function validateEdit(values: EditPlanFormValues): Partial<Record<keyof EditPlanFormValues, string>> {
+  function validateEdit(
+    values: EditPlanFormValues,
+  ): Partial<Record<keyof EditPlanFormValues, string>> {
     const nextErrors: Partial<Record<keyof EditPlanFormValues, string>> = {};
-    if (!values.project_title.trim()) nextErrors.project_title = "Project title is required.";
+    if (!values.project_title.trim())
+      nextErrors.project_title = "Project title is required.";
     if (!values.summary.trim()) nextErrors.summary = "Summary is required.";
     for (const field of ["actual_hours", "requested_team_size"] as const) {
-      if (values[field] !== "" && Number(values[field]) < 0) nextErrors[field] = "Value cannot be negative.";
+      if (values[field] !== "" && Number(values[field]) < 0)
+        nextErrors[field] = "Value cannot be negative.";
     }
-    if (values.planning_start_date && values.planning_end_date && values.planning_end_date < values.planning_start_date) {
-      nextErrors.planning_end_date = "End date cannot be earlier than start date.";
+    if (
+      values.planning_start_date &&
+      values.planning_end_date &&
+      values.planning_end_date < values.planning_start_date
+    ) {
+      nextErrors.planning_end_date =
+        "End date cannot be earlier than start date.";
     }
-    if (values.actual_start_date && values.actual_end_date && values.actual_end_date < values.actual_start_date) {
-      nextErrors.actual_end_date = "End date cannot be earlier than start date.";
+    if (
+      values.actual_start_date &&
+      values.actual_end_date &&
+      values.actual_end_date < values.actual_start_date
+    ) {
+      nextErrors.actual_end_date =
+        "End date cannot be earlier than start date.";
     }
     return nextErrors;
   }
 
   function editPayload(values: EditPlanFormValues) {
     const nullableDate = (value: string) => value || null;
-    const nullableNumber = (value: string) => value === "" ? null : Number(value);
+    const nullableNumber = (value: string) =>
+      value === "" ? null : Number(value);
     return {
       project_title: values.project_title.trim(),
       summary: values.summary.trim(),
@@ -660,9 +856,13 @@ export default function Dashboard() {
     setDeletePlanSaving(true);
     setDeletePlanError("");
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/planner/plans?id=${encodeURIComponent(deletePlan.id)}`,
+        { method: "DELETE" },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete plan");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to delete plan");
       if (activePlanId === deletePlan.id) {
         setActivePlanId(null);
         setResult(null);
@@ -671,7 +871,9 @@ export default function Dashboard() {
       setDeletePlan(null);
       fetchPlans();
     } catch (caught) {
-      setDeletePlanError(caught instanceof Error ? caught.message : "Error deleting plan");
+      setDeletePlanError(
+        caught instanceof Error ? caught.message : "Error deleting plan",
+      );
     } finally {
       setDeletePlanSaving(false);
     }
@@ -684,9 +886,15 @@ export default function Dashboard() {
     try {
       const deletedIds = new Set<string>();
       for (const planRecord of bulkDeletePlans) {
-        const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(planRecord.id)}`, { method: "DELETE" });
+        const res = await fetch(
+          `/api/planner/plans?id=${encodeURIComponent(planRecord.id)}`,
+          { method: "DELETE" },
+        );
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error ?? `Failed to delete ${planRecord.project_title}`);
+        if (!res.ok || !data.success)
+          throw new Error(
+            data.error ?? `Failed to delete ${planRecord.project_title}`,
+          );
         deletedIds.add(planRecord.id);
       }
       if (activePlanId && deletedIds.has(activePlanId)) {
@@ -696,7 +904,11 @@ export default function Dashboard() {
       setBulkDeletePlans([]);
       fetchPlans();
     } catch (caught) {
-      setBulkDeleteError(caught instanceof Error ? caught.message : "Error deleting selected plans");
+      setBulkDeleteError(
+        caught instanceof Error
+          ? caught.message
+          : "Error deleting selected plans",
+      );
     } finally {
       setBulkDeleteSaving(false);
     }
@@ -711,20 +923,28 @@ export default function Dashboard() {
     if (Object.keys(nextErrors).length > 0) return;
     setEditSaving(true);
     try {
-      const res = await fetch(`/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(editPayload(editValues)),
-      });
+      const res = await fetch(
+        `/api/planner/plans?id=${encodeURIComponent(editPlan.id)}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(editPayload(editValues)),
+        },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update plan");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to update plan");
       setEditMessage("Saved updates successfully.");
       fetchPlans();
       if (activePlanId === editPlan.id) setActivePlanId(editPlan.id);
       window.setTimeout(() => setEditPlan(null), 700);
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error saving plan edit");
-      setEditMessage(caught instanceof Error ? caught.message : "Error updating plan");
+      alert(
+        caught instanceof Error ? caught.message : "Error saving plan edit",
+      );
+      setEditMessage(
+        caught instanceof Error ? caught.message : "Error updating plan",
+      );
     } finally {
       setEditSaving(false);
     }
@@ -741,10 +961,16 @@ export default function Dashboard() {
       const res = await fetch("/api/planner/operators", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: newEmail, username: newUsername, password: newPassword, role: newRole }),
+        body: JSON.stringify({
+          email: newEmail,
+          username: newUsername,
+          password: newPassword,
+          role: newRole,
+        }),
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create operator");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to create operator");
 
       setNewEmail("");
       setNewUsername("");
@@ -757,25 +983,33 @@ export default function Dashboard() {
         message: `Invitation link sent to ${invitedEmail} for user account "${invitedName}". Account status set to Pending.`,
       });
     } catch (caught) {
-      const errMsg = caught instanceof Error ? caught.message : "Error creating user";
+      const errMsg =
+        caught instanceof Error ? caught.message : "Error creating user";
       setOperatorNotification({ type: "error", message: errMsg });
     }
   }
 
-  async function handleUpdateOperator(op: OperatorAccount, updates: { role?: FrontendRole; active?: boolean }) {
+  async function handleUpdateOperator(
+    op: OperatorAccount,
+    updates: { role?: FrontendRole; active?: boolean },
+  ) {
     if (!user) return;
     if (op.username === user.username || op.id === user.id) {
       alert("You cannot change access for your own active admin account.");
       return;
     }
     try {
-      const res = await fetch(`/api/planner/operators?id=${encodeURIComponent(op.id)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(updates),
-      });
+      const res = await fetch(
+        `/api/planner/operators?id=${encodeURIComponent(op.id)}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(updates),
+        },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to update user");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to update user");
       fetchOperators();
     } catch (caught) {
       alert(caught instanceof Error ? caught.message : "Error updating user");
@@ -794,15 +1028,23 @@ export default function Dashboard() {
         const reassignRes = await fetch("/api/planner/operators/reassign", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fromUsername: deleteOpUser.username, toUsername: reassignTarget }),
+          body: JSON.stringify({
+            fromUsername: deleteOpUser.username,
+            toUsername: reassignTarget,
+          }),
         });
         const reassignData = await reassignRes.json();
-        if (!reassignRes.ok || !reassignData.success) throw new Error(reassignData.error ?? "Plan reassignment failed");
+        if (!reassignRes.ok || !reassignData.success)
+          throw new Error(reassignData.error ?? "Plan reassignment failed");
       }
 
-      const res = await fetch(`/api/planner/operators?id=${encodeURIComponent(deleteOpUser.id)}`, { method: "DELETE" });
+      const res = await fetch(
+        `/api/planner/operators?id=${encodeURIComponent(deleteOpUser.id)}`,
+        { method: "DELETE" },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to delete user");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to delete user");
 
       setDeleteOpUser(null);
       setReassignTarget("");
@@ -814,7 +1056,8 @@ export default function Dashboard() {
         message: `User account "${deletedName}" was successfully deleted.`,
       });
     } catch (caught) {
-      const errMsg = caught instanceof Error ? caught.message : "Error deleting user";
+      const errMsg =
+        caught instanceof Error ? caught.message : "Error deleting user";
       setOperatorNotification({ type: "error", message: errMsg });
     }
   }
@@ -822,14 +1065,20 @@ export default function Dashboard() {
   async function handleDownloadPlanFile(file: PlanFileRecord) {
     if (!activePlanId) return;
     try {
-      const res = await fetch(`/api/planner/plans/${encodeURIComponent(activePlanId)}/files/${encodeURIComponent(file.id)}/download`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `/api/planner/plans/${encodeURIComponent(activePlanId)}/files/${encodeURIComponent(file.id)}/download`,
+        {
+          method: "POST",
+        },
+      );
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to create download link");
+      if (!res.ok || !data.success)
+        throw new Error(data.error ?? "Failed to create download link");
       window.location.href = data.signedUrl;
     } catch (caught) {
-      alert(caught instanceof Error ? caught.message : "Error downloading workbook");
+      alert(
+        caught instanceof Error ? caught.message : "Error downloading workbook",
+      );
     }
   }
 
@@ -870,36 +1119,42 @@ export default function Dashboard() {
   return (
     <DashboardLayout sidebarContent={sidebarContent}>
       <header className="topbar">
-        <div className="topbar-title-container" title={plan?.project.projectName ?? "Production planning board"}>
+        <div
+          className="topbar-title-container"
+          title={plan?.project.projectName ?? "Production planning board"}
+        >
           <span className="eyebrow">LIFEPLAN DASHBOARD</span>
           <h1>{plan?.project.projectName ?? "Production planning board"}</h1>
         </div>
         <div className="topbar-actions">
-          <span className={`connection-pill ${history.configured ? "connected" : "pending"}`}>
+          <span
+            className={`connection-pill ${history.configured ? "connected" : "pending"}`}
+          >
             <span /> Supabase Auth {history.configured ? "linked" : "offline"}
           </span>
           <div className="topbar-user-pill">
             <span className="user-pill-label">Logged In As</span>
-            <strong className="user-pill-name">{user.displayName ?? user.username}</strong>
+            <strong className="user-pill-name">
+              {user.displayName ?? user.username}
+            </strong>
             <span className="user-pill-role">{user.role}</span>
           </div>
           <ThemeToggle />
           <button className="download-button" type="button" onClick={logout}>
             Sign out
           </button>
-          {user.role === "admin" ? (
-            result && downloadUrl && (
-              <a className="download-button" href={downloadUrl} download>
-                <Icon name="download" /> Download Excel
-              </a>
-            )
-          ) : (
-            downloadUrl && (
-              <a className="download-button" href={downloadUrl} download>
-                <Icon name="download" /> Download Excel
-              </a>
-            )
-          )}
+          {user.role === "admin"
+            ? result &&
+              downloadUrl && (
+                <a className="download-button" href={downloadUrl} download>
+                  <Icon name="download" /> Download Excel
+                </a>
+              )
+            : downloadUrl && (
+                <a className="download-button" href={downloadUrl} download>
+                  <Icon name="download" /> Download Excel
+                </a>
+              )}
         </div>
       </header>
 
@@ -916,7 +1171,10 @@ export default function Dashboard() {
                 </div>
                 <span className="eyebrow">READY TO MODEL</span>
                 <h2>Describe your prompt to compile a new plan.</h2>
-                <p>Input target annotators, timelines, and hour counts on the sidebar to get started.</p>
+                <p>
+                  Input target annotators, timelines, and hour counts on the
+                  sidebar to get started.
+                </p>
               </section>
             ) : (
               planToShow && (
@@ -985,22 +1243,51 @@ export default function Dashboard() {
 
                 {planDetailsOpen && planToShow && (
                   <div className="modal-overlay" role="presentation">
-                    <div className="modal-content plan-view-modal" role="dialog" aria-modal="true" aria-labelledby="plan-view-title">
+                    <div
+                      className="modal-content plan-view-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="plan-view-title"
+                    >
                       <div className="modal-header plan-view-header">
                         <div>
                           <span className="eyebrow">PLAN PREVIEW</span>
-                          <h3 id="plan-view-title" className="modal-title">{planToShow.project_title}</h3>
-                          <div className="plan-view-meta" aria-label="Plan metadata">
-                            <span className={`compact-badge status-${planToShow.status ?? "generated"}`}>
-                              {(planToShow.status ?? "generated").replace("_", " ")}
+                          <h3 id="plan-view-title" className="modal-title">
+                            {planToShow.project_title}
+                          </h3>
+                          <div
+                            className="plan-view-meta"
+                            aria-label="Plan metadata"
+                          >
+                            <span
+                              className={`compact-badge status-${planToShow.status ?? "generated"}`}
+                            >
+                              {(planToShow.status ?? "generated").replace(
+                                "_",
+                                " ",
+                              )}
                             </span>
                             <span>{planToShow.whatsapp_user_id}</span>
-                            <span>{new Date(planToShow.created_at).toLocaleDateString()}</span>
+                            <span>
+                              {new Date(
+                                planToShow.created_at,
+                              ).toLocaleDateString()}
+                            </span>
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "12px",
+                            alignItems: "center",
+                          }}
+                        >
                           {downloadUrl && (
-                            <a className="download-button" href={downloadUrl} download>
+                            <a
+                              className="download-button"
+                              href={downloadUrl}
+                              download
+                            >
                               <Icon name="download" /> Download Excel
                             </a>
                           )}
@@ -1047,7 +1334,11 @@ export default function Dashboard() {
                     errors={editErrors}
                     message={editMessage}
                     saving={editSaving}
-                    setValue={(field, value) => setEditValues((current) => current ? { ...current, [field]: value } : current)}
+                    setValue={(field, value) =>
+                      setEditValues((current) =>
+                        current ? { ...current, [field]: value } : current,
+                      )
+                    }
                     onClose={() => setEditPlan(null)}
                     onSubmit={handleUpdatePlan}
                   />
@@ -1106,7 +1397,6 @@ export default function Dashboard() {
                     onConfirm={handleDeleteOperator}
                   />
                 )}
-
               </>
             ) : (
               <AdminRunsPanel

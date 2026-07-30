@@ -10,7 +10,10 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ success: false, error: "Invalid generation request." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid generation request." },
+        { status: 400 },
+      );
     }
     const payload = {
       ...body,
@@ -27,10 +30,14 @@ export async function POST(request: Request) {
     const responsePayload = await response.text();
     return new NextResponse(responsePayload, {
       status: response.status,
-      headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+      headers: {
+        "content-type":
+          response.headers.get("content-type") ?? "application/json",
+      },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Planner service unavailable";
+    const message =
+      error instanceof Error ? error.message : "Planner service unavailable";
     const userFriendlyError =
       message === "fetch failed"
         ? `Cannot connect to MCP Planner server at ${plannerUrl}. Make sure mcp-server is running.`
@@ -41,4 +48,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

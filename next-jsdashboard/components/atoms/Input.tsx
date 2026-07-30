@@ -31,7 +31,12 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
   options: { label: string; value: string }[];
 }
 
-export function Select({ error, options, className = "", ...props }: SelectProps) {
+export function Select({
+  error,
+  options,
+  className = "",
+  ...props
+}: SelectProps) {
   return (
     <select
       className={`select-atom ${error ? "input-error" : ""} ${className}`}

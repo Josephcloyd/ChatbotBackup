@@ -142,12 +142,7 @@ export type PlanConversationIntent =
   | "unrelated_request";
 
 export type PlanMessageType =
-  | "user"
-  | "assistant"
-  | "clarification"
-  | "proposal"
-  | "validation"
-  | "system";
+  "user" | "assistant" | "clarification" | "proposal" | "validation" | "system";
 
 export interface PlanChangeProposal {
   id: string;
@@ -216,7 +211,11 @@ export interface PlanRevision {
   parent_revision_id?: string | null;
   created_by?: string | null;
   created_by_role: "operator" | "admin" | "system";
-  revision_source: "initial_generation" | "user_modification" | "admin_edit" | "revision_restore";
+  revision_source:
+    | "initial_generation"
+    | "user_modification"
+    | "admin_edit"
+    | "revision_restore";
   user_instruction?: string | null;
   change_summary: string;
   plan_data: ProductionPlan;

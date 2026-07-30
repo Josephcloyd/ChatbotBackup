@@ -8,7 +8,12 @@ interface LeafLogoProps {
   style?: React.CSSProperties;
 }
 
-export function LeafLogo({ width = 32, height = 32, className = "", style = {} }: LeafLogoProps) {
+export function LeafLogo({
+  width = 32,
+  height = 32,
+  className = "",
+  style = {},
+}: LeafLogoProps) {
   return (
     <Image
       src="/lifeplan-leaf.png"
@@ -22,7 +27,7 @@ export function LeafLogo({ width = 32, height = 32, className = "", style = {} }
         verticalAlign: "middle",
         width: typeof width === "number" ? `${width}px` : width,
         height: typeof height === "number" ? `${height}px` : height,
-        ...style
+        ...style,
       }}
     />
   );

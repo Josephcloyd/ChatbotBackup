@@ -57,7 +57,8 @@ const suggestions = [
 
 function display(value: unknown): string {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "number") return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (typeof value === "number")
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString();
@@ -72,9 +73,12 @@ function fileSize(bytes: number | null): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function safeAssistantResponse(message: PlanConversationMessage): PlanAssistantResponse | null {
+function safeAssistantResponse(
+  message: PlanConversationMessage,
+): PlanAssistantResponse | null {
   const response = message.metadata?.assistantResponse;
-  if (response && typeof response === "object") return response as PlanAssistantResponse;
+  if (response && typeof response === "object")
+    return response as PlanAssistantResponse;
   return null;
 }
 
@@ -93,13 +97,22 @@ function MessageBubble({
 }) {
   const response = safeAssistantResponse(message);
   const proposal = response?.proposal;
-  const staleProposal = Boolean(proposal && proposal.basedOnRevisionId !== currentRevisionId);
+  const staleProposal = Boolean(
+    proposal && proposal.basedOnRevisionId !== currentRevisionId,
+  );
 
   return (
     <article className={`workspace-message workspace-message-${message.role}`}>
       <div className="workspace-message-meta">
-        <span>{message.role === "assistant" ? "AI assistant" : message.role}</span>
-        <time>{new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+        <span>
+          {message.role === "assistant" ? "AI assistant" : message.role}
+        </span>
+        <time>
+          {new Date(message.created_at).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </time>
       </div>
       <p>{message.content}</p>
 
@@ -117,7 +130,9 @@ function MessageBubble({
 
       {response?.clarificationQuestions?.length ? (
         <ul className="compact-list workspace-question-list">
-          {response.clarificationQuestions.map((question) => <li key={question}>{question}</li>)}
+          {response.clarificationQuestions.map((question) => (
+            <li key={question}>{question}</li>
+          ))}
         </ul>
       ) : null}
 
@@ -128,12 +143,17 @@ function MessageBubble({
               <span className="eyebrow">PROPOSAL</span>
               <h4>{proposal.requestSummary}</h4>
             </div>
-            <span className="revision-badge">base {proposal.basedOnRevisionId.slice(0, 8)}</span>
+            <span className="revision-badge">
+              base {proposal.basedOnRevisionId.slice(0, 8)}
+            </span>
           </div>
           <p>{proposal.interpretedRequest}</p>
           <div className="proposal-change-list">
             {proposal.changes.map((change) => (
-              <div key={`${proposal.id}-${change.field}-${change.label}`} className="proposal-change-row">
+              <div
+                key={`${proposal.id}-${change.field}-${change.label}`}
+                className="proposal-change-row"
+              >
                 <span>{change.label}</span>
                 <strong>{display(change.previousValue)}</strong>
                 <Icon name="clock" />
@@ -143,7 +163,9 @@ function MessageBubble({
           </div>
           {proposal.warnings.length ? (
             <div className="proposal-warning">
-              {proposal.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              {proposal.warnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
             </div>
           ) : null}
           <div className="proposal-actions">
@@ -163,7 +185,11 @@ function MessageBubble({
             >
               Cancel
             </Button>
-            {staleProposal && <span className="proposal-stale-note">Reloaded after a newer revision.</span>}
+            {staleProposal && (
+              <span className="proposal-stale-note">
+                Reloaded after a newer revision.
+              </span>
+            )}
           </div>
         </div>
       ) : null}
@@ -232,11 +258,11 @@ export function PlanWorkspace({
             className={`workspace-tab-btn ${viewMode === "chat" ? "active" : ""}`}
             onClick={() => setViewMode("chat")}
           >
-            <Icon name="clock" /> Revisions & Chat {revisions.length > 0 && `(${revisions.length})`}
+            <Icon name="clock" /> Revisions & Chat{" "}
+            {revisions.length > 0 && `(${revisions.length})`}
           </button>
         </div>
       </div>
-
 
       <section className={`plan-workspace view-mode-${viewMode}`}>
         {showDetails && (
@@ -246,10 +272,13 @@ export function PlanWorkspace({
                 <span className="eyebrow">PLAN DETAILS</span>
               </div>
               <div className="workspace-header-actions">
-                {currentRevision && <span className="revision-badge">Revision {currentRevision.revision_number}</span>}
+                {currentRevision && (
+                  <span className="revision-badge">
+                    Revision {currentRevision.revision_number}
+                  </span>
+                )}
               </div>
             </div>
-
 
             {loading ? (
               <div className="workspace-loading">Loading workspace...</div>
@@ -257,7 +286,9 @@ export function PlanWorkspace({
               <div className="error-box" role="alert">
                 {error}
                 <div className="mt-2">
-                  <Button type="button" variant="ghost" onClick={onRetry}>Retry</Button>
+                  <Button type="button" variant="ghost" onClick={onRetry}>
+                    Retry
+                  </Button>
                 </div>
               </div>
             ) : null}
@@ -266,12 +297,23 @@ export function PlanWorkspace({
             <div className="summary-strip">
               <div className="project-summary">
                 <span className="eyebrow">PLAN OVERVIEW</span>
-                <p>{plan.project_description || plan.raw_plan?.project?.projectDescription}</p>
+                <p>
+                  {plan.project_description ||
+                    plan.raw_plan?.project?.projectDescription}
+                </p>
                 <div className="date-range mt-2">
                   <Icon name="clock" />
-                  <span>{plan.planning_start_date ? new Date(plan.planning_start_date).toLocaleDateString() : "Today"}</span>
+                  <span>
+                    {plan.planning_start_date
+                      ? new Date(plan.planning_start_date).toLocaleDateString()
+                      : "Today"}
+                  </span>
                   <span>→</span>
-                  <span>{plan.planning_end_date ? new Date(plan.planning_end_date).toLocaleDateString() : "End of schedule"}</span>
+                  <span>
+                    {plan.planning_end_date
+                      ? new Date(plan.planning_end_date).toLocaleDateString()
+                      : "End of schedule"}
+                  </span>
                 </div>
               </div>
               <div className="completion-ring">
@@ -285,15 +327,23 @@ export function PlanWorkspace({
             {/* 2. Rich KPI Cards Grid */}
             <div className="kpi-grid">
               <div className="metric-card">
-                <div className="kpi-icon blue"><Icon name="hours" /></div>
+                <div className="kpi-icon blue">
+                  <Icon name="hours" />
+                </div>
                 <div>
                   <small>Planned {metrics.unitLabel}</small>
-                  <strong>{metrics.totalPlanned.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong>
+                  <strong>
+                    {metrics.totalPlanned.toLocaleString(undefined, {
+                      maximumFractionDigits: 1,
+                    })}
+                  </strong>
                   <em>allocated total</em>
                 </div>
               </div>
               <div className="metric-card">
-                <div className="kpi-icon green"><Icon name="team" /></div>
+                <div className="kpi-icon green">
+                  <Icon name="team" />
+                </div>
                 <div>
                   <small>Active team</small>
                   <strong>{metrics.teamSize}</strong>
@@ -301,7 +351,9 @@ export function PlanWorkspace({
                 </div>
               </div>
               <div className="metric-card">
-                <div className="kpi-icon amber"><Icon name="clock" /></div>
+                <div className="kpi-icon amber">
+                  <Icon name="clock" />
+                </div>
                 <div>
                   <small>Scheduled days</small>
                   <strong>{metrics.scheduledDays}</strong>
@@ -309,11 +361,19 @@ export function PlanWorkspace({
                 </div>
               </div>
               <div className="metric-card">
-                <div className="kpi-icon violet"><Icon name="grid" /></div>
+                <div className="kpi-icon violet">
+                  <Icon name="grid" />
+                </div>
                 <div>
                   <small>Workbook mode</small>
-                  <strong className="word-value">{plan.workbook_mode === "official_template" ? "Template" : "Dynamic"}</strong>
-                  <em>{plan.raw_plan?.workbook?.sheets?.length ?? 1} plan sheet</em>
+                  <strong className="word-value">
+                    {plan.workbook_mode === "official_template"
+                      ? "Template"
+                      : "Dynamic"}
+                  </strong>
+                  <em>
+                    {plan.raw_plan?.workbook?.sheets?.length ?? 1} plan sheet
+                  </em>
                 </div>
               </div>
             </div>
@@ -324,18 +384,35 @@ export function PlanWorkspace({
                 <div className="card-heading">
                   <div>
                     <span className="eyebrow">CAPACITY CURVE</span>
-                    <h3>{metrics.unitLabel.charAt(0).toUpperCase() + metrics.unitLabel.slice(1)} by month</h3>
+                    <h3>
+                      {metrics.unitLabel.charAt(0).toUpperCase() +
+                        metrics.unitLabel.slice(1)}{" "}
+                      by month
+                    </h3>
                   </div>
-                  <span className="legend"><i /> Planned</span>
+                  <span className="legend">
+                    <i /> Planned
+                  </span>
                 </div>
                 <div className="bar-chart">
                   {metrics.monthly.map((item) => {
-                    const maxMonth = Math.max(...metrics.monthly.map((m) => m.value), 1);
+                    const maxMonth = Math.max(
+                      ...metrics.monthly.map((m) => m.value),
+                      1,
+                    );
                     return (
                       <div className="bar-column" key={item.month}>
-                        <div className="bar-value">{item.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                        <div className="bar-value">
+                          {item.value.toLocaleString(undefined, {
+                            maximumFractionDigits: 1,
+                          })}
+                        </div>
                         <div className="bar-track">
-                          <div style={{ height: `${Math.max((item.value / maxMonth) * 100, 4)}%` }} />
+                          <div
+                            style={{
+                              height: `${Math.max((item.value / maxMonth) * 100, 4)}%`,
+                            }}
+                          />
                         </div>
                         <span>{item.month}</span>
                       </div>
@@ -374,7 +451,9 @@ export function PlanWorkspace({
                 {filesLoading ? (
                   <p className="empty-note">Loading workbook files...</p>
                 ) : filesError ? (
-                  <div className="error-box" role="alert">{filesError}</div>
+                  <div className="error-box" role="alert">
+                    {filesError}
+                  </div>
                 ) : (
                   <div className="table-scroll">
                     <table className="admin-table">
@@ -420,8 +499,6 @@ export function PlanWorkspace({
           </div>
         )}
 
-
-
         {showChat && (
           <aside className="plan-communication-area">
             <div className="workspace-section-header compact">
@@ -429,7 +506,11 @@ export function PlanWorkspace({
                 <span className="eyebrow">REVISION WORKSPACE</span>
                 <h3>Revisions & Chat</h3>
               </div>
-              {currentRevision && <span className="revision-badge">R{currentRevision.revision_number}</span>}
+              {currentRevision && (
+                <span className="revision-badge">
+                  R{currentRevision.revision_number}
+                </span>
+              )}
             </div>
 
             {/* Revision History Accordion */}
@@ -453,23 +534,48 @@ export function PlanWorkspace({
                       {revisions.map((revision) => {
                         const isCurrent = revision.id === currentRevision?.id;
                         return (
-                          <div className={`revision-row ${isCurrent ? "is-current-revision" : ""}`} key={revision.id}>
+                          <div
+                            className={`revision-row ${isCurrent ? "is-current-revision" : ""}`}
+                            key={revision.id}
+                          >
                             <div className="revision-info">
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <strong>Revision {revision.revision_number}</strong>
-                                {isCurrent && <span className="revision-current-tag">Active</span>}
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                }}
+                              >
+                                <strong>
+                                  Revision {revision.revision_number}
+                                </strong>
+                                {isCurrent && (
+                                  <span className="revision-current-tag">
+                                    Active
+                                  </span>
+                                )}
                               </div>
-                              <span className="revision-summary">{revision.change_summary}</span>
-                              <small className="revision-date">{new Date(revision.created_at).toLocaleString()}</small>
+                              <span className="revision-summary">
+                                {revision.change_summary}
+                              </span>
+                              <small className="revision-date">
+                                {new Date(revision.created_at).toLocaleString()}
+                              </small>
                             </div>
                             <div className="revision-actions">
                               {!isCurrent && (
                                 <Button
                                   type="button"
                                   variant="outline"
-                                  isLoading={restoringRevisionId === revision.id}
+                                  isLoading={
+                                    restoringRevisionId === revision.id
+                                  }
                                   onClick={() => onRestoreRevision(revision)}
-                                  style={{ minHeight: "30px", padding: "0 10px", fontSize: "11px" }}
+                                  style={{
+                                    minHeight: "30px",
+                                    padding: "0 10px",
+                                    fontSize: "11px",
+                                  }}
                                 >
                                   Restore
                                 </Button>
@@ -478,12 +584,19 @@ export function PlanWorkspace({
                                 <Button
                                   type="button"
                                   variant="ghost"
-                                  disabled={!workspace?.permissions.canDeleteRevision}
+                                  disabled={
+                                    !workspace?.permissions.canDeleteRevision
+                                  }
                                   isLoading={deletingRevisionId === revision.id}
                                   onClick={() => onDeleteRevision(revision)}
                                   aria-label={`Delete revision ${revision.revision_number}`}
                                   title="Delete revision"
-                                  style={{ minHeight: "30px", padding: "0 8px", fontSize: "11px", color: "var(--danger, #b91c1c)" }}
+                                  style={{
+                                    minHeight: "30px",
+                                    padding: "0 8px",
+                                    fontSize: "11px",
+                                    color: "var(--danger, #b91c1c)",
+                                  }}
                                 >
                                   <Icon name="trash" /> Delete
                                 </Button>
@@ -491,7 +604,6 @@ export function PlanWorkspace({
                             </div>
                           </div>
                         );
-
                       })}
                     </div>
                   ) : (
@@ -529,10 +641,18 @@ export function PlanWorkspace({
               ) : (
                 <div className="conversation-empty">
                   <span className="eyebrow">READY</span>
-                  <p>{currentRevision ? "Revision loaded. Ask for adjustments or corrections." : "Select a saved plan."}</p>
+                  <p>
+                    {currentRevision
+                      ? "Revision loaded. Ask for adjustments or corrections."
+                      : "Select a saved plan."}
+                  </p>
                 </div>
               )}
-              {sending && <div className="workspace-message workspace-message-assistant"><p>Analyzing request and calculating plan modifications...</p></div>}
+              {sending && (
+                <div className="workspace-message workspace-message-assistant">
+                  <p>Analyzing request and calculating plan modifications...</p>
+                </div>
+              )}
             </div>
 
             <form
@@ -545,7 +665,9 @@ export function PlanWorkspace({
               <div style={{ position: "relative", width: "100%" }}>
                 <textarea
                   value={draft}
-                  onChange={(event) => setDraft(event.target.value.slice(0, 4_000))}
+                  onChange={(event) =>
+                    setDraft(event.target.value.slice(0, 4_000))
+                  }
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
@@ -555,13 +677,38 @@ export function PlanWorkspace({
                   disabled={sending || !workspace?.permissions.canMessage}
                   placeholder="Ask a question or request changes (e.g., 'Change workers to 6')"
                   rows={3}
-                  style={{ paddingRight: "44px", paddingBottom: "32px", resize: "none" }}
+                  style={{
+                    paddingRight: "44px",
+                    paddingBottom: "32px",
+                    resize: "none",
+                  }}
                 />
-                <div style={{ position: "absolute", bottom: "10px", right: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "10px", color: "var(--muted)", opacity: 0.8 }}>{draft.length}/4000</span>
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "10px",
+                    right: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      color: "var(--muted)",
+                      opacity: 0.8,
+                    }}
+                  >
+                    {draft.length}/4000
+                  </span>
                   <Button
                     type="submit"
-                    disabled={!draft.trim() || sending || !workspace?.permissions.canMessage}
+                    disabled={
+                      !draft.trim() ||
+                      sending ||
+                      !workspace?.permissions.canMessage
+                    }
                     isLoading={sending}
                     style={{
                       padding: "0",
@@ -582,11 +729,9 @@ export function PlanWorkspace({
                 </div>
               </div>
             </form>
-
           </aside>
         )}
       </section>
     </div>
   );
 }
-

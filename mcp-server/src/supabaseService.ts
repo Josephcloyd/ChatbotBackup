@@ -139,7 +139,12 @@ interface BuildPlanRecordOptions {
 }
 
 function numberValue(value: unknown): number {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 0;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -149,9 +154,9 @@ export function buildPlanRecord(
   plan: ProductionPlanOutput,
   options: BuildPlanRecordOptions = {},
 ): PlanRecord {
-  const productionRows = plan.workbook.sheets.find(
-    (sheet) => sheet.sheetName === "Production Plan",
-  )?.rows ?? [];
+  const productionRows =
+    plan.workbook.sheets.find((sheet) => sheet.sheetName === "Production Plan")
+      ?.rows ?? [];
   const productionSheet = plan.workbook.sheets.find(
     (sheet) => sheet.sheetName === "Production Plan",
   );
@@ -160,20 +165,20 @@ export function buildPlanRecord(
   const recommendedTeamSize = productionSheet
     ? productionRows.reduce(
         (largest, row) =>
-          Math.max(largest, numberValue(getSemanticCell(row, productionSheet, "planned_staff"))),
+          Math.max(
+            largest,
+            numberValue(getSemanticCell(row, productionSheet, "planned_staff")),
+          ),
         0,
       )
     : 0;
   const plannedHoursColumn = productionSheet
-    ? (
-        findColumnLabel(
-          productionSheet,
-          plan.project.productionUnit && plan.project.productionUnit !== "hours"
-            ? "planned_hours"
-            : "planned_output",
-        ) ??
-        findColumnLabel(productionSheet, "planned_output")
-      )
+    ? (findColumnLabel(
+        productionSheet,
+        plan.project.productionUnit && plan.project.productionUnit !== "hours"
+          ? "planned_hours"
+          : "planned_output",
+      ) ?? findColumnLabel(productionSheet, "planned_output"))
     : undefined;
 
   return {
@@ -221,7 +226,7 @@ export function getClient(): SupabaseClient {
   if (!url || !key) {
     throw new Error(
       "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables. " +
-        "Copy .env.example to .env and fill in your Supabase credentials."
+        "Copy .env.example to .env and fill in your Supabase credentials.",
     );
   }
 
@@ -242,7 +247,7 @@ export function createServiceRoleClient(): SupabaseClient {
 
   if (!url || !key) {
     throw new Error(
-      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables."
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.",
     );
   }
 
@@ -319,11 +324,17 @@ export function formatSupabaseError(prefix: string, error: unknown): string {
   const inferredHint = explicitHint ? undefined : inferSupabaseSetupHint(error);
   const parts = [
     getObjectField(error, "message") ?? describeUnknownError(error),
-    getObjectField(error, "code") ? `code=${getObjectField(error, "code")}` : undefined,
-    getObjectField(error, "details") ? `details=${getObjectField(error, "details")}` : undefined,
+    getObjectField(error, "code")
+      ? `code=${getObjectField(error, "code")}`
+      : undefined,
+    getObjectField(error, "details")
+      ? `details=${getObjectField(error, "details")}`
+      : undefined,
     explicitHint ? `hint=${explicitHint}` : undefined,
     inferredHint ? `hint=${inferredHint}` : undefined,
-    getObjectField(error, "status") ? `status=${getObjectField(error, "status")}` : undefined,
+    getObjectField(error, "status")
+      ? `status=${getObjectField(error, "status")}`
+      : undefined,
   ].filter(Boolean);
 
   return `${prefix}: ${parts.join("; ")}`;
@@ -343,7 +354,12 @@ export async function savePlan(
 ): Promise<PlanRecord> {
   const supabase = getClient();
 
-  const record = buildPlanRecord(whatsappUserId, projectDescription, plan, options);
+  const record = buildPlanRecord(
+    whatsappUserId,
+    projectDescription,
+    plan,
+    options,
+  );
 
   console.log(`[supabaseService] Saving plan for user: ${whatsappUserId}`);
 
@@ -365,7 +381,7 @@ export async function savePlan(
  * Fetch the most recent plan for a given WhatsApp user.
  */
 export async function getLatestPlan(
-  whatsappUserId: string
+  whatsappUserId: string,
 ): Promise<PlanRecord | null> {
   const supabase = getClient();
 
@@ -400,7 +416,8 @@ export async function getRecentPlans(
 
   if (whatsappUserId) query = query.eq("whatsapp_user_id", whatsappUserId);
   const { data, error } = await query;
-  if (error) throw new Error(formatSupabaseError("Supabase query failed", error));
+  if (error)
+    throw new Error(formatSupabaseError("Supabase query failed", error));
   return (data ?? []) as PlanRecord[];
 }
 
@@ -421,11 +438,13 @@ function getSignedUrlExpiresInSeconds(): number {
 }
 
 function safeStorageSegment(value: string): string {
-  return value
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "workspace";
+  return (
+    value
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "workspace"
+  );
 }
 
 export interface WorkbookUploadResult {
@@ -457,12 +476,15 @@ export async function uploadWorkbookAndCreateSignedUrl(
   const { error: uploadError } = await supabase.storage
     .from(bucket)
     .upload(objectPath, fileBuffer, {
-      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      contentType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       upsert: false,
     });
 
   if (uploadError) {
-    throw new Error(formatSupabaseError("Supabase workbook upload failed", uploadError));
+    throw new Error(
+      formatSupabaseError("Supabase workbook upload failed", uploadError),
+    );
   }
 
   const { data, error: signedUrlError } = await supabase.storage
@@ -474,7 +496,10 @@ export async function uploadWorkbookAndCreateSignedUrl(
   if (signedUrlError || !data?.signedUrl) {
     throw new Error(
       signedUrlError
-        ? formatSupabaseError("Supabase signed URL creation failed", signedUrlError)
+        ? formatSupabaseError(
+            "Supabase signed URL creation failed",
+            signedUrlError,
+          )
         : "Supabase signed URL creation failed: No signed URL returned",
     );
   }
@@ -544,7 +569,9 @@ export async function updatePlanFromRevision(
     .single();
 
   if (error) {
-    throw new Error(`Failed to update plan ${planId} from revision: ${error.message}`);
+    throw new Error(
+      `Failed to update plan ${planId} from revision: ${error.message}`,
+    );
   }
 
   return data as PlanRecord;
@@ -563,13 +590,23 @@ export async function deletePlan(planId: string): Promise<void> {
       const bucket = String(file.storage_bucket ?? "");
       const objectPath = String(file.storage_path ?? "");
       if (!bucket || !objectPath) continue;
-      filesByBucket.set(bucket, [...(filesByBucket.get(bucket) ?? []), objectPath]);
+      filesByBucket.set(bucket, [
+        ...(filesByBucket.get(bucket) ?? []),
+        objectPath,
+      ]);
     }
     for (const [bucket, paths] of filesByBucket.entries()) {
       if (paths.length === 0) continue;
-      const { error: removeError } = await supabase.storage.from(bucket).remove(paths);
+      const { error: removeError } = await supabase.storage
+        .from(bucket)
+        .remove(paths);
       if (removeError) {
-        throw new Error(formatSupabaseError(`Failed to delete workbook files for plan ${planId}`, removeError));
+        throw new Error(
+          formatSupabaseError(
+            `Failed to delete workbook files for plan ${planId}`,
+            removeError,
+          ),
+        );
       }
     }
   } else {
@@ -585,7 +622,12 @@ export async function deletePlan(planId: string): Promise<void> {
     .eq("id", planId);
 
   if (error) {
-    throw new Error(formatSupabaseError(`Failed to delete plan ${planId} from Supabase`, error));
+    throw new Error(
+      formatSupabaseError(
+        `Failed to delete plan ${planId} from Supabase`,
+        error,
+      ),
+    );
   }
 }
 
@@ -605,12 +647,17 @@ const editablePlanFields = new Set([
 function normalizeNullableDate(value: unknown): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (typeof value !== "string") throw new Error("Date fields must be strings or null.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Date fields must use YYYY-MM-DD.");
+  if (typeof value !== "string")
+    throw new Error("Date fields must be strings or null.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+    throw new Error("Date fields must use YYYY-MM-DD.");
   return value;
 }
 
-function normalizeNonNegativeNumber(value: unknown, fieldName: string): number | null | undefined {
+function normalizeNonNegativeNumber(
+  value: unknown,
+  fieldName: string,
+): number | null | undefined {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
@@ -620,7 +667,9 @@ function normalizeNonNegativeNumber(value: unknown, fieldName: string): number |
   return parsed;
 }
 
-export function sanitizePlanUpdates(input: Record<string, unknown>): Partial<PlanRecord> {
+export function sanitizePlanUpdates(
+  input: Record<string, unknown>,
+): Partial<PlanRecord> {
   const updates: Partial<PlanRecord> = {};
   for (const [key, value] of Object.entries(input)) {
     if (!editablePlanFields.has(key)) continue;
@@ -648,7 +697,10 @@ export function sanitizePlanUpdates(input: Record<string, unknown>): Partial<Pla
     ) {
       (updates as Record<string, unknown>)[key] = normalizeNullableDate(value);
     } else if (key === "actual_hours" || key === "requested_team_size") {
-      (updates as Record<string, unknown>)[key] = normalizeNonNegativeNumber(value, key);
+      (updates as Record<string, unknown>)[key] = normalizeNonNegativeNumber(
+        value,
+        key,
+      );
     }
   }
 
@@ -657,21 +709,28 @@ export function sanitizePlanUpdates(input: Record<string, unknown>): Partial<Pla
     updates.planning_end_date &&
     updates.planning_end_date < updates.planning_start_date
   ) {
-    throw new Error("Planning end date cannot be earlier than planning start date.");
+    throw new Error(
+      "Planning end date cannot be earlier than planning start date.",
+    );
   }
   if (
     updates.actual_start_date &&
     updates.actual_end_date &&
     updates.actual_end_date < updates.actual_start_date
   ) {
-    throw new Error("Actual end date cannot be earlier than actual start date.");
+    throw new Error(
+      "Actual end date cannot be earlier than actual start date.",
+    );
   }
 
   updates.updated_at = new Date().toISOString();
   return updates;
 }
 
-export async function updatePlan(planId: string, updates: Record<string, unknown>): Promise<PlanRecord> {
+export async function updatePlan(
+  planId: string,
+  updates: Record<string, unknown>,
+): Promise<PlanRecord> {
   const sanitizedUpdates = sanitizePlanUpdates(updates);
   const supabase = getClient();
   const { data, error } = await supabase
@@ -682,13 +741,22 @@ export async function updatePlan(planId: string, updates: Record<string, unknown
     .single();
 
   if (error) {
-    throw new Error(formatSupabaseError(`Failed to update plan ${planId} in Supabase`, error));
+    throw new Error(
+      formatSupabaseError(`Failed to update plan ${planId} in Supabase`, error),
+    );
   }
 
   return data as PlanRecord;
 }
 
-export type ReviewAction = "under_review" | "approve" | "reject" | "archive" | "restore" | "generated" | "failed";
+export type ReviewAction =
+  | "under_review"
+  | "approve"
+  | "reject"
+  | "archive"
+  | "restore"
+  | "generated"
+  | "failed";
 
 export async function updatePlanReviewStatus(
   planId: string,
@@ -707,7 +775,8 @@ export async function updatePlanReviewStatus(
     updates.reviewed_at = now;
     updates.rejection_reason = null;
   } else if (action === "reject") {
-    if (!rejectionReason?.trim()) throw new Error("Rejection reason is required.");
+    if (!rejectionReason?.trim())
+      throw new Error("Rejection reason is required.");
     updates.status = "rejected";
     updates.reviewed_by = adminId;
     updates.reviewed_at = now;
@@ -735,13 +804,21 @@ export async function updatePlanReviewStatus(
     .single();
 
   if (error) {
-    throw new Error(formatSupabaseError(`Failed to update plan status ${planId} in Supabase`, error));
+    throw new Error(
+      formatSupabaseError(
+        `Failed to update plan status ${planId} in Supabase`,
+        error,
+      ),
+    );
   }
 
   return data as PlanRecord;
 }
 
-export async function reassignPlans(fromUsername: string, toUsername: string): Promise<void> {
+export async function reassignPlans(
+  fromUsername: string,
+  toUsername: string,
+): Promise<void> {
   const supabase = getClient();
   const { error } = await supabase
     .from("production_plans")
@@ -749,7 +826,12 @@ export async function reassignPlans(fromUsername: string, toUsername: string): P
     .eq("whatsapp_user_id", fromUsername);
 
   if (error) {
-    throw new Error(formatSupabaseError(`Failed to reassign plans from ${fromUsername} to ${toUsername}`, error));
+    throw new Error(
+      formatSupabaseError(
+        `Failed to reassign plans from ${fromUsername} to ${toUsername}`,
+        error,
+      ),
+    );
   }
 }
 
@@ -761,7 +843,10 @@ export async function countPlansForUser(username: string): Promise<number> {
     .select("id", { count: "exact", head: true })
     .eq("whatsapp_user_id", username);
 
-  if (error) throw new Error(formatSupabaseError(`Failed to count plans for ${username}`, error));
+  if (error)
+    throw new Error(
+      formatSupabaseError(`Failed to count plans for ${username}`, error),
+    );
   return count ?? 0;
 }
 
@@ -774,11 +859,14 @@ export async function listPlanFiles(planId: string): Promise<PlanFileRecord[]> {
     .order("version", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(formatSupabaseError("Failed to list plan files", error));
+  if (error)
+    throw new Error(formatSupabaseError("Failed to list plan files", error));
   return (data ?? []) as PlanFileRecord[];
 }
 
-export async function listPlanRevisions(planId: string): Promise<PlanRevision[]> {
+export async function listPlanRevisions(
+  planId: string,
+): Promise<PlanRevision[]> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_revisions")
@@ -790,7 +878,9 @@ export async function listPlanRevisions(planId: string): Promise<PlanRevision[]>
   return (data ?? []) as PlanRevision[];
 }
 
-export async function getLatestPlanRevision(planId: string): Promise<PlanRevision | null> {
+export async function getLatestPlanRevision(
+  planId: string,
+): Promise<PlanRevision | null> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_revisions")
@@ -800,11 +890,15 @@ export async function getLatestPlanRevision(planId: string): Promise<PlanRevisio
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new Error(`Failed to load current plan revision: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to load current plan revision: ${error.message}`);
   return data as PlanRevision | null;
 }
 
-export async function getPlanRevision(planId: string, revisionId: string): Promise<PlanRevision | null> {
+export async function getPlanRevision(
+  planId: string,
+  revisionId: string,
+): Promise<PlanRevision | null> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_revisions")
@@ -817,7 +911,10 @@ export async function getPlanRevision(planId: string, revisionId: string): Promi
   return data as PlanRevision | null;
 }
 
-export async function deletePlanRevision(planId: string, revisionId: string): Promise<void> {
+export async function deletePlanRevision(
+  planId: string,
+  revisionId: string,
+): Promise<void> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_revisions")
@@ -827,11 +924,14 @@ export async function deletePlanRevision(planId: string, revisionId: string): Pr
     .select("id")
     .maybeSingle();
 
-  if (error) throw new Error(`Failed to delete plan revision: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to delete plan revision: ${error.message}`);
   if (!data) throw new Error("Revision not found.");
 }
 
-export async function createPlanRevision(input: CreatePlanRevisionInput): Promise<PlanRevision> {
+export async function createPlanRevision(
+  input: CreatePlanRevisionInput,
+): Promise<PlanRevision> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_revisions")
@@ -854,11 +954,14 @@ export async function createPlanRevision(input: CreatePlanRevisionInput): Promis
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to create plan revision: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to create plan revision: ${error.message}`);
   return data as PlanRevision;
 }
 
-export async function listPlanConversationMessages(planId: string): Promise<PlanConversationMessage[]> {
+export async function listPlanConversationMessages(
+  planId: string,
+): Promise<PlanConversationMessage[]> {
   const supabase = getClient();
   const { data, error } = await supabase
     .from("plan_conversations")
@@ -866,7 +969,10 @@ export async function listPlanConversationMessages(planId: string): Promise<Plan
     .eq("plan_id", planId)
     .order("created_at", { ascending: true });
 
-  if (error) throw new Error(`Failed to list plan conversation messages: ${error.message}`);
+  if (error)
+    throw new Error(
+      `Failed to list plan conversation messages: ${error.message}`,
+    );
   return (data ?? []) as PlanConversationMessage[];
 }
 
@@ -888,7 +994,10 @@ export async function createPlanConversationMessage(
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to save plan conversation message: ${error.message}`);
+  if (error)
+    throw new Error(
+      `Failed to save plan conversation message: ${error.message}`,
+    );
   return data as PlanConversationMessage;
 }
 
@@ -911,7 +1020,8 @@ export async function createPlanChangeProposal(
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to save plan change proposal: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to save plan change proposal: ${error.message}`);
   return data as StoredPlanChangeProposal;
 }
 
@@ -927,7 +1037,8 @@ export async function getPlanChangeProposal(
     .eq("id", proposalId)
     .maybeSingle();
 
-  if (error) throw new Error(`Failed to load plan change proposal: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to load plan change proposal: ${error.message}`);
   return data as StoredPlanChangeProposal | null;
 }
 
@@ -950,7 +1061,8 @@ export async function updatePlanChangeProposalStatus(
     .select()
     .single();
 
-  if (error) throw new Error(`Failed to update plan change proposal: ${error.message}`);
+  if (error)
+    throw new Error(`Failed to update plan change proposal: ${error.message}`);
   return data as StoredPlanChangeProposal;
 }
 
@@ -988,12 +1100,17 @@ export async function recordPlanFile(
     if (error) throw error;
     return data as PlanFileRecord;
   } catch (error) {
-    console.error("[supabaseService] Failed to record plan file:", formatSupabaseError("Supabase plan file insert failed", error));
+    console.error(
+      "[supabaseService] Failed to record plan file:",
+      formatSupabaseError("Supabase plan file insert failed", error),
+    );
     return null;
   }
 }
 
-export async function createSignedPlanFileDownload(fileId: string): Promise<{ signedUrl: string; fileName: string }> {
+export async function createSignedPlanFileDownload(
+  fileId: string,
+): Promise<{ signedUrl: string; fileName: string }> {
   const supabase = getClient();
   const { data: file, error } = await supabase
     .from("plan_files")
@@ -1006,10 +1123,14 @@ export async function createSignedPlanFileDownload(fileId: string): Promise<{ si
   const expiresIn = getSignedUrlExpiresInSeconds();
   const { data, error: signedUrlError } = await supabase.storage
     .from(file.storage_bucket)
-    .createSignedUrl(file.storage_path, expiresIn, { download: file.file_name });
+    .createSignedUrl(file.storage_path, expiresIn, {
+      download: file.file_name,
+    });
 
   if (signedUrlError || !data?.signedUrl) {
-    throw new Error(`Failed to create workbook download URL: ${signedUrlError?.message ?? "No signed URL returned"}`);
+    throw new Error(
+      `Failed to create workbook download URL: ${signedUrlError?.message ?? "No signed URL returned"}`,
+    );
   }
 
   return { signedUrl: data.signedUrl, fileName: file.file_name };
@@ -1040,14 +1161,20 @@ export async function createGenerationRun(input: {
     if (error) throw error;
     return data.id as string;
   } catch (error) {
-    console.error("[supabaseService] Failed to create generation run:", formatSupabaseError("Supabase generation run insert failed", error));
+    console.error(
+      "[supabaseService] Failed to create generation run:",
+      formatSupabaseError("Supabase generation run insert failed", error),
+    );
     return null;
   }
 }
 
 export async function completeGenerationRun(
   runId: string | null,
-  updates: Partial<PlanGenerationRunRecord> & { status: "completed" | "failed"; plan_id?: string | null },
+  updates: Partial<PlanGenerationRunRecord> & {
+    status: "completed" | "failed";
+    plan_id?: string | null;
+  },
 ): Promise<void> {
   if (!runId) return;
   try {
@@ -1058,16 +1185,21 @@ export async function completeGenerationRun(
       .eq("id", runId);
     if (error) throw error;
   } catch (error) {
-    console.error("[supabaseService] Failed to complete generation run:", formatSupabaseError("Supabase generation run update failed", error));
+    console.error(
+      "[supabaseService] Failed to complete generation run:",
+      formatSupabaseError("Supabase generation run update failed", error),
+    );
   }
 }
 
-export async function listGenerationRuns(filters: {
-  status?: string;
-  modelName?: string;
-  planId?: string;
-  date?: string;
-} = {}): Promise<PlanGenerationRunRecord[]> {
+export async function listGenerationRuns(
+  filters: {
+    status?: string;
+    modelName?: string;
+    planId?: string;
+    date?: string;
+  } = {},
+): Promise<PlanGenerationRunRecord[]> {
   const supabase = getClient();
   let query = supabase
     .from("plan_generation_runs")
@@ -1079,11 +1211,15 @@ export async function listGenerationRuns(filters: {
   if (filters.modelName) query = query.eq("model_name", filters.modelName);
   if (filters.planId) query = query.eq("plan_id", filters.planId);
   if (filters.date) {
-    query = query.gte("started_at", `${filters.date}T00:00:00.000Z`).lt("started_at", `${filters.date}T23:59:59.999Z`);
+    query = query
+      .gte("started_at", `${filters.date}T00:00:00.000Z`)
+      .lt("started_at", `${filters.date}T23:59:59.999Z`);
   }
 
   const { data, error } = await query;
-  if (error) throw new Error(formatSupabaseError("Failed to list generation runs", error));
+  if (error)
+    throw new Error(
+      formatSupabaseError("Failed to list generation runs", error),
+    );
   return (data ?? []) as PlanGenerationRunRecord[];
 }
-

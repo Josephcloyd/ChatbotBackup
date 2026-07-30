@@ -36,26 +36,33 @@ export const planChangeProposalSchema = z.object({
   interpretedRequest: z.string().trim().min(1).max(4_000),
   reasonForChange: z.string().trim().min(1).max(4_000),
   affectedSections: z.array(z.string().trim().min(1)).max(30),
-  changes: z.array(z.object({
-    field: z.string().trim().min(1).max(120),
-    label: z.string().trim().min(1).max(160),
-    previousValue: z.unknown(),
-    proposedValue: z.unknown(),
-    reason: z.string().trim().min(1).max(1_000),
-    impact: z.string().trim().max(1_000).optional(),
-  })).min(1).max(30),
-  recalculatedMetrics: z.object({
-    previousWorkerCount: z.number().optional(),
-    proposedWorkerCount: z.number().optional(),
-    previousTotalHours: z.number().optional(),
-    proposedTotalHours: z.number().optional(),
-    previousDuration: z.number().optional(),
-    proposedDuration: z.number().optional(),
-    previousDailyTarget: z.number().optional(),
-    proposedDailyTarget: z.number().optional(),
-    previousTotalTarget: z.number().optional(),
-    proposedTotalTarget: z.number().optional(),
-  }).optional(),
+  changes: z
+    .array(
+      z.object({
+        field: z.string().trim().min(1).max(120),
+        label: z.string().trim().min(1).max(160),
+        previousValue: z.unknown(),
+        proposedValue: z.unknown(),
+        reason: z.string().trim().min(1).max(1_000),
+        impact: z.string().trim().max(1_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(30),
+  recalculatedMetrics: z
+    .object({
+      previousWorkerCount: z.number().optional(),
+      proposedWorkerCount: z.number().optional(),
+      previousTotalHours: z.number().optional(),
+      proposedTotalHours: z.number().optional(),
+      previousDuration: z.number().optional(),
+      proposedDuration: z.number().optional(),
+      previousDailyTarget: z.number().optional(),
+      proposedDailyTarget: z.number().optional(),
+      previousTotalTarget: z.number().optional(),
+      proposedTotalTarget: z.number().optional(),
+    })
+    .optional(),
   warnings: z.array(z.string().trim().min(1)).max(20).default([]),
   clarificationQuestions: z.array(z.string().trim().min(1)).max(10).default([]),
   requiresConfirmation: z.boolean(),
@@ -64,25 +71,39 @@ export const planChangeProposalSchema = z.object({
 export const planAssistantResponseSchema = z.object({
   intent: z.enum(planConversationIntentValues),
   message: z.string().trim().min(1).max(8_000),
-  explanation: z.object({
-    summary: z.string().trim().min(1).max(4_000),
-    formulas: z.array(z.object({
-      label: z.string().trim().min(1).max(160),
-      expression: z.string().trim().min(1).max(1_000),
-      result: z.string().trim().min(1).max(1_000),
-    })).max(20).optional(),
-    assumptions: z.array(z.string().trim().min(1).max(1_000)).max(20).optional(),
-  }).optional(),
-  clarificationQuestions: z.array(z.string().trim().min(1).max(1_000)).max(10).optional(),
+  explanation: z
+    .object({
+      summary: z.string().trim().min(1).max(4_000),
+      formulas: z
+        .array(
+          z.object({
+            label: z.string().trim().min(1).max(160),
+            expression: z.string().trim().min(1).max(1_000),
+            result: z.string().trim().min(1).max(1_000),
+          }),
+        )
+        .max(20)
+        .optional(),
+      assumptions: z
+        .array(z.string().trim().min(1).max(1_000))
+        .max(20)
+        .optional(),
+    })
+    .optional(),
+  clarificationQuestions: z
+    .array(z.string().trim().min(1).max(1_000))
+    .max(10)
+    .optional(),
   proposal: planChangeProposalSchema.optional(),
   requiresConfirmation: z.boolean(),
   canApply: z.boolean(),
   warnings: z.array(z.string().trim().min(1).max(1_000)).max(20).optional(),
 });
 
-export type PlanConversationIntent = typeof planConversationIntentValues[number];
-export type PlanMessageType = typeof planMessageTypeValues[number];
-export type PlanRevisionSource = typeof planRevisionSourceValues[number];
+export type PlanConversationIntent =
+  (typeof planConversationIntentValues)[number];
+export type PlanMessageType = (typeof planMessageTypeValues)[number];
+export type PlanRevisionSource = (typeof planRevisionSourceValues)[number];
 export type PlanChangeProposal = z.infer<typeof planChangeProposalSchema>;
 export type PlanAssistantResponse = z.infer<typeof planAssistantResponseSchema>;
 

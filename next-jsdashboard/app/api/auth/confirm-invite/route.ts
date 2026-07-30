@@ -6,13 +6,22 @@ const plannerUrl = process.env.PLANNER_API_URL ?? "http://127.0.0.1:3001";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const identifier = typeof body?.identifier === "string" ? body.identifier.trim() : "";
-  const temporaryPassword = typeof body?.temporaryPassword === "string" ? body.temporaryPassword.trim() : "";
-  const newPassword = typeof body?.newPassword === "string" ? body.newPassword.trim() : "";
+  const identifier =
+    typeof body?.identifier === "string" ? body.identifier.trim() : "";
+  const temporaryPassword =
+    typeof body?.temporaryPassword === "string"
+      ? body.temporaryPassword.trim()
+      : "";
+  const newPassword =
+    typeof body?.newPassword === "string" ? body.newPassword.trim() : "";
 
   if (!identifier || !temporaryPassword || !newPassword) {
     return NextResponse.json(
-      { success: false, error: "Email/username, temporary password, and new password are required." },
+      {
+        success: false,
+        error:
+          "Email/username, temporary password, and new password are required.",
+      },
       { status: 400 },
     );
   }
@@ -27,7 +36,11 @@ export async function POST(request: Request) {
     const data = await res.json();
     if (!res.ok || !data.success) {
       return NextResponse.json(
-        { success: false, error: data.error ?? "Failed to confirm invitation and set new password." },
+        {
+          success: false,
+          error:
+            data.error ?? "Failed to confirm invitation and set new password.",
+        },
         { status: res.status },
       );
     }
@@ -44,7 +57,10 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 8,
     });
 
-    return NextResponse.json({ success: true, user: { username: validUser, displayName, role } });
+    return NextResponse.json({
+      success: true,
+      user: { username: validUser, displayName, role },
+    });
   } catch (err) {
     console.error("[confirm-invite/route] Error:", err);
     return NextResponse.json(

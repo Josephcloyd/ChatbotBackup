@@ -10,8 +10,14 @@ interface PlanTableProps {
 }
 
 function selectTeamColumn(keys: string[]): string | undefined {
-  return keys.find((key) => /^target\s+active\b/i.test(key))
-    ?? keys.find((key) => /\b(?:team|staff|workers|resources)\b/i.test(key) && !/actual|per\s+/i.test(key));
+  return (
+    keys.find((key) => /^target\s+active\b/i.test(key)) ??
+    keys.find(
+      (key) =>
+        /\b(?:team|staff|workers|resources)\b/i.test(key) &&
+        !/actual|per\s+/i.test(key),
+    )
+  );
 }
 
 export function PlanTable({ rows, metrics }: PlanTableProps) {
@@ -30,7 +36,10 @@ export function PlanTable({ rows, metrics }: PlanTableProps) {
       "Actual Hours",
       "Status",
       "Notes",
-    ].filter((column): column is string => typeof column === "string" && keys.includes(column));
+    ].filter(
+      (column): column is string =>
+        typeof column === "string" && keys.includes(column),
+    );
     return [...new Set(preferred)].slice(0, 10);
   }, [rows, metrics?.targetCol, metrics?.perAnnotCol]);
 
@@ -62,7 +71,11 @@ export function PlanTable({ rows, metrics }: PlanTableProps) {
                   let displayVal = "—";
                   if (typeof rawVal === "number") {
                     displayVal = rawVal.toLocaleString();
-                  } else if (rawVal !== null && rawVal !== undefined && rawVal !== "") {
+                  } else if (
+                    rawVal !== null &&
+                    rawVal !== undefined &&
+                    rawVal !== ""
+                  ) {
                     displayVal = String(rawVal);
                   } else if (/status/i.test(col)) {
                     displayVal = "Not Started";

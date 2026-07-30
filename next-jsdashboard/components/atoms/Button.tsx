@@ -6,7 +6,13 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   isLoading?: boolean;
 }
 
-export function Button({ variant = "primary", isLoading, children, className = "", ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  isLoading,
+  children,
+  className = "",
+  ...props
+}: ButtonProps) {
   return (
     <button
       className={`btn btn-${variant} ${className}`}

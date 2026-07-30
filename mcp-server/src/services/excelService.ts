@@ -11,9 +11,13 @@ function copyRowFormatting(source: ExcelJS.Row, target: ExcelJS.Row): void {
   target.outlineLevel = source.outlineLevel;
   source.eachCell({ includeEmpty: true }, (sourceCell, columnNumber) => {
     const targetCell = target.getCell(columnNumber);
-    targetCell.style = JSON.parse(JSON.stringify(sourceCell.style)) as ExcelJS.Style;
+    targetCell.style = JSON.parse(
+      JSON.stringify(sourceCell.style),
+    ) as ExcelJS.Style;
     if (sourceCell.dataValidation) {
-      targetCell.dataValidation = JSON.parse(JSON.stringify(sourceCell.dataValidation));
+      targetCell.dataValidation = JSON.parse(
+        JSON.stringify(sourceCell.dataValidation),
+      );
     }
   });
 }
@@ -25,7 +29,10 @@ function rowIsAvailable(
 ): boolean {
   return columnNumbers.every((columnNumber) => {
     const cell = worksheet.getCell(rowNumber, columnNumber);
-    return cell.type === ExcelJS.ValueType.Null || cell.type === ExcelJS.ValueType.Formula;
+    return (
+      cell.type === ExcelJS.ValueType.Null ||
+      cell.type === ExcelJS.ValueType.Formula
+    );
   });
 }
 
@@ -46,12 +53,17 @@ export class ExcelService {
       );
       const worksheet = workbook.getWorksheet(generatedSheet.sheetName);
       if (!definition || !worksheet) {
-        throw new Error(`Template worksheet not found: ${generatedSheet.sheetName}`);
+        throw new Error(
+          `Template worksheet not found: ${generatedSheet.sheetName}`,
+        );
       }
 
       let headerRowNumber = definition.headerRow;
       if (headerRowNumber === null) {
-        if (worksheet.actualRowCount === 0 && generatedSheet.columns.length > 0) {
+        if (
+          worksheet.actualRowCount === 0 &&
+          generatedSheet.columns.length > 0
+        ) {
           headerRowNumber = 1;
           generatedSheet.columns.forEach((header, index) => {
             worksheet.getCell(1, index + 1).value = header;
@@ -62,7 +74,9 @@ export class ExcelService {
       }
 
       const templateDataRow = worksheet.getRow(headerRowNumber + 1);
-      const columnNumbers = definition.columns.map((column) => column.columnNumber);
+      const columnNumbers = definition.columns.map(
+        (column) => column.columnNumber,
+      );
       let nextRowNumber = headerRowNumber + 1;
       generatedSheet.rows.forEach((generatedRow, rowIndex) => {
         while (
@@ -83,7 +97,10 @@ export class ExcelService {
         for (const column of definition.columns) {
           const cell = targetRow.getCell(column.columnNumber);
           // Formula and non-master merged cells belong to the official layout.
-          if (cell.type === ExcelJS.ValueType.Formula || (cell.isMerged && cell.master !== cell)) {
+          if (
+            cell.type === ExcelJS.ValueType.Formula ||
+            (cell.isMerged && cell.master !== cell)
+          ) {
             continue;
           }
           cell.value = generatedRow[column.header] ?? "";
@@ -94,7 +111,8 @@ export class ExcelService {
     }
 
     const destination =
-      outputPath ?? path.join(this.outputDirectory, `production-plan-${randomUUID()}.xlsx`);
+      outputPath ??
+      path.join(this.outputDirectory, `production-plan-${randomUUID()}.xlsx`);
     await mkdir(path.dirname(destination), { recursive: true });
     await workbook.xlsx.writeFile(destination);
     return destination;

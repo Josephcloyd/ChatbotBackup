@@ -43,7 +43,10 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 8,
     });
 
-    return NextResponse.json({ success: true, user: { username: validUser, displayName, role } });
+    return NextResponse.json({
+      success: true,
+      user: { username: validUser, displayName, role },
+    });
   } catch (err) {
     console.error("Auth Login Error:", err);
     return NextResponse.json(
@@ -52,4 +55,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

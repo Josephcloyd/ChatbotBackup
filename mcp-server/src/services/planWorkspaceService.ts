@@ -6,7 +6,11 @@ import type {
   ProductionPlanRow,
   ProductionPlanSheet,
 } from "../types/productionPlan.js";
-import type { DynamicPhase, DynamicPlanResult, DynamicRisk } from "./dynamicPlanService.js";
+import type {
+  DynamicPhase,
+  DynamicPlanResult,
+  DynamicRisk,
+} from "./dynamicPlanService.js";
 import {
   buildScheduleDates,
   DEFAULT_PLANNING_MODEL,
@@ -120,12 +124,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function asProductionPlan(value: unknown): ProductionPlan {
-  if (!isRecord(value)) throw new PlanWorkspaceError(422, "Revision plan data is invalid.");
+  if (!isRecord(value))
+    throw new PlanWorkspaceError(422, "Revision plan data is invalid.");
   return value as unknown as ProductionPlan;
 }
 
 function numberValue(value: unknown): number {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : 0;
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -154,25 +164,40 @@ function isWeekendDate(date: string): boolean {
 }
 
 function safeSlug(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "production-plan";
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "production-plan"
+  );
 }
 
-function distributeAmount(total: number, count: number, decimals = 2): number[] {
+function distributeAmount(
+  total: number,
+  count: number,
+  decimals = 2,
+): number[] {
   const scale = 10 ** decimals;
   const scaledTotal = Math.round(total * scale);
   const base = Math.floor(scaledTotal / count);
   const remainder = scaledTotal - base * count;
-  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / scale);
+  return Array.from(
+    { length: count },
+    (_, index) => (base + (index < remainder ? 1 : 0)) / scale,
+  );
 }
 
-function findProductionSheet(plan: ProductionPlan): ProductionPlanSheet | undefined {
-  return plan.workbook?.sheets?.find((sheet) => sheet.sheetName === "Production Plan")
-    ?? plan.workbook?.sheets?.find((sheet) => /production/i.test(sheet.sheetName));
+function findProductionSheet(
+  plan: ProductionPlan,
+): ProductionPlanSheet | undefined {
+  return (
+    plan.workbook?.sheets?.find(
+      (sheet) => sheet.sheetName === "Production Plan",
+    ) ??
+    plan.workbook?.sheets?.find((sheet) => /production/i.test(sheet.sheetName))
+  );
 }
 
 function sheetColumns(sheet: ProductionPlanSheet | undefined): string[] {
@@ -182,15 +207,20 @@ function sheetColumns(sheet: ProductionPlanSheet | undefined): string[] {
 }
 
 function targetColumn(columns: string[]): string {
-  return columns.find((column) => column === "Target Total Hours")
-    ?? columns.find((column) =>
-      (/target|plan/i.test(column) || /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
-      !/active|accumulate|accumulative|annotator|annotators|recorder|recorders|operator|operators|worker|workers|staff|headcount|team|resource|resources|per\s+(?:annotator|person|worker|recorder|operator|resource|staff)|actual|balance|status|variance|completion/i.test(column)
-    )
-    ?? columns[5]
-    ?? "Target Total Hours";
+  return (
+    columns.find((column) => column === "Target Total Hours") ??
+    columns.find(
+      (column) =>
+        (/target|plan/i.test(column) ||
+          /posts|images|records|documents|units|hours|tasks/i.test(column)) &&
+        !/active|accumulate|accumulative|annotator|annotators|recorder|recorders|operator|operators|worker|workers|staff|headcount|team|resource|resources|per\s+(?:annotator|person|worker|recorder|operator|resource|staff)|actual|balance|status|variance|completion/i.test(
+          column,
+        ),
+    ) ??
+    columns[5] ??
+    "Target Total Hours"
+  );
 }
-
 
 function inferUnitLabel(plan: ProductionPlan, target: string): string {
   const fromProject = plan.project?.productionUnit;
@@ -205,7 +235,9 @@ function inferUnitLabel(plan: ProductionPlan, target: string): string {
   return cleaned || "hours";
 }
 
-export function extractPlanWorkspaceMetrics(plan: ProductionPlan): PlanWorkspaceMetrics {
+export function extractPlanWorkspaceMetrics(
+  plan: ProductionPlan,
+): PlanWorkspaceMetrics {
   const sheet = findProductionSheet(plan);
   const rows = sheet?.rows ?? [];
   const columns = sheetColumns(sheet);
@@ -215,12 +247,29 @@ export function extractPlanWorkspaceMetrics(plan: ProductionPlan): PlanWorkspace
     : columns.includes("Target Hours")
       ? "Target Hours"
       : target;
-  const team = columns.find((column) => /active\s+(?:annotators|recorders|operators|resources)|workers|team|staff|resource/i.test(column));
-  const perWorker = columns.find((column) => /per\s+(?:annotator|person|worker|recorder|operator|resource)/i.test(column));
-  const totalTarget = rows.reduce((sum, row) => sum + numberValue(row[target]), 0);
-  const totalHours = rows.reduce((sum, row) => sum + numberValue(row[targetHours]), 0);
+  const team = columns.find((column) =>
+    /active\s+(?:annotators|recorders|operators|resources)|workers|team|staff|resource/i.test(
+      column,
+    ),
+  );
+  const perWorker = columns.find((column) =>
+    /per\s+(?:annotator|person|worker|recorder|operator|resource)/i.test(
+      column,
+    ),
+  );
+  const totalTarget = rows.reduce(
+    (sum, row) => sum + numberValue(row[target]),
+    0,
+  );
+  const totalHours = rows.reduce(
+    (sum, row) => sum + numberValue(row[targetHours]),
+    0,
+  );
   const teamSize = team
-    ? rows.reduce((largest, row) => Math.max(largest, numberValue(row[team])), 0)
+    ? rows.reduce(
+        (largest, row) => Math.max(largest, numberValue(row[team])),
+        0,
+      )
     : 0;
   const startDate = String(rows[0]?.Date ?? plan.project?.startDate ?? "");
   const endDate = String(rows.at(-1)?.Date ?? plan.project?.deadline ?? "");
@@ -239,7 +288,10 @@ export function extractPlanWorkspaceMetrics(plan: ProductionPlan): PlanWorkspace
     workingDays,
     startDate,
     endDate,
-    weekdaysOnly: rows.length > 0 ? rows.every((row) => !isWeekendDate(String(row.Date))) : true,
+    weekdaysOnly:
+      rows.length > 0
+        ? rows.every((row) => !isWeekendDate(String(row.Date)))
+        : true,
     unitLabel,
     isQuantityPlan,
     dailyTarget: workingDays > 0 ? round2(totalTarget / workingDays) : 0,
@@ -247,30 +299,56 @@ export function extractPlanWorkspaceMetrics(plan: ProductionPlan): PlanWorkspace
   };
 }
 
-export function classifyPlanConversationIntent(message: string): PlanConversationIntent {
+export function classifyPlanConversationIntent(
+  message: string,
+): PlanConversationIntent {
   const text = message.toLowerCase();
-  if (/\b(weather|recipe|joke|poem|song|news|stock|crypto|movie|translate|write\s+an?\s+email)\b/.test(text)) {
+  if (
+    /\b(weather|recipe|joke|poem|song|news|stock|crypto|movie|translate|write\s+an?\s+email)\b/.test(
+      text,
+    )
+  ) {
     return "unrelated_request";
   }
-  if (/\b(compare|difference|diff|changed)\b/.test(text) && /\brevisions?\b/.test(text)) {
+  if (
+    /\b(compare|difference|diff|changed)\b/.test(text) &&
+    /\brevisions?\b/.test(text)
+  ) {
     return "compare_revisions";
   }
-  if (/\b(restore|revert|go\s+back|roll\s+back)\b/.test(text) && /\brevisions?\b/.test(text)) {
+  if (
+    /\b(restore|revert|go\s+back|roll\s+back)\b/.test(text) &&
+    /\brevisions?\b/.test(text)
+  ) {
     return "restore_revision";
   }
   if (/\b(regenerate|rebuild|start\s+over|new\s+revision)\b/.test(text)) {
     return "request_regeneration";
   }
-  if (/\b(wrong|incorrect|mistake|error|not\s+right|should\s+be)\b/.test(text)) {
+  if (
+    /\b(wrong|incorrect|mistake|error|not\s+right|should\s+be)\b/.test(text)
+  ) {
     return "report_mistake";
   }
-  if (/\b(meant|misunderstood|clarify|instead|per\s+(?:worker|annotator|person|resource))\b/.test(text)) {
+  if (
+    /\b(meant|misunderstood|clarify|instead|per\s+(?:worker|annotator|person|resource))\b/.test(
+      text,
+    )
+  ) {
     return "clarify_requirement";
   }
-  if (/\b(change|set|update|move|adjust|use|switch|increase|decrease|make)\b/.test(text)) {
+  if (
+    /\b(change|set|update|move|adjust|use|switch|increase|decrease|make)\b/.test(
+      text,
+    )
+  ) {
     return "request_modification";
   }
-  if (/\b(how|formula|calculate|calculated|calculation|daily\s+target|staffing\s+requirement|team\s+size)\b/.test(text)) {
+  if (
+    /\b(how|formula|calculate|calculated|calculation|daily\s+target|staffing\s+requirement|team\s+size)\b/.test(
+      text,
+    )
+  ) {
     return "explain_calculation";
   }
   if (/\b(explain|why|summarize|summary|walk\s+me\s+through)\b/.test(text)) {
@@ -283,7 +361,10 @@ function formulaResult(value: number, suffix = ""): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
 }
 
-export function buildPlanExplanation(plan: ProductionPlan, intent: PlanConversationIntent): PlanAssistantResponse {
+export function buildPlanExplanation(
+  plan: ProductionPlan,
+  intent: PlanConversationIntent,
+): PlanAssistantResponse {
   const metrics = extractPlanWorkspaceMetrics(plan);
   const assumptions = plan.project?.assumptions?.slice(0, 6) ?? [];
   const projectName = plan.project?.projectName || "this production plan";
@@ -302,7 +383,10 @@ export function buildPlanExplanation(plan: ProductionPlan, intent: PlanConversat
       {
         label: "Daily target per resource",
         expression: `${metrics.dailyTarget.toLocaleString()} ${unit}/day / ${Math.max(metrics.teamSize, 1)} resource(s)`,
-        result: formulaResult(metrics.teamSize > 0 ? metrics.dailyTarget / metrics.teamSize : 0, ` ${unit}/resource/day`),
+        result: formulaResult(
+          metrics.teamSize > 0 ? metrics.dailyTarget / metrics.teamSize : 0,
+          ` ${unit}/resource/day`,
+        ),
       },
       {
         label: "Planned hours per day",
@@ -317,7 +401,8 @@ export function buildPlanExplanation(plan: ProductionPlan, intent: PlanConversat
         `${metrics.totalTarget.toLocaleString()} ${unit} over ${metrics.workingDays} scheduled day(s), ` +
         `which gives ${metrics.dailyTarget.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit} per day.`,
       explanation: {
-        summary: "The calculation uses the current revision's Production Plan rows, not a fresh estimate.",
+        summary:
+          "The calculation uses the current revision's Production Plan rows, not a fresh estimate.",
         formulas,
         assumptions,
       },
@@ -333,7 +418,9 @@ export function buildPlanExplanation(plan: ProductionPlan, intent: PlanConversat
       `and ${metrics.totalHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} planned hour(s). ` +
       `It is using ${metrics.weekdaysOnly ? "weekday-only" : "calendar-day"} scheduling.`,
     explanation: {
-      summary: plan.summary || "The selected production plan is organized around the current workbook schedule and assumptions.",
+      summary:
+        plan.summary ||
+        "The selected production plan is organized around the current workbook schedule and assumptions.",
       assumptions,
     },
     requiresConfirmation: false,
@@ -355,10 +442,15 @@ function addChange(
 }
 
 function firstHoursNumber(message: string): number | undefined {
-  const match = message.match(/\b(\d+(?:\.\d+)?)\s+(?:total\s+|working\s+|productive\s+)?hours?\b/i)
-    ?? message.match(/\bhours?\s+(?:should\s+be|to|of|=|:)?\s*(\d+(?:\.\d+)?)\b/i);
+  const match =
+    message.match(
+      /\b(\d+(?:\.\d+)?)\s+(?:total\s+|working\s+|productive\s+)?hours?\b/i,
+    ) ??
+    message.match(/\bhours?\s+(?:should\s+be|to|of|=|:)?\s*(\d+(?:\.\d+)?)\b/i);
   const value = match ? Number(match[1]) : undefined;
-  return value !== undefined && Number.isFinite(value) && value > 0 ? value : undefined;
+  return value !== undefined && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
 }
 
 function proposalSummary(message: string): string {
@@ -382,19 +474,29 @@ function proposedSettingsFromChanges(
   };
 
   for (const change of changes) {
-    if (change.field === "planning.totalHours") next.totalHours = Number(change.proposedValue);
-    if (change.field === "planning.teamSize") next.teamSize = Number(change.proposedValue);
-    if (change.field === "planning.durationValue") next.durationValue = Number(change.proposedValue);
-    if (change.field === "planning.durationUnit") next.durationUnit = String(change.proposedValue) as DurationUnit;
-    if (change.field === "planning.startDate") next.startDate = String(change.proposedValue);
-    if (change.field === "planning.weekdaysOnly") next.weekdaysOnly = Boolean(change.proposedValue);
-    if (change.field === "planning.totalQuantity") next.totalQuantity = Number(change.proposedValue);
+    if (change.field === "planning.totalHours")
+      next.totalHours = Number(change.proposedValue);
+    if (change.field === "planning.teamSize")
+      next.teamSize = Number(change.proposedValue);
+    if (change.field === "planning.durationValue")
+      next.durationValue = Number(change.proposedValue);
+    if (change.field === "planning.durationUnit")
+      next.durationUnit = String(change.proposedValue) as DurationUnit;
+    if (change.field === "planning.startDate")
+      next.startDate = String(change.proposedValue);
+    if (change.field === "planning.weekdaysOnly")
+      next.weekdaysOnly = Boolean(change.proposedValue);
+    if (change.field === "planning.totalQuantity")
+      next.totalQuantity = Number(change.proposedValue);
   }
 
   return next;
 }
 
-function estimateRecalculatedMetrics(metrics: PlanWorkspaceMetrics, changes: PlanChangeProposal["changes"]) {
+function estimateRecalculatedMetrics(
+  metrics: PlanWorkspaceMetrics,
+  changes: PlanChangeProposal["changes"],
+) {
   const next = proposedSettingsFromChanges(metrics, changes);
   let proposedDuration = next.durationValue;
   try {
@@ -419,13 +521,17 @@ function estimateRecalculatedMetrics(metrics: PlanWorkspaceMetrics, changes: Pla
     previousDuration: metrics.workingDays,
     proposedDuration,
     previousDailyTarget: metrics.dailyTarget,
-    proposedDailyTarget: proposedDuration > 0 ? round2(proposedTotalTarget / proposedDuration) : 0,
+    proposedDailyTarget:
+      proposedDuration > 0 ? round2(proposedTotalTarget / proposedDuration) : 0,
     previousTotalTarget: metrics.totalTarget,
     proposedTotalTarget: round2(proposedTotalTarget),
   };
 }
 
-function proposalWarnings(metrics: PlanWorkspaceMetrics, changes: PlanChangeProposal["changes"]): string[] {
+function proposalWarnings(
+  metrics: PlanWorkspaceMetrics,
+  changes: PlanChangeProposal["changes"],
+): string[] {
   const next = proposedSettingsFromChanges(metrics, changes);
   let scheduledDays = next.durationValue;
   try {
@@ -439,7 +545,9 @@ function proposalWarnings(metrics: PlanWorkspaceMetrics, changes: PlanChangeProp
       totalQuantity: next.totalQuantity,
     }).length;
   } catch (error) {
-    return [`The revised schedule needs clarification: ${(error as Error).message}`];
+    return [
+      `The revised schedule needs clarification: ${(error as Error).message}`,
+    ];
   }
   const availableHours = next.teamSize * scheduledDays * 8;
   if (next.totalHours > availableHours) {
@@ -462,8 +570,11 @@ export function buildPlanChangeProposal(
   const requested = extractRequestedConstraints(message, currentDate);
   const changes: PlanChangeProposal["changes"] = [];
   const hoursNumber = firstHoursNumber(message);
-  const perWorkerHours = hoursNumber !== undefined &&
-    /\b(?:per|for each|each)\s+(?:worker|annotator|person|resource|employee|operator)\b/i.test(message);
+  const perWorkerHours =
+    hoursNumber !== undefined &&
+    /\b(?:per|for each|each)\s+(?:worker|annotator|person|resource|employee|operator)\b/i.test(
+      message,
+    );
 
   if (perWorkerHours) {
     addChange(
@@ -557,13 +668,22 @@ export function buildPlanChangeProposal(
 
   if (changes.length === 0) return null;
 
-  const affectedSections = [...new Set(changes.flatMap((change) => {
-    if (change.field === "planning.teamSize") return ["Staffing", "Production Plan", "Workbook"];
-    if (change.field === "planning.startDate" || change.field === "planning.durationValue" || change.field === "planning.weekdaysOnly") {
-      return ["Schedule", "Production Plan", "Workbook"];
-    }
-    return ["Metrics", "Production Plan", "Workbook"];
-  }))];
+  const affectedSections = [
+    ...new Set(
+      changes.flatMap((change) => {
+        if (change.field === "planning.teamSize")
+          return ["Staffing", "Production Plan", "Workbook"];
+        if (
+          change.field === "planning.startDate" ||
+          change.field === "planning.durationValue" ||
+          change.field === "planning.weekdaysOnly"
+        ) {
+          return ["Schedule", "Production Plan", "Workbook"];
+        }
+        return ["Metrics", "Production Plan", "Workbook"];
+      }),
+    ),
+  ];
 
   const proposal = {
     id: randomUUID(),
@@ -573,39 +693,56 @@ export function buildPlanChangeProposal(
     interpretedRequest: perWorkerHours
       ? `Treat ${hoursNumber} hours as a per-resource requirement, not a whole-team total.`
       : `Apply the requested planning changes to the selected plan revision.`,
-    reasonForChange: "The selected plan should reflect the corrected production-planning requirement before a new workbook is generated.",
+    reasonForChange:
+      "The selected plan should reflect the corrected production-planning requirement before a new workbook is generated.",
     affectedSections,
     changes,
     recalculatedMetrics: estimateRecalculatedMetrics(metrics, changes),
     warnings: proposalWarnings(metrics, changes),
     clarificationQuestions: [],
-    requiresConfirmation: changes.some((change) => HIGH_IMPACT_FIELDS.has(change.field)),
+    requiresConfirmation: changes.some((change) =>
+      HIGH_IMPACT_FIELDS.has(change.field),
+    ),
   };
 
   return planChangeProposalSchema.parse(proposal);
 }
 
 function normalizeWorkbookMode(mode: unknown): "dynamic" | "template" {
-  return mode === "official_template" || mode === "template" ? "template" : "dynamic";
+  return mode === "official_template" || mode === "template"
+    ? "template"
+    : "dynamic";
 }
 
 function canAccessPlan(plan: PlanRecord, user: WorkspaceUser): boolean {
   if (user.role === "admin") return true;
-  return plan.whatsapp_user_id === user.username || plan.requested_by === user.username;
+  return (
+    plan.whatsapp_user_id === user.username ||
+    plan.requested_by === user.username
+  );
 }
 
 function requireSupabaseConfigured(): void {
   if (!config.supabaseConfigured) {
-    throw new PlanWorkspaceError(503, "Supabase is required for plan workspace history.");
+    throw new PlanWorkspaceError(
+      503,
+      "Supabase is required for plan workspace history.",
+    );
   }
 }
 
-async function loadAuthorizedPlan(planId: string, user: WorkspaceUser): Promise<PlanRecord> {
+async function loadAuthorizedPlan(
+  planId: string,
+  user: WorkspaceUser,
+): Promise<PlanRecord> {
   requireSupabaseConfigured();
   const plan = await getPlanById(planId);
   if (!plan) throw new PlanWorkspaceError(404, "Plan not found.");
   if (!canAccessPlan(plan, user)) {
-    throw new PlanWorkspaceError(403, "You are not authorized to access this plan.");
+    throw new PlanWorkspaceError(
+      403,
+      "You are not authorized to access this plan.",
+    );
   }
   return plan;
 }
@@ -613,7 +750,9 @@ async function loadAuthorizedPlan(planId: string, user: WorkspaceUser): Promise<
 async function ensureInitialRevision(plan: PlanRecord): Promise<PlanRevision> {
   const existing = await getLatestPlanRevision(plan.id!);
   if (existing) return existing;
-  const files = await listPlanFiles(plan.id!).catch(() => [] as PlanFileRecord[]);
+  const files = await listPlanFiles(plan.id!).catch(
+    () => [] as PlanFileRecord[],
+  );
   const latestFile = files[0];
   return createPlanRevision({
     planId: plan.id!,
@@ -623,7 +762,10 @@ async function ensureInitialRevision(plan: PlanRecord): Promise<PlanRevision> {
     revisionSource: "initial_generation",
     changeSummary: "Initial production plan imported from saved plan history.",
     planData: plan.raw_plan,
-    validationResult: { status: "passed", importedAt: new Date().toISOString() },
+    validationResult: {
+      status: "passed",
+      importedAt: new Date().toISOString(),
+    },
     workbookMode: normalizeWorkbookMode(plan.workbook_mode),
     workbookFilename: latestFile?.file_name ?? null,
     workbookStoragePath: latestFile?.storage_path ?? null,
@@ -659,7 +801,9 @@ export async function loadPlanWorkspace(planId: string, user: WorkspaceUser) {
   };
 }
 
-function assistantMessageType(response: PlanAssistantResponse): "assistant" | "proposal" | "clarification" {
+function assistantMessageType(
+  response: PlanAssistantResponse,
+): "assistant" | "proposal" | "clarification" {
   if (response.proposal) return "proposal";
   if (response.clarificationQuestions?.length) return "clarification";
   return "assistant";
@@ -675,10 +819,13 @@ function buildAssistantResponse(
   if (intent === "unrelated_request") {
     return planAssistantResponseSchema.parse({
       intent,
-      message: "I can only help with the selected production plan in this workspace.",
+      message:
+        "I can only help with the selected production plan in this workspace.",
       requiresConfirmation: false,
       canApply: false,
-      warnings: ["Select another plan if you need context for a different project."],
+      warnings: [
+        "Select another plan if you need context for a different project.",
+      ],
     });
   }
 
@@ -689,7 +836,8 @@ function buildAssistantResponse(
   if (intent === "compare_revisions") {
     return planAssistantResponseSchema.parse({
       intent,
-      message: "I can compare two saved revisions when you select the revision pair from the revision history.",
+      message:
+        "I can compare two saved revisions when you select the revision pair from the revision history.",
       clarificationQuestions: ["Which two revision numbers should I compare?"],
       requiresConfirmation: false,
       canApply: false,
@@ -699,18 +847,25 @@ function buildAssistantResponse(
   if (intent === "restore_revision") {
     return planAssistantResponseSchema.parse({
       intent,
-      message: "Restoring is available from the revision history. It creates a new revision instead of overwriting history.",
+      message:
+        "Restoring is available from the revision history. It creates a new revision instead of overwriting history.",
       clarificationQuestions: ["Which revision should be restored?"],
       requiresConfirmation: false,
       canApply: false,
     });
   }
 
-  const proposal = buildPlanChangeProposal(planId, currentRevision.id, plan, message);
+  const proposal = buildPlanChangeProposal(
+    planId,
+    currentRevision.id,
+    plan,
+    message,
+  );
   if (!proposal) {
     return planAssistantResponseSchema.parse({
       intent,
-      message: "I need one more detail before I can safely prepare a revision proposal.",
+      message:
+        "I need one more detail before I can safely prepare a revision proposal.",
       clarificationQuestions: [
         "Should the deadline stay fixed, or should the system change the schedule length?",
         "Should staffing change, daily workload change, or both?",
@@ -740,16 +895,23 @@ export async function sendPlanWorkspaceMessage(
 ) {
   const text = input.message.trim();
   if (!text) throw new PlanWorkspaceError(400, "Message is required.");
-  if (text.length > 4_000) throw new PlanWorkspaceError(400, "Message must be 4,000 characters or fewer.");
+  if (text.length > 4_000)
+    throw new PlanWorkspaceError(
+      400,
+      "Message must be 4,000 characters or fewer.",
+    );
 
   const plan = await loadAuthorizedPlan(planId, user);
   const currentRevision = await ensureInitialRevision(plan);
   if (input.revisionId && input.revisionId !== currentRevision.id) {
-    throw new PlanWorkspaceError(409, "This plan has a newer revision. Reload the workspace before sending another message.", "revision_conflict");
+    throw new PlanWorkspaceError(
+      409,
+      "This plan has a newer revision. Reload the workspace before sending another message.",
+      "revision_conflict",
+    );
   }
 
   const existingMessages = await listPlanConversationMessages(planId);
-
 
   const userMessage = await createPlanConversationMessage({
     planId,
@@ -774,7 +936,10 @@ export async function sendPlanWorkspaceMessage(
   );
 
   if (assistantResponse.proposal) {
-    await createPlanChangeProposal(assistantResponse.proposal, user.id ?? user.username);
+    await createPlanChangeProposal(
+      assistantResponse.proposal,
+      user.id ?? user.username,
+    );
   }
 
   const assistantMessage = await createPlanConversationMessage({
@@ -821,13 +986,22 @@ function applyChangesToSettings(
 ): RevisionPlanningSettings {
   const next = { ...settings };
   for (const change of changes) {
-    if (change.field === "planning.totalHours") next.totalHours = Number(change.proposedValue);
-    if (change.field === "planning.teamSize") next.teamSize = Number(change.proposedValue);
-    if (change.field === "planning.durationValue") next.durationValue = Number(change.proposedValue);
-    if (change.field === "planning.durationUnit") next.durationUnit = String(change.proposedValue) as DurationUnit;
-    if (change.field === "planning.startDate") next.startDate = String(change.proposedValue);
-    if (change.field === "planning.weekdaysOnly") next.weekdaysOnly = String(change.proposedValue) === "weekdays only" || change.proposedValue === true;
-    if (change.field === "planning.totalQuantity") next.totalQuantity = Number(change.proposedValue);
+    if (change.field === "planning.totalHours")
+      next.totalHours = Number(change.proposedValue);
+    if (change.field === "planning.teamSize")
+      next.teamSize = Number(change.proposedValue);
+    if (change.field === "planning.durationValue")
+      next.durationValue = Number(change.proposedValue);
+    if (change.field === "planning.durationUnit")
+      next.durationUnit = String(change.proposedValue) as DurationUnit;
+    if (change.field === "planning.startDate")
+      next.startDate = String(change.proposedValue);
+    if (change.field === "planning.weekdaysOnly")
+      next.weekdaysOnly =
+        String(change.proposedValue) === "weekdays only" ||
+        change.proposedValue === true;
+    if (change.field === "planning.totalQuantity")
+      next.totalQuantity = Number(change.proposedValue);
   }
   return next;
 }
@@ -840,13 +1014,20 @@ function validationDescription(settings: RevisionPlanningSettings): string {
     `Revision plan for ${settings.teamSize} workers over ${settings.durationValue} ${settings.durationUnit}.`,
     `Use ${workload}.`,
     `Start ${settings.startDate}.`,
-    settings.weekdaysOnly ? "Use weekdays only." : "Use calendar days including weekends.",
+    settings.weekdaysOnly
+      ? "Use weekdays only."
+      : "Use calendar days including weekends.",
     "Historical plan revision is allowed if start date is before the validation date.",
   ].join(" ");
 }
 
 function cellValue(value: unknown): ProductionPlanCellValue {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+  ) {
     return value;
   }
   return "";
@@ -855,19 +1036,27 @@ function cellValue(value: unknown): ProductionPlanCellValue {
 function applyDefaultPlanningModel(plan: ProductionPlan): void {
   const modelAssumption = `Requested planning model preserved: ${DEFAULT_PLANNING_MODEL}.`;
   const assumptions = [...(plan.project.assumptions ?? [])];
-  if (!assumptions.some((item) => /LPB Model/i.test(item))) assumptions.push(modelAssumption);
+  if (!assumptions.some((item) => /LPB Model/i.test(item)))
+    assumptions.push(modelAssumption);
   plan.project.assumptions = assumptions;
 
-  const projectInfo = plan.workbook.sheets.find((sheet) => sheet.sheetName === "Project Information");
+  const projectInfo = plan.workbook.sheets.find(
+    (sheet) => sheet.sheetName === "Project Information",
+  );
   if (!projectInfo) return;
 
-  const planningModelRow = projectInfo.rows.find((row) => String(row.Field ?? "").toLowerCase() === "planning model");
+  const planningModelRow = projectInfo.rows.find(
+    (row) => String(row.Field ?? "").toLowerCase() === "planning model",
+  );
   if (planningModelRow) {
     planningModelRow.Value = DEFAULT_PLANNING_MODEL;
     return;
   }
 
-  projectInfo.rows.push({ Field: "Planning model", Value: DEFAULT_PLANNING_MODEL });
+  projectInfo.rows.push({
+    Field: "Planning model",
+    Value: DEFAULT_PLANNING_MODEL,
+  });
 }
 
 export function applyProposalToPlanData(
@@ -878,17 +1067,27 @@ export function applyProposalToPlanData(
 ): ProductionPlan {
   const plan = JSON.parse(JSON.stringify(basePlan)) as ProductionPlan;
   const sheet = findProductionSheet(plan);
-  if (!sheet) throw new PlanWorkspaceError(422, "Plan does not contain a Production Plan sheet.");
+  if (!sheet)
+    throw new PlanWorkspaceError(
+      422,
+      "Plan does not contain a Production Plan sheet.",
+    );
 
   const columns = sheetColumns(sheet);
   const metrics = extractPlanWorkspaceMetrics(plan);
   const baseSettings = baseSettingsFromPlan(plan);
   const settings = applyChangesToSettings(baseSettings, proposal.changes);
   if (!Number.isFinite(settings.totalHours) || settings.totalHours <= 0) {
-    throw new PlanWorkspaceError(422, "Revised total hours must be greater than zero.");
+    throw new PlanWorkspaceError(
+      422,
+      "Revised total hours must be greater than zero.",
+    );
   }
   if (!Number.isInteger(settings.teamSize) || settings.teamSize <= 0) {
-    throw new PlanWorkspaceError(422, "Revised worker count must be a positive whole number.");
+    throw new PlanWorkspaceError(
+      422,
+      "Revised worker count must be a positive whole number.",
+    );
   }
 
   const dates = buildScheduleDates({
@@ -906,7 +1105,11 @@ export function applyProposalToPlanData(
   const perWorkerColumn = metrics.perWorkerColumn;
   const targetTotal = settings.totalQuantity ?? settings.totalHours;
   const targetDecimals = settings.totalQuantity ? 0 : 2;
-  const targetValues = distributeAmount(targetTotal, dates.length, targetDecimals);
+  const targetValues = distributeAmount(
+    targetTotal,
+    dates.length,
+    targetDecimals,
+  );
   const hourValues = distributeAmount(settings.totalHours, dates.length, 2);
 
   sheet.columns = columns;
@@ -925,51 +1128,75 @@ export function applyProposalToPlanData(
         : round2(targetValues[index]! / settings.teamSize);
     }
     if (columns.includes(targetHours)) row[targetHours] = hourValues[index]!;
-    if (columns.includes("Actual Active Annotators")) row["Actual Active Annotators"] = "";
+    if (columns.includes("Actual Active Annotators"))
+      row["Actual Active Annotators"] = "";
     if (columns.includes("Actual Total Hours")) row["Actual Total Hours"] = "";
-    if (columns.includes("Actual Total Hours per Annotator")) row["Actual Total Hours per Annotator"] = "";
+    if (columns.includes("Actual Total Hours per Annotator"))
+      row["Actual Total Hours per Annotator"] = "";
     if (columns.includes("Actual Hours")) row["Actual Hours"] = "";
     if (columns.includes("Total Variance")) row["Total Variance"] = "";
-    if (columns.includes("Completion Rate (%)")) row["Completion Rate (%)"] = "";
+    if (columns.includes("Completion Rate (%)"))
+      row["Completion Rate (%)"] = "";
     if (columns.includes("Status")) row.Status = "Not Started";
-    if (columns.includes("Notes")) row.Notes = cellValue(sheet.rows[index]?.Notes ?? `Revision ${nextRevisionNumber} recalculated target.`);
+    if (columns.includes("Notes"))
+      row.Notes = cellValue(
+        sheet.rows[index]?.Notes ??
+          `Revision ${nextRevisionNumber} recalculated target.`,
+      );
     return row;
   });
 
   const revisionNote = `Revision ${nextRevisionNumber}: ${proposal.requestSummary}`;
   const assumptions = [...(plan.project.assumptions ?? [])];
   if (!assumptions.includes(revisionNote)) assumptions.push(revisionNote);
-  const utilization = settings.teamSize * dates.length * 8 > 0
-    ? round2((settings.totalHours / (settings.teamSize * dates.length * 8)) * 100)
-    : 0;
+  const utilization =
+    settings.teamSize * dates.length * 8 > 0
+      ? round2(
+          (settings.totalHours / (settings.teamSize * dates.length * 8)) * 100,
+        )
+      : 0;
   plan.project = {
     ...plan.project,
     startDate: dates[0]!,
     deadline: dates.at(-1)!,
     totalAssets: settings.totalQuantity ?? targetTotal,
     assumptions,
-    productionUnit: settings.unitOfMeasure ?? plan.project.productionUnit ?? "hours",
+    productionUnit:
+      settings.unitOfMeasure ?? plan.project.productionUnit ?? "hours",
     requiredDailyOutput: round2(targetTotal / dates.length),
     utilizationPercent: utilization,
   };
 
-  const taskSheet = plan.workbook.sheets.find((item) => item.sheetName === "Task Breakdown");
+  const taskSheet = plan.workbook.sheets.find(
+    (item) => item.sheetName === "Task Breakdown",
+  );
   if (taskSheet) {
-    const oldBaseStart = basePlan.project?.startDate ? new Date(`${basePlan.project.startDate}T00:00:00Z`).getTime() : null;
+    const oldBaseStart = basePlan.project?.startDate
+      ? new Date(`${basePlan.project.startDate}T00:00:00Z`).getTime()
+      : null;
     const newBaseStart = new Date(`${dates[0]!}T00:00:00Z`);
 
     taskSheet.rows = taskSheet.rows.map((row) => {
       const taskObj = { ...row };
-      const rawStart = typeof row["Planned Start"] === "string" ? row["Planned Start"].trim() : "";
-      const rawEnd = typeof row["Planned End"] === "string" ? row["Planned End"].trim() : "";
-      if (/^\d{4}-\d{2}-\d{2}$/.test(rawStart) && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd)) {
+      const rawStart =
+        typeof row["Planned Start"] === "string"
+          ? row["Planned Start"].trim()
+          : "";
+      const rawEnd =
+        typeof row["Planned End"] === "string" ? row["Planned End"].trim() : "";
+      if (
+        /^\d{4}-\d{2}-\d{2}$/.test(rawStart) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(rawEnd)
+      ) {
         const startDateObj = new Date(`${rawStart}T00:00:00Z`);
         const endDateObj = new Date(`${rawEnd}T00:00:00Z`);
         const durationMs = endDateObj.getTime() - startDateObj.getTime();
 
         let dayOffset = 0;
         if (oldBaseStart && !Number.isNaN(oldBaseStart)) {
-          dayOffset = Math.round((startDateObj.getTime() - oldBaseStart) / (1000 * 60 * 60 * 24));
+          dayOffset = Math.round(
+            (startDateObj.getTime() - oldBaseStart) / (1000 * 60 * 60 * 24),
+          );
         }
         if (dayOffset < 0) dayOffset = 0;
 
@@ -989,13 +1216,13 @@ export function applyProposalToPlanData(
         const projectEndObj = new Date(`${dates.at(-1)!}T00:00:00Z`);
         if (newEnd > projectEndObj) {
           taskObj["Planned End"] = dates.at(-1)!;
-          if (newStart > projectEndObj) taskObj["Planned Start"] = dates.at(-1)!;
+          if (newStart > projectEndObj)
+            taskObj["Planned Start"] = dates.at(-1)!;
           else taskObj["Planned Start"] = newStart.toISOString().slice(0, 10);
         } else {
           taskObj["Planned Start"] = newStart.toISOString().slice(0, 10);
           taskObj["Planned End"] = newEnd.toISOString().slice(0, 10);
         }
-
       }
       return taskObj;
     });
@@ -1007,7 +1234,6 @@ export function applyProposalToPlanData(
     `Planned workload: ${targetTotal.toLocaleString()} ${plan.project.productionUnit ?? "hours"} ` +
     `from ${dates[0]} to ${dates.at(-1)} with ${settings.teamSize} resource(s).`;
 
-
   const validationDate = dates[0]! < currentDate ? dates[0]! : currentDate;
   return planRulesService.validate(plan, {
     currentDate: validationDate,
@@ -1016,23 +1242,51 @@ export function applyProposalToPlanData(
 }
 
 function extractPhases(plan: ProductionPlan): DynamicPhase[] {
-  const stageSheet = plan.workbook.sheets.find((sheet) => /workflow|stage|phase/i.test(sheet.sheetName));
+  const stageSheet = plan.workbook.sheets.find((sheet) =>
+    /workflow|stage|phase/i.test(sheet.sheetName),
+  );
   const rows = stageSheet?.rows ?? [];
-  const phases = rows.slice(0, 8).map((row) => ({
-    name: String(row["Stage Name"] ?? row.Phase ?? row.Milestone ?? "Production"),
-    objective: String(row.Purpose ?? row.Objective ?? row["Completion Criteria"] ?? "Complete planned production work."),
-  })).filter((phase) => phase.name.trim());
-  return phases.length ? phases : [{ name: "Production", objective: "Complete planned production work." }];
+  const phases = rows
+    .slice(0, 8)
+    .map((row) => ({
+      name: String(
+        row["Stage Name"] ?? row.Phase ?? row.Milestone ?? "Production",
+      ),
+      objective: String(
+        row.Purpose ??
+          row.Objective ??
+          row["Completion Criteria"] ??
+          "Complete planned production work.",
+      ),
+    }))
+    .filter((phase) => phase.name.trim());
+  return phases.length
+    ? phases
+    : [{ name: "Production", objective: "Complete planned production work." }];
 }
 
 function extractRisks(plan: ProductionPlan): DynamicRisk[] {
-  const riskSheet = plan.workbook.sheets.find((sheet) => /risk/i.test(sheet.sheetName));
+  const riskSheet = plan.workbook.sheets.find((sheet) =>
+    /risk/i.test(sheet.sheetName),
+  );
   const rows = riskSheet?.rows ?? [];
-  return rows.slice(0, 12).map((row) => ({
-    risk: String(row.Description ?? row.Item ?? row.Risk ?? "Delivery risk"),
-    impact: String(row.Impact ?? row.Severity ?? "May affect schedule, quality, or capacity."),
-    mitigation: String(row.Mitigation ?? row["Mitigation / Note"] ?? row.Contingency ?? "Monitor and adjust the plan promptly."),
-  })).filter((risk) => risk.risk.trim());
+  return rows
+    .slice(0, 12)
+    .map((row) => ({
+      risk: String(row.Description ?? row.Item ?? row.Risk ?? "Delivery risk"),
+      impact: String(
+        row.Impact ??
+          row.Severity ??
+          "May affect schedule, quality, or capacity.",
+      ),
+      mitigation: String(
+        row.Mitigation ??
+          row["Mitigation / Note"] ??
+          row.Contingency ??
+          "Monitor and adjust the plan promptly.",
+      ),
+    }))
+    .filter((risk) => risk.risk.trim());
 }
 
 function dynamicResultFromPlan(plan: ProductionPlan): DynamicPlanResult {
@@ -1070,12 +1324,25 @@ async function generateRevisionWorkbook(
     const template = await templateService.loadDefinition();
     return excelService.writeProductionPlan(plan, template, outputPath);
   }
-  return dynamicExcelService.writeDynamicProductionPlan(dynamicResultFromPlan(plan), outputPath);
+  return dynamicExcelService.writeDynamicProductionPlan(
+    dynamicResultFromPlan(plan),
+    outputPath,
+  );
 }
 
-async function saveRevisionWorkbook(planId: string, workbookPath: string, createdBy: string) {
-  const upload = await uploadWorkbookAndCreateSignedUrl(workbookPath, createdBy).catch((error) => {
-    console.error("[planWorkspaceService] Workbook upload failed:", error instanceof Error ? error.message : String(error));
+async function saveRevisionWorkbook(
+  planId: string,
+  workbookPath: string,
+  createdBy: string,
+) {
+  const upload = await uploadWorkbookAndCreateSignedUrl(
+    workbookPath,
+    createdBy,
+  ).catch((error) => {
+    console.error(
+      "[planWorkspaceService] Workbook upload failed:",
+      error instanceof Error ? error.message : String(error),
+    );
     return null;
   });
   if (upload) {
@@ -1094,11 +1361,22 @@ export async function applyPlanWorkspaceProposal(
   const storedProposal = await getPlanChangeProposal(planId, input.proposalId);
   if (!storedProposal) throw new PlanWorkspaceError(404, "Proposal not found.");
   if (storedProposal.status !== "pending") {
-    throw new PlanWorkspaceError(409, `Proposal is already ${storedProposal.status}.`, "proposal_not_pending");
+    throw new PlanWorkspaceError(
+      409,
+      `Proposal is already ${storedProposal.status}.`,
+      "proposal_not_pending",
+    );
   }
   const proposal = planChangeProposalSchema.parse(storedProposal.proposal);
-  if (proposal.basedOnRevisionId !== input.basedOnRevisionId || proposal.basedOnRevisionId !== currentRevision.id) {
-    throw new PlanWorkspaceError(409, "This proposal is based on an older revision. Reload the plan before applying it.", "revision_conflict");
+  if (
+    proposal.basedOnRevisionId !== input.basedOnRevisionId ||
+    proposal.basedOnRevisionId !== currentRevision.id
+  ) {
+    throw new PlanWorkspaceError(
+      409,
+      "This proposal is based on an older revision. Reload the plan before applying it.",
+      "revision_conflict",
+    );
   }
 
   if (!input.confirmed) {
@@ -1122,8 +1400,16 @@ export async function applyPlanWorkspaceProposal(
     proposal,
     nextRevisionNumber,
   );
-  const workbookPath = await generateRevisionWorkbook(revisedPlan, workbookMode, nextRevisionNumber);
-  const upload = await saveRevisionWorkbook(planId, workbookPath, user.id ?? user.username);
+  const workbookPath = await generateRevisionWorkbook(
+    revisedPlan,
+    workbookMode,
+    nextRevisionNumber,
+  );
+  const upload = await saveRevisionWorkbook(
+    planId,
+    workbookPath,
+    user.id ?? user.username,
+  );
   const newRevision = await createPlanRevision({
     planId,
     revisionNumber: nextRevisionNumber,
@@ -1134,7 +1420,10 @@ export async function applyPlanWorkspaceProposal(
     userInstruction: proposal.requestSummary,
     changeSummary: proposal.requestSummary,
     planData: revisedPlan,
-    validationResult: { status: "passed", validatedAt: new Date().toISOString() },
+    validationResult: {
+      status: "passed",
+      validatedAt: new Date().toISOString(),
+    },
     workbookMode,
     workbookFilename: upload?.filename ?? path.basename(workbookPath),
     workbookStoragePath: upload?.objectPath ?? null,
@@ -1146,7 +1435,12 @@ export async function applyPlanWorkspaceProposal(
     generationSource: plan.generation_source,
     requestedBy: plan.whatsapp_user_id,
   });
-  await updatePlanChangeProposalStatus(planId, input.proposalId, "applied", newRevision.id);
+  await updatePlanChangeProposalStatus(
+    planId,
+    input.proposalId,
+    "applied",
+    newRevision.id,
+  );
   await createPlanConversationMessage({
     planId,
     revisionId: newRevision.id,
@@ -1184,7 +1478,8 @@ export async function comparePlanWorkspaceRevisions(
     getPlanRevision(planId, fromRevisionId),
     getPlanRevision(planId, toRevisionId),
   ]);
-  if (!fromRevision || !toRevision) throw new PlanWorkspaceError(404, "One or both revisions were not found.");
+  if (!fromRevision || !toRevision)
+    throw new PlanWorkspaceError(404, "One or both revisions were not found.");
   const fromPlan = asProductionPlan(fromRevision.plan_data);
   const toPlan = asProductionPlan(toRevision.plan_data);
   const fromMetrics = extractPlanWorkspaceMetrics(fromPlan);
@@ -1198,7 +1493,11 @@ export async function comparePlanWorkspaceRevisions(
     ["End date", fromMetrics.endDate, toMetrics.endDate],
   ]
     .filter(([, previous, next]) => previous !== next)
-    .map(([label, previousValue, proposedValue]) => ({ label, previousValue, proposedValue }));
+    .map(([label, previousValue, proposedValue]) => ({
+      label,
+      previousValue,
+      proposedValue,
+    }));
 
   return {
     success: true,
@@ -1219,12 +1518,21 @@ export async function restorePlanWorkspaceRevision(
   const plan = await loadAuthorizedPlan(planId, user);
   const currentRevision = await ensureInitialRevision(plan);
   const selectedRevision = await getPlanRevision(planId, revisionId);
-  if (!selectedRevision) throw new PlanWorkspaceError(404, "Revision not found.");
+  if (!selectedRevision)
+    throw new PlanWorkspaceError(404, "Revision not found.");
   const nextRevisionNumber = currentRevision.revision_number + 1;
   const workbookMode = normalizeWorkbookMode(selectedRevision.workbook_mode);
   const restoredPlan = asProductionPlan(selectedRevision.plan_data);
-  const workbookPath = await generateRevisionWorkbook(restoredPlan, workbookMode, nextRevisionNumber);
-  const upload = await saveRevisionWorkbook(planId, workbookPath, user.id ?? user.username);
+  const workbookPath = await generateRevisionWorkbook(
+    restoredPlan,
+    workbookMode,
+    nextRevisionNumber,
+  );
+  const upload = await saveRevisionWorkbook(
+    planId,
+    workbookPath,
+    user.id ?? user.username,
+  );
   const newRevision = await createPlanRevision({
     planId,
     revisionNumber: nextRevisionNumber,
@@ -1235,7 +1543,10 @@ export async function restorePlanWorkspaceRevision(
     userInstruction: `Restore revision ${selectedRevision.revision_number}`,
     changeSummary: `Restored from revision ${selectedRevision.revision_number}.`,
     planData: restoredPlan,
-    validationResult: { status: "passed", restoredAt: new Date().toISOString() },
+    validationResult: {
+      status: "passed",
+      restoredAt: new Date().toISOString(),
+    },
     workbookMode,
     workbookFilename: upload?.filename ?? path.basename(workbookPath),
     workbookStoragePath: upload?.objectPath ?? null,
@@ -1253,7 +1564,10 @@ export async function restorePlanWorkspaceRevision(
     role: "system",
     messageType: "system",
     content: `Revision ${selectedRevision.revision_number} restored as revision ${newRevision.revision_number}.`,
-    metadata: { restoredRevisionId: selectedRevision.id, newRevisionId: newRevision.id },
+    metadata: {
+      restoredRevisionId: selectedRevision.id,
+      newRevisionId: newRevision.id,
+    },
   });
 
   return {
@@ -1279,7 +1593,8 @@ export async function deletePlanWorkspaceRevision(
   }
 
   const selectedRevision = await getPlanRevision(planId, revisionId);
-  if (!selectedRevision) throw new PlanWorkspaceError(404, "Revision not found.");
+  if (!selectedRevision)
+    throw new PlanWorkspaceError(404, "Revision not found.");
 
   await deletePlanRevision(planId, revisionId);
   await createPlanConversationMessage({

@@ -17,7 +17,10 @@ function getLegacyEmail(username: string): string {
 
 // Derive a display username from a user's metadata or email address.
 // Prefers assigned username / display_name in metadata, falling back to email or legacy domain stripping.
-function getUsername(email: string | undefined, metadata?: Record<string, unknown>): string {
+function getUsername(
+  email: string | undefined,
+  metadata?: Record<string, unknown>,
+): string {
   const metaName = metadata?.username ?? metadata?.display_name;
   if (typeof metaName === "string" && metaName.trim()) {
     return metaName.trim();
@@ -65,7 +68,9 @@ function isActive(metadata: Record<string, unknown> | undefined): boolean {
   return getUserStatus(metadata) === "active";
 }
 
-function getUserStatus(metadata: Record<string, unknown> | undefined): UserAccountStatus {
+function getUserStatus(
+  metadata: Record<string, unknown> | undefined,
+): UserAccountStatus {
   if (metadata?.status === "pending" || metadata?.active === "pending") {
     return "pending";
   }
@@ -78,7 +83,10 @@ function getUserStatus(metadata: Record<string, unknown> | undefined): UserAccou
   return metadata?.active === true ? "active" : "pending";
 }
 
-function getDisplayName(email: string | undefined, metadata: Record<string, unknown> | undefined): string | undefined {
+function getDisplayName(
+  email: string | undefined,
+  metadata: Record<string, unknown> | undefined,
+): string | undefined {
   const metadataName = metadata?.display_name;
   if (typeof metadataName === "string" && metadataName.trim()) {
     return metadataName.trim();
@@ -86,11 +94,15 @@ function getDisplayName(email: string | undefined, metadata: Record<string, unkn
   return email;
 }
 
-async function syncUserRole(userId: string, role: "admin" | "operator", active: boolean): Promise<void> {
+async function syncUserRole(
+  userId: string,
+  role: "admin" | "operator",
+  active: boolean,
+): Promise<void> {
   if (!config.supabaseConfigured) return;
   try {
     const supabase = getClient();
-    
+
     // Default payload using user_id (standard migration schema)
     let payload: Record<string, unknown> = {
       user_id: userId,
@@ -111,7 +123,11 @@ async function syncUserRole(userId: string, role: "admin" | "operator", active: 
     }
 
     // If 'is_active' or 'active' columns are missing in schema cache
-    if (error && (error.message?.includes("is_active") || error.message?.includes("'active'"))) {
+    if (
+      error &&
+      (error.message?.includes("is_active") ||
+        error.message?.includes("'active'"))
+    ) {
       if (error.message.includes("is_active")) delete payload.is_active;
       if (error.message.includes("'active'")) delete payload.active;
       const retry = await supabase.from("user_roles").upsert(payload);
@@ -119,10 +135,15 @@ async function syncUserRole(userId: string, role: "admin" | "operator", active: 
     }
 
     if (error) {
-      console.error("[userService] Failed to sync public.user_roles:", error.message || JSON.stringify(error));
+      console.error(
+        "[userService] Failed to sync public.user_roles:",
+        error.message || JSON.stringify(error),
+      );
     }
   } catch (error: any) {
-    const message = error?.message || (typeof error === "object" ? JSON.stringify(error) : String(error));
+    const message =
+      error?.message ||
+      (typeof error === "object" ? JSON.stringify(error) : String(error));
     console.error("[userService] Failed to sync public.user_roles:", message);
   }
 }
@@ -137,9 +158,15 @@ export async function seedUsers(): Promise<void> {
     const supabase = getClient();
     console.log("[userService] Checking and seeding default users...");
 
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+    const {
+      data: { users },
+      error: listError,
+    } = await supabase.auth.admin.listUsers();
     if (listError) {
-      console.error("[userService] Failed to list users during seeding:", listError.message);
+      console.error(
+        "[userService] Failed to list users during seeding:",
+        listError.message,
+      );
       return;
     }
 
@@ -156,7 +183,10 @@ export async function seedUsers(): Promise<void> {
         user_metadata: { role: "admin", display_name: "admin", active: true },
       });
       if (createAdminError) {
-        console.error("[userService] Failed to create seed admin:", createAdminError.message);
+        console.error(
+          "[userService] Failed to create seed admin:",
+          createAdminError.message,
+        );
       }
     } else {
       const admin = users?.find((u) => u.email === adminEmail);
@@ -165,15 +195,24 @@ export async function seedUsers(): Promise<void> {
 
     const operatorExists = users?.some((u) => u.email === operatorEmail);
     if (!operatorExists) {
-      console.log(`[userService] Seeding default operator user: ${operatorEmail}`);
+      console.log(
+        `[userService] Seeding default operator user: ${operatorEmail}`,
+      );
       const { error: createOpError } = await supabase.auth.admin.createUser({
         email: operatorEmail,
         password: DEFAULT_OPERATOR_PASSWORD,
         email_confirm: true,
-        user_metadata: { role: "user", display_name: DEFAULT_OPERATOR_DISPLAY_NAME, active: true },
+        user_metadata: {
+          role: "user",
+          display_name: DEFAULT_OPERATOR_DISPLAY_NAME,
+          active: true,
+        },
       });
       if (createOpError) {
-        console.error("[userService] Failed to create seed operator:", createOpError.message);
+        console.error(
+          "[userService] Failed to create seed operator:",
+          createOpError.message,
+        );
       }
     } else {
       const operator = users?.find((u) => u.email === operatorEmail);
@@ -182,22 +221,43 @@ export async function seedUsers(): Promise<void> {
 
     console.log("[userService] Seeding check complete.");
   } catch (err) {
-    console.error("[userService] Unexpected error in seeding:", err instanceof Error ? err.message : String(err));
+    console.error(
+      "[userService] Unexpected error in seeding:",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }
 
-export async function verifyUser(username: string, password: string): Promise<VerifiedUser> {
+export async function verifyUser(
+  username: string,
+  password: string,
+): Promise<VerifiedUser> {
   // If Supabase is unconfigured, fall back to mock admin/operator authentication for ease of testing
   if (!config.supabaseConfigured) {
-    console.warn("[userService] Supabase not configured. Authenticating using local mock configuration.");
+    console.warn(
+      "[userService] Supabase not configured. Authenticating using local mock configuration.",
+    );
     const cleanUser = username.trim().toLowerCase();
     if (cleanUser === "admin" && password === "admin123") {
-      return { id: "mock-admin-id", username: "admin", displayName: "admin", role: "admin" };
+      return {
+        id: "mock-admin-id",
+        username: "admin",
+        displayName: "admin",
+        role: "admin",
+      };
     }
-    const defaultOperatorLogin = cleanUser === DEFAULT_OPERATOR_USERNAME && password === DEFAULT_OPERATOR_PASSWORD;
-    const legacyOperatorLogin = cleanUser.startsWith("operator") && password === `${cleanUser}123`;
+    const defaultOperatorLogin =
+      cleanUser === DEFAULT_OPERATOR_USERNAME &&
+      password === DEFAULT_OPERATOR_PASSWORD;
+    const legacyOperatorLogin =
+      cleanUser.startsWith("operator") && password === `${cleanUser}123`;
     if (defaultOperatorLogin || legacyOperatorLogin) {
-      return { id: `mock-${cleanUser}-id`, username: cleanUser, displayName: DEFAULT_OPERATOR_DISPLAY_NAME, role: "operator" };
+      return {
+        id: `mock-${cleanUser}-id`,
+        username: cleanUser,
+        displayName: DEFAULT_OPERATOR_DISPLAY_NAME,
+        role: "operator",
+      };
     }
     throw new Error("Invalid username or password (Mock Mode).");
   }
@@ -216,17 +276,30 @@ export async function verifyUser(username: string, password: string): Promise<Ve
     const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
     const matched = listData?.users?.find((u) => {
       const uName = getUsername(u.email, u.user_metadata).toLowerCase();
-      const metaName = (u.user_metadata?.username as string | undefined)?.toLowerCase();
-      const metaDisplay = (u.user_metadata?.display_name as string | undefined)?.toLowerCase();
-      return uName === cleanUser || metaName === cleanUser || metaDisplay === cleanUser;
+      const metaName = (
+        u.user_metadata?.username as string | undefined
+      )?.toLowerCase();
+      const metaDisplay = (
+        u.user_metadata?.display_name as string | undefined
+      )?.toLowerCase();
+      return (
+        uName === cleanUser ||
+        metaName === cleanUser ||
+        metaDisplay === cleanUser
+      );
     });
     candidateEmails = matched?.email ? [matched.email] : [cleanUser];
   }
 
-  let authenticatedUser: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"]["user"] = null;
+  let authenticatedUser: Awaited<
+    ReturnType<typeof supabase.auth.signInWithPassword>
+  >["data"]["user"] = null;
   let lastErrorMessage = "Authentication failed";
   for (const email of candidateEmails) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (data.user) {
       authenticatedUser = data.user;
       break;
@@ -240,12 +313,16 @@ export async function verifyUser(username: string, password: string): Promise<Ve
 
   const userStatus = getUserStatus(authenticatedUser.user_metadata);
   if (userStatus === "inactive") {
-    throw new Error("Your account has been deactivated. Please contact your administrator.");
+    throw new Error(
+      "Your account has been deactivated. Please contact your administrator.",
+    );
   }
 
   // Automatically activate pending user profiles upon successful initial login / sign up
   if (userStatus === "pending") {
-    console.log(`[userService] Activating pending user ${authenticatedUser.id} upon successful sign in.`);
+    console.log(
+      `[userService] Activating pending user ${authenticatedUser.id} upon successful sign in.`,
+    );
     const supabaseAdmin = getClient();
     const updatedMetadata = {
       ...(authenticatedUser.user_metadata ?? {}),
@@ -261,13 +338,21 @@ export async function verifyUser(username: string, password: string): Promise<Ve
   }
 
   const role = databaseRoleToFrontend(authenticatedUser.user_metadata?.role);
-  const actualUsername = getUsername(authenticatedUser.email, authenticatedUser.user_metadata);
-  const displayName = getDisplayName(authenticatedUser.email, authenticatedUser.user_metadata);
+  const actualUsername = getUsername(
+    authenticatedUser.email,
+    authenticatedUser.user_metadata,
+  );
+  const displayName = getDisplayName(
+    authenticatedUser.email,
+    authenticatedUser.user_metadata,
+  );
   return {
     id: authenticatedUser.id,
-    username: cleanUser === DEFAULT_OPERATOR_USERNAME && actualUsername === DEFAULT_OPERATOR_AUTH_EMAIL
-      ? DEFAULT_OPERATOR_USERNAME
-      : actualUsername,
+    username:
+      cleanUser === DEFAULT_OPERATOR_USERNAME &&
+      actualUsername === DEFAULT_OPERATOR_AUTH_EMAIL
+        ? DEFAULT_OPERATOR_USERNAME
+        : actualUsername,
     displayName,
     role,
   };
@@ -277,13 +362,37 @@ export async function listUsers(): Promise<UserRecord[]> {
   if (!config.supabaseConfigured) {
     // Return mock users for mock local development mode
     return [
-      { id: "mock-admin-id", username: "admin", role: "admin", databaseRole: "admin", active: true, status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), planCount: 0 },
-      { id: "mock-op1-id", username: DEFAULT_OPERATOR_USERNAME, displayName: DEFAULT_OPERATOR_DISPLAY_NAME, role: "operator", databaseRole: "user", active: true, status: "active", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), planCount: 1 },
+      {
+        id: "mock-admin-id",
+        username: "admin",
+        role: "admin",
+        databaseRole: "admin",
+        active: true,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        planCount: 0,
+      },
+      {
+        id: "mock-op1-id",
+        username: DEFAULT_OPERATOR_USERNAME,
+        displayName: DEFAULT_OPERATOR_DISPLAY_NAME,
+        role: "operator",
+        databaseRole: "user",
+        active: true,
+        status: "active",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        planCount: 1,
+      },
     ];
   }
 
   const supabase = getClient();
-  const { data: { users }, error } = await supabase.auth.admin.listUsers();
+  const {
+    data: { users },
+    error,
+  } = await supabase.auth.admin.listUsers();
   if (error) {
     throw new Error(`Failed to list users: ${error.message}`);
   }
@@ -296,7 +405,9 @@ export async function listUsers(): Promise<UserRecord[]> {
       email: u.email ?? undefined,
       displayName: getDisplayName(u.email, u.user_metadata),
       role: databaseRoleToFrontend(u.user_metadata?.role),
-      databaseRole: frontendRoleToDatabase(databaseRoleToFrontend(u.user_metadata?.role)),
+      databaseRole: frontendRoleToDatabase(
+        databaseRoleToFrontend(u.user_metadata?.role),
+      ),
       active: userStatus === "active",
       status: userStatus,
       createdAt: u.created_at,
@@ -305,25 +416,55 @@ export async function listUsers(): Promise<UserRecord[]> {
   });
 }
 
-export async function getUserAccessByUsername(username: string): Promise<{ active: boolean; role: "admin" | "operator"; id: string; displayName?: string } | null> {
+export async function getUserAccessByUsername(
+  username: string,
+): Promise<{
+  active: boolean;
+  role: "admin" | "operator";
+  id: string;
+  displayName?: string;
+} | null> {
   if (!config.supabaseConfigured) {
     const cleanUser = username.trim().toLowerCase();
-    if (cleanUser === "admin") return { id: "mock-admin-id", active: true, role: "admin", displayName: "admin" };
-    if (cleanUser.startsWith("operator")) return { id: `mock-${cleanUser}-id`, active: true, role: "operator", displayName: DEFAULT_OPERATOR_DISPLAY_NAME };
+    if (cleanUser === "admin")
+      return {
+        id: "mock-admin-id",
+        active: true,
+        role: "admin",
+        displayName: "admin",
+      };
+    if (cleanUser.startsWith("operator"))
+      return {
+        id: `mock-${cleanUser}-id`,
+        active: true,
+        role: "operator",
+        displayName: DEFAULT_OPERATOR_DISPLAY_NAME,
+      };
     return null;
   }
 
   try {
     const supabase = getClient();
-    const { data: { users }, error } = await supabase.auth.admin.listUsers();
+    const {
+      data: { users },
+      error,
+    } = await supabase.auth.admin.listUsers();
     if (error || !users) {
-      console.warn(`[userService] listUsers warning in getUserAccessByUsername: ${error?.message ?? "no users returned"}`);
+      console.warn(
+        `[userService] listUsers warning in getUserAccessByUsername: ${error?.message ?? "no users returned"}`,
+      );
       return null;
     }
     const user = users.find((candidate) => {
-      const candidateUsername = getUsername(candidate.email, candidate.user_metadata);
+      const candidateUsername = getUsername(
+        candidate.email,
+        candidate.user_metadata,
+      );
       const cleanSearch = username.trim().toLowerCase();
-      return candidateUsername.toLowerCase() === cleanSearch || candidate.email?.toLowerCase() === cleanSearch;
+      return (
+        candidateUsername.toLowerCase() === cleanSearch ||
+        candidate.email?.toLowerCase() === cleanSearch
+      );
     });
     if (!user) return null;
     return {
@@ -333,7 +474,10 @@ export async function getUserAccessByUsername(username: string): Promise<{ activ
       displayName: getDisplayName(user.email, user.user_metadata),
     };
   } catch (err) {
-    console.warn(`[userService] Exception in getUserAccessByUsername for ${username}:`, err);
+    console.warn(
+      `[userService] Exception in getUserAccessByUsername for ${username}:`,
+      err,
+    );
     return null;
   }
 }
@@ -353,7 +497,11 @@ export async function getUserAccessByUsername(username: string): Promise<{ activ
  * @param password A required temporary password set by the admin.
  * @param role     The access role for the new account.
  */
-async function sendGmailInvitationEmail(email: string, username: string, redirectUrl: string): Promise<boolean> {
+async function sendGmailInvitationEmail(
+  email: string,
+  username: string,
+  redirectUrl: string,
+): Promise<boolean> {
   const user = process.env.EMAIL_USER || process.env.SMTP_USER;
   const pass = process.env.EMAIL_PASS || process.env.SMTP_PASS;
 
@@ -479,10 +627,15 @@ async function sendGmailInvitationEmail(email: string, username: string, redirec
       html: htmlContent,
     });
 
-    console.log(`[userService] Invitation email sent via Gmail SMTP to ${email} (Message ID: ${info.messageId})`);
+    console.log(
+      `[userService] Invitation email sent via Gmail SMTP to ${email} (Message ID: ${info.messageId})`,
+    );
     return true;
   } catch (err) {
-    console.error(`[userService] Error sending Gmail invitation email to ${email}:`, err);
+    console.error(
+      `[userService] Error sending Gmail invitation email to ${email}:`,
+      err,
+    );
     return false;
   }
 }
@@ -494,7 +647,9 @@ export async function createUser(
   role: "admin" | "operator",
 ): Promise<UserRecord> {
   if (!config.supabaseConfigured) {
-    throw new Error("User creation is disabled when Supabase is not configured (Mock Mode).");
+    throw new Error(
+      "User creation is disabled when Supabase is not configured (Mock Mode).",
+    );
   }
 
   const supabase = getClient();
@@ -510,7 +665,7 @@ export async function createUser(
 
   const hasCustomEmailProvider = Boolean(
     (process.env.EMAIL_USER && process.env.EMAIL_PASS) ||
-    (process.env.SMTP_USER && process.env.SMTP_PASS)
+    (process.env.SMTP_USER && process.env.SMTP_PASS),
   );
 
   const redirectUrl = process.env.APP_URL
@@ -520,29 +675,36 @@ export async function createUser(
   // If custom email provider (Gmail SMTP) is configured, create user account directly
   // to avoid triggering Supabase's default plain text email ("noreply@mail.app.supabase.io").
   if (hasCustomEmailProvider) {
-    const { data: createData, error: createError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: userMetadata,
-    });
+    const { data: createData, error: createError } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
 
     if (createError || !createData?.user) {
-      throw new Error(`Failed to create user account: ${createError?.message ?? "Unable to contact Supabase Auth service."}`);
+      throw new Error(
+        `Failed to create user account: ${createError?.message ?? "Unable to contact Supabase Auth service."}`,
+      );
     }
 
     resolvedUser = createData.user;
   } else {
     // Step 1: Try sending invitation email link via Supabase Auth with redirect to /accept-invite page.
     try {
-      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-        data: userMetadata,
-        redirectTo: redirectUrl,
-      });
+      const { data: inviteData, error: inviteError } =
+        await supabase.auth.admin.inviteUserByEmail(email, {
+          data: userMetadata,
+          redirectTo: redirectUrl,
+        });
 
       if (!inviteError && inviteData?.user) {
         resolvedUser = inviteData.user;
-        await supabase.auth.admin.updateUserById(resolvedUser.id, { password, email_confirm: true });
+        await supabase.auth.admin.updateUserById(resolvedUser.id, {
+          password,
+          email_confirm: true,
+        });
       } else {
         console.warn(
           `[userService] inviteUserByEmail failed (${inviteError?.message ?? "unknown"}); falling back to direct user creation.`,
@@ -556,15 +718,18 @@ export async function createUser(
 
     // Step 2: Fallback to direct createUser if invitation link email could not be sent
     if (!resolvedUser) {
-      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: userMetadata,
-      });
+      const { data: createData, error: createError } =
+        await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: userMetadata,
+        });
 
       if (createError || !createData?.user) {
-        throw new Error(`Failed to create user account: ${createError?.message ?? "Unable to contact Supabase Auth service."}`);
+        throw new Error(
+          `Failed to create user account: ${createError?.message ?? "Unable to contact Supabase Auth service."}`,
+        );
       }
 
       resolvedUser = createData.user;
@@ -596,13 +761,18 @@ export async function updateUserAccess(
   updates: { role?: "admin" | "operator"; active?: boolean },
 ): Promise<UserRecord> {
   if (!config.supabaseConfigured) {
-    throw new Error("User updates are disabled when Supabase is not configured (Mock Mode).");
+    throw new Error(
+      "User updates are disabled when Supabase is not configured (Mock Mode).",
+    );
   }
 
   const supabase = getClient();
-  const { data: existingData, error: getError } = await supabase.auth.admin.getUserById(userId);
+  const { data: existingData, error: getError } =
+    await supabase.auth.admin.getUserById(userId);
   if (getError || !existingData.user) {
-    throw new Error(`Failed to load user: ${getError?.message ?? "Unknown error"}`);
+    throw new Error(
+      `Failed to load user: ${getError?.message ?? "Unknown error"}`,
+    );
   }
 
   const metadata = { ...(existingData.user.user_metadata ?? {}) };
@@ -615,17 +785,24 @@ export async function updateUserAccess(
   // Build the update payload. When deactivating, we also set a Supabase-native
   // ban so the user cannot authenticate even bypassing the app's metadata check.
   // ban_duration='none' lifts the ban on reactivation.
-  const updatePayload: Parameters<typeof supabase.auth.admin.updateUserById>[1] = {
+  const updatePayload: Parameters<
+    typeof supabase.auth.admin.updateUserById
+  >[1] = {
     user_metadata: metadata,
   };
   if (typeof updates.active === "boolean") {
     updatePayload.ban_duration = updates.active ? "none" : "87600h"; // 10 years ≈ permanent ban
   }
 
-  const { data: { user }, error } = await supabase.auth.admin.updateUserById(userId, updatePayload);
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.admin.updateUserById(userId, updatePayload);
 
   if (error || !user) {
-    throw new Error(`Failed to update user: ${error?.message ?? "Unknown error"}`);
+    throw new Error(
+      `Failed to update user: ${error?.message ?? "Unknown error"}`,
+    );
   }
 
   const frontendRole = databaseRoleToFrontend(user.user_metadata?.role);
@@ -662,7 +839,12 @@ export async function confirmInvitePassword(
   // If Supabase is unconfigured (Mock Mode)
   if (!config.supabaseConfigured) {
     const cleanUser = identifier.trim().toLowerCase();
-    return { id: `mock-${cleanUser}-id`, username: cleanUser, displayName: cleanUser, role: "operator" };
+    return {
+      id: `mock-${cleanUser}-id`,
+      username: cleanUser,
+      displayName: cleanUser,
+      role: "operator",
+    };
   }
 
   const supabaseAdmin = getClient();
@@ -671,12 +853,16 @@ export async function confirmInvitePassword(
   // 1. Try verifying user using identifier and temporaryPassword
   try {
     const verified = await verifyUser(identifier, temporaryPassword);
-    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(verified.id);
+    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(
+      verified.id,
+    );
     if (userData?.user) {
       targetUser = userData.user;
     }
   } catch (verifyErr) {
-    console.warn(`[userService] verifyUser in confirmInvitePassword caught error (${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}); attempting admin resolution.`);
+    console.warn(
+      `[userService] verifyUser in confirmInvitePassword caught error (${verifyErr instanceof Error ? verifyErr.message : String(verifyErr)}); attempting admin resolution.`,
+    );
   }
 
   // 2. If verifyUser failed (e.g. unconfirmed email or temporary password mismatch), resolve target user via admin listUsers
@@ -685,13 +871,24 @@ export async function confirmInvitePassword(
     const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
     targetUser = listData?.users?.find((u) => {
       const uName = getUsername(u.email, u.user_metadata).toLowerCase();
-      const metaName = (u.user_metadata?.username as string | undefined)?.toLowerCase();
-      const metaDisplay = (u.user_metadata?.display_name as string | undefined)?.toLowerCase();
-      return uName === cleanSearch || metaName === cleanSearch || metaDisplay === cleanSearch || u.email?.toLowerCase() === cleanSearch;
+      const metaName = (
+        u.user_metadata?.username as string | undefined
+      )?.toLowerCase();
+      const metaDisplay = (
+        u.user_metadata?.display_name as string | undefined
+      )?.toLowerCase();
+      return (
+        uName === cleanSearch ||
+        metaName === cleanSearch ||
+        metaDisplay === cleanSearch ||
+        u.email?.toLowerCase() === cleanSearch
+      );
     });
 
     if (!targetUser) {
-      throw new Error("User account not found. Please check your username or email.");
+      throw new Error(
+        "User account not found. Please check your username or email.",
+      );
     }
   }
 
@@ -702,23 +899,32 @@ export async function confirmInvitePassword(
     status: "active",
   };
 
-  const { data: updatedData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
-    password: newPassword,
-    email_confirm: true,
-    user_metadata: updatedMetadata,
-    ban_duration: "none",
-  });
+  const { data: updatedData, error: updateError } =
+    await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
+      password: newPassword,
+      email_confirm: true,
+      user_metadata: updatedMetadata,
+      ban_duration: "none",
+    });
 
   if (updateError || !updatedData.user) {
-    throw new Error(`Failed to update password: ${updateError?.message ?? "Unknown error"}`);
+    throw new Error(
+      `Failed to update password: ${updateError?.message ?? "Unknown error"}`,
+    );
   }
 
   // 4. Sync user role to active in user_roles table
   const role = databaseRoleToFrontend(updatedData.user.user_metadata?.role);
   await syncUserRole(targetUser.id, role, true);
 
-  const actualUsername = getUsername(updatedData.user.email, updatedData.user.user_metadata);
-  const displayName = getDisplayName(updatedData.user.email, updatedData.user.user_metadata);
+  const actualUsername = getUsername(
+    updatedData.user.email,
+    updatedData.user.user_metadata,
+  );
+  const displayName = getDisplayName(
+    updatedData.user.email,
+    updatedData.user.user_metadata,
+  );
 
   return {
     id: targetUser.id,
@@ -730,7 +936,9 @@ export async function confirmInvitePassword(
 
 export async function deleteUser(userId: string): Promise<void> {
   if (!config.supabaseConfigured) {
-    throw new Error("User deletion is disabled when Supabase is not configured (Mock Mode).");
+    throw new Error(
+      "User deletion is disabled when Supabase is not configured (Mock Mode).",
+    );
   }
 
   const supabase = getClient();

@@ -6,12 +6,17 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-export function DashboardLayout({ sidebarContent, children }: DashboardLayoutProps) {
+export function DashboardLayout({
+  sidebarContent,
+  children,
+}: DashboardLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className={`app-shell ${mobileMenuOpen ? "mobile-menu-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div
+      className={`app-shell ${mobileMenuOpen ? "mobile-menu-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+    >
       {/* Mobile Header for hamburger menu */}
       <div className="mobile-header">
         <Brand variant="dark" />
@@ -24,10 +29,10 @@ export function DashboardLayout({ sidebarContent, children }: DashboardLayoutPro
         </button>
       </div>
 
-      <aside className={`control-panel ${mobileMenuOpen ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <div className="control-panel-inner">
-          {sidebarContent}
-        </div>
+      <aside
+        className={`control-panel ${mobileMenuOpen ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}
+      >
+        <div className="control-panel-inner">{sidebarContent}</div>
       </aside>
 
       <button
@@ -62,9 +67,7 @@ export function DashboardLayout({ sidebarContent, children }: DashboardLayoutPro
         />
       )}
 
-      <section className="workspace">
-        {children}
-      </section>
+      <section className="workspace">{children}</section>
     </div>
   );
 }

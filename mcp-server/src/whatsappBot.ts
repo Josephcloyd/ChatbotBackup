@@ -24,7 +24,8 @@ const qrcode = require("qrcode-terminal") as {
   generate: (qr: string, options?: { small?: boolean }) => void;
 };
 
-const whatsappWeb = require("whatsapp-web.js") as typeof import("whatsapp-web.js");
+const whatsappWeb =
+  require("whatsapp-web.js") as typeof import("whatsapp-web.js");
 
 const { Client, LocalAuth, MessageMedia } = whatsappWeb;
 
@@ -32,17 +33,23 @@ const groupAccessConfig: GroupAccessConfig = normalizeGroupAccessConfig({
   allowedGroupId: process.env.WHATSAPP_ALLOWED_GROUP_ID ?? "",
   allowedGroupName: process.env.WHATSAPP_ALLOWED_GROUP_NAME ?? "test bot",
 });
-const logFullGroupId = (process.env.WHATSAPP_LOG_FULL_GROUP_ID ?? "").trim() === "1";
+const logFullGroupId =
+  (process.env.WHATSAPP_LOG_FULL_GROUP_ID ?? "").trim() === "1";
 const productionWorkbookFilename = "ProductionPlan.xlsx";
 const whatsAppClientId = resolveWhatsAppClientId();
-const botMentionDisplayName = (process.env.WHATSAPP_BOT_MENTION_NAME ?? "wil alt").trim();
+const botMentionDisplayName = (
+  process.env.WHATSAPP_BOT_MENTION_NAME ?? "wil alt"
+).trim();
 const configuredBotMentionIds = (process.env.WHATSAPP_BOT_MENTION_ID ?? "")
   .split(",")
   .map((id) => id.trim())
   .filter((id) => id.length > 0);
 const chromeExecutablePath = findChromeExecutablePath();
 const whatsAppHeadless = readBooleanEnv("WHATSAPP_HEADLESS", true);
-const whatsAppAuthTimeoutMs = readPositiveIntegerEnv("WHATSAPP_AUTH_TIMEOUT_MS", 120_000);
+const whatsAppAuthTimeoutMs = readPositiveIntegerEnv(
+  "WHATSAPP_AUTH_TIMEOUT_MS",
+  120_000,
+);
 const whatsAppUserAgent =
   readNonEmptyEnv("WHATSAPP_USER_AGENT") ??
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -90,7 +97,9 @@ function readPositiveIntegerEnv(name: string, defaultValue: number): number {
   }
 
   const parsedValue = Number(rawValue);
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : defaultValue;
+  return Number.isInteger(parsedValue) && parsedValue > 0
+    ? parsedValue
+    : defaultValue;
 }
 
 function readBooleanEnv(name: string, defaultValue: boolean): boolean {
@@ -122,7 +131,9 @@ function resolveWhatsAppClientId(): string {
     "production-planner-v2",
   ].filter((clientId): clientId is string => Boolean(clientId));
 
-  const existingClientId = knownClientIds.find((clientId) => hasLocalAuthSession(clientId));
+  const existingClientId = knownClientIds.find((clientId) =>
+    hasLocalAuthSession(clientId),
+  );
   if (existingClientId) {
     if (configuredClientId && configuredClientId !== existingClientId) {
       console.warn(
@@ -177,7 +188,9 @@ function logApprovedFallbackGroup(chat: ChatIdentity): void {
   }
 
   const displayId = formatWhatsAppIdForLog(chat.id);
-  console.log(`[whatsappBot] Group detected: name="${chat.name}", id="${displayId}"`);
+  console.log(
+    `[whatsappBot] Group detected: name="${chat.name}", id="${displayId}"`,
+  );
 
   if (!logFullGroupId) {
     console.log(
@@ -194,11 +207,17 @@ function attachPuppeteerDiagnostics(): void {
   puppeteerDiagnosticsAttached = true;
 
   client.pupPage?.on("pageerror", (error: unknown) => {
-    console.error("[whatsappBot] WhatsApp Web page error:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "[whatsappBot] WhatsApp Web page error:",
+      error instanceof Error ? error.message : String(error),
+    );
   });
 
   client.pupPage?.on("error", (error: unknown) => {
-    console.error("[whatsappBot] Puppeteer page crashed:", error instanceof Error ? error.message : String(error));
+    console.error(
+      "[whatsappBot] Puppeteer page crashed:",
+      error instanceof Error ? error.message : String(error),
+    );
   });
 
   client.pupBrowser?.on("disconnected", () => {
@@ -238,7 +257,10 @@ function escapeRegExp(text: string): string {
 }
 
 function createMentionNamePattern(displayName: string): RegExp | null {
-  const normalizedName = displayName.replace(/^~/, "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+  const normalizedName = displayName
+    .replace(/^~/, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
   if (!normalizedName) {
     return null;
   }
@@ -274,7 +296,9 @@ function getCurrentBotContactIds(): Set<string> {
   const ids = [
     client.info?.wid?._serialized,
     client.info?.me?._serialized,
-  ].filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+  ].filter(
+    (id): id is string => typeof id === "string" && id.trim().length > 0,
+  );
 
   for (const id of ids) {
     addKnownBotContactId(id);
@@ -310,7 +334,9 @@ async function refreshKnownBotContactIds(): Promise<void> {
   }
 }
 
-async function isMessageMentioningBot(message: WhatsAppMessage): Promise<boolean> {
+async function isMessageMentioningBot(
+  message: WhatsAppMessage,
+): Promise<boolean> {
   if (hasBotMentionDisplayName(message.body)) {
     return true;
   }
@@ -318,17 +344,25 @@ async function isMessageMentioningBot(message: WhatsAppMessage): Promise<boolean
   const botContactIds = getCurrentBotContactIds();
 
   if (botContactIds.size === 0) {
-    console.warn("[whatsappBot] Could not determine bot contact ID; ignoring message because mention-only mode is enabled.");
+    console.warn(
+      "[whatsappBot] Could not determine bot contact ID; ignoring message because mention-only mode is enabled.",
+    );
     return false;
   }
 
-  if (message.mentionedIds.some((mentionedId) => botContactIds.has(normalizeWhatsAppId(mentionedId)))) {
+  if (
+    message.mentionedIds.some((mentionedId) =>
+      botContactIds.has(normalizeWhatsAppId(mentionedId)),
+    )
+  ) {
     return true;
   }
 
   await refreshKnownBotContactIds();
   const refreshedBotContactIds = getCurrentBotContactIds();
-  return message.mentionedIds.some((mentionedId) => refreshedBotContactIds.has(normalizeWhatsAppId(mentionedId)));
+  return message.mentionedIds.some((mentionedId) =>
+    refreshedBotContactIds.has(normalizeWhatsAppId(mentionedId)),
+  );
 }
 
 function logIgnoredUnmentionedMessage(chatIdentity: ChatIdentity): void {
@@ -349,23 +383,32 @@ function describeError(error: unknown): string {
   return String(error);
 }
 
-async function sendWhatsAppChatState(chatId: string, state: "typing" | "stop"): Promise<boolean> {
+async function sendWhatsAppChatState(
+  chatId: string,
+  state: "typing" | "stop",
+): Promise<boolean> {
   if (!client.pupPage) {
     return false;
   }
 
-  return client.pupPage.evaluate((targetChatId, targetState) => {
-    const webWindow = window as unknown as {
-      WWebJS?: { sendChatstate?: (chatState: string, chatId: string) => void };
-    };
+  return client.pupPage.evaluate(
+    (targetChatId, targetState) => {
+      const webWindow = window as unknown as {
+        WWebJS?: {
+          sendChatstate?: (chatState: string, chatId: string) => void;
+        };
+      };
 
-    if (!webWindow.WWebJS?.sendChatstate) {
-      return false;
-    }
+      if (!webWindow.WWebJS?.sendChatstate) {
+        return false;
+      }
 
-    webWindow.WWebJS.sendChatstate(targetState, targetChatId);
-    return true;
-  }, chatId, state);
+      webWindow.WWebJS.sendChatstate(targetState, targetChatId);
+      return true;
+    },
+    chatId,
+    state,
+  );
 }
 
 function startTypingIndicator(chatId: string): { stop: () => Promise<void> } {
@@ -381,7 +424,10 @@ function startTypingIndicator(chatId: string): { stop: () => Promise<void> } {
     } catch (error) {
       if (!warningLogged) {
         warningLogged = true;
-        console.warn("[whatsappBot] Could not send WhatsApp typing state:", describeError(error));
+        console.warn(
+          "[whatsappBot] Could not send WhatsApp typing state:",
+          describeError(error),
+        );
       }
     }
   };
@@ -403,7 +449,10 @@ function startTypingIndicator(chatId: string): { stop: () => Promise<void> } {
         await sendWhatsAppChatState(chatId, "stop");
       } catch (error) {
         if (!warningLogged) {
-          console.warn("[whatsappBot] Could not clear WhatsApp typing state:", describeError(error));
+          console.warn(
+            "[whatsappBot] Could not clear WhatsApp typing state:",
+            describeError(error),
+          );
         }
       }
     },
@@ -423,7 +472,9 @@ function logWhatsAppSessionResetHelp(): void {
   console.warn(
     `[whatsappBot] To recover, close this bot and any Chrome/WhatsApp Web windows, then delete ".wwebjs_auth\\session-${whatsAppClientId}" and ".wwebjs_cache" from mcp-server before starting again.`,
   );
-  console.warn("[whatsappBot] If WhatsApp shows this linked device as logged out, remove it from WhatsApp -> Linked devices, then scan the QR again.");
+  console.warn(
+    "[whatsappBot] If WhatsApp shows this linked device as logged out, remove it from WhatsApp -> Linked devices, then scan the QR again.",
+  );
 }
 
 function getMessagePreview(message: WhatsAppMessage): string {
@@ -494,8 +545,12 @@ async function getAuthorizedMessageContext(
 console.log("[whatsappBot] Starting WhatsApp QR demo bot.");
 console.log(`[whatsappBot] LocalAuth clientId: ${whatsAppClientId}`);
 console.log(`[whatsappBot] Mention display name: @${botMentionDisplayName}`);
-console.log(`[whatsappBot] Chrome executable: ${chromeExecutablePath ?? "(auto/default)"}`);
-console.log(`[whatsappBot] Chrome mode: ${whatsAppHeadless ? "headless" : "visible"}`);
+console.log(
+  `[whatsappBot] Chrome executable: ${chromeExecutablePath ?? "(auto/default)"}`,
+);
+console.log(
+  `[whatsappBot] Chrome mode: ${whatsAppHeadless ? "headless" : "visible"}`,
+);
 console.log(`[whatsappBot] Auth timeout: ${whatsAppAuthTimeoutMs}ms`);
 logAccessMode();
 startReadyWarningTimer();
@@ -513,8 +568,12 @@ client.on("ready", () => {
   attachPuppeteerDiagnostics();
   void refreshKnownBotContactIds();
   console.log("[whatsappBot] WhatsApp QR demo bot is ready.");
-  console.log("[whatsappBot] Mention the bot in the allowed group, then send 'ping' to test replies.");
-  console.log(`[whatsappBot] Mention the bot with a command. ${productionPlanCommandHelp}`);
+  console.log(
+    "[whatsappBot] Mention the bot in the allowed group, then send 'ping' to test replies.",
+  );
+  console.log(
+    `[whatsappBot] Mention the bot with a command. ${productionPlanCommandHelp}`,
+  );
   logAccessMode();
 });
 
@@ -591,7 +650,9 @@ client.on("message", async (message) => {
     }
 
     const command = parseProductionPlanCommand(commandText);
-    const projectDescription = normalizeBotMessageText(command?.projectDescription ?? commandText);
+    const projectDescription = normalizeBotMessageText(
+      command?.projectDescription ?? commandText,
+    );
     if (command && !projectDescription) {
       await message.reply(
         `Please include your project description after the command. Example:\n\n${productionPlanCommandExample}`,
@@ -599,10 +660,11 @@ client.on("message", async (message) => {
       return;
     }
 
-    if (projectDescription.length >= 10 && isProductionPlanningRequest(projectDescription)) {
-      await message.reply(
-        "Got it. I'm generating your production plan now...",
-      );
+    if (
+      projectDescription.length >= 10 &&
+      isProductionPlanningRequest(projectDescription)
+    ) {
+      await message.reply("Got it. I'm generating your production plan now...");
 
       const typingIndicator = startTypingIndicator(message.from);
       try {
@@ -622,16 +684,21 @@ client.on("message", async (message) => {
           ? `${result.dateInterpretations.join("\n")}\n\n`
           : "";
 
-        await message.reply(`${dateLine}${result.whatsappSummary}\n\nI'm sending the Excel workbook as a document file now.`);
+        await message.reply(
+          `${dateLine}${result.whatsappSummary}\n\nI'm sending the Excel workbook as a document file now.`,
+        );
 
         if (!result.workbookPath) {
-          await message.reply("The production plan was generated, but I could not find the Excel workbook file to attach.");
+          await message.reply(
+            "The production plan was generated, but I could not find the Excel workbook file to attach.",
+          );
           return;
         }
 
         const workbookMedia = MessageMedia.fromFilePath(result.workbookPath);
         workbookMedia.filename = productionWorkbookFilename;
-        workbookMedia.mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        workbookMedia.mimetype =
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
         await client.sendMessage(message.from, workbookMedia, {
           caption: productionWorkbookFilename,
@@ -650,7 +717,11 @@ client.on("message", async (message) => {
       }
     }
 
-    if (/\b(?:weather|forecast|temperature|rain|sunny|cloudy)\b/i.test(projectDescription)) {
+    if (
+      /\b(?:weather|forecast|temperature|rain|sunny|cloudy)\b/i.test(
+        projectDescription,
+      )
+    ) {
       await message.reply(
         "I cannot check live weather from this WhatsApp bot yet. I can help when you mention me with a production-planning request, target workload, deadline, resources, or schedule.",
       );
@@ -682,7 +753,10 @@ client.initialize().catch((error: unknown) => {
 
 process.on("unhandledRejection", (reason: unknown) => {
   if (isExpectedLogoutCleanupError(reason)) {
-    console.warn("[whatsappBot] WhatsApp Web cleanup warning after logout:", describeError(reason));
+    console.warn(
+      "[whatsappBot] WhatsApp Web cleanup warning after logout:",
+      describeError(reason),
+    );
     logWhatsAppSessionResetHelp();
     return;
   }

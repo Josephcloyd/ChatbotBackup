@@ -35,8 +35,7 @@ const MONTHS = new Map([
   ["december", 11],
 ]);
 
-const DATE_EXPRESSION =
-  String.raw`(?:\d{4}-\d{2}-\d{2}|today|tomorrow|next\s+week|end\s+of\s+(?:the\s+)?month|(?:this|next)\s+(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:,?\s+\d{4})?)`;
+const DATE_EXPRESSION = String.raw`(?:\d{4}-\d{2}-\d{2}|today|tomorrow|next\s+week|end\s+of\s+(?:the\s+)?month|(?:this|next)\s+(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)|(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(?:,?\s+\d{4})?)`;
 
 export function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -82,7 +81,10 @@ function thisWeekday(current: Date, targetDay: number): Date {
   return addDays(current, delta);
 }
 
-function parseMonthDate(expression: string, currentDate: string): string | undefined {
+function parseMonthDate(
+  expression: string,
+  currentDate: string,
+): string | undefined {
   const match = expression.match(
     /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/i,
   );
@@ -113,23 +115,33 @@ function parseMonthDate(expression: string, currentDate: string): string | undef
 
 function endOfMonth(currentDate: string): string {
   const current = parseIsoDate(currentDate);
-  const result = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0));
+  const result = new Date(
+    Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0),
+  );
   return formatIsoDate(result);
 }
 
 function parseSlashDate(expression: string): string | undefined {
-  const isoMatch = expression.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})$/);
+  const isoMatch = expression.match(
+    /^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})$/,
+  );
   if (isoMatch) {
     const year = Number(isoMatch[1]);
     const month = Number(isoMatch[2]) - 1;
     const day = Number(isoMatch[3]);
     const d = new Date(Date.UTC(year, month, day));
-    if (d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day) {
+    if (
+      d.getUTCFullYear() === year &&
+      d.getUTCMonth() === month &&
+      d.getUTCDate() === day
+    ) {
       return formatIsoDate(d);
     }
   }
 
-  const slashMatch = expression.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/);
+  const slashMatch = expression.match(
+    /^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/,
+  );
   if (slashMatch) {
     const part1 = Number(slashMatch[1]);
     const part2 = Number(slashMatch[2]);
@@ -139,7 +151,11 @@ function parseSlashDate(expression: string): string | undefined {
     let day = part1 > 12 ? part1 : part2;
 
     const d = new Date(Date.UTC(year, month, day));
-    if (d.getUTCFullYear() === year && d.getUTCMonth() === month && d.getUTCDate() === day) {
+    if (
+      d.getUTCFullYear() === year &&
+      d.getUTCMonth() === month &&
+      d.getUTCDate() === day
+    ) {
       return formatIsoDate(d);
     }
   }
@@ -157,13 +173,19 @@ export function normalizeDateExpression(
   const fromSlash = parseSlashDate(normalized);
   if (fromSlash) return fromSlash;
   if (normalized === "today") return currentDate;
-  if (normalized === "tomorrow") return formatIsoDate(addDays(parseIsoDate(currentDate), 1));
+  if (normalized === "tomorrow")
+    return formatIsoDate(addDays(parseIsoDate(currentDate), 1));
   if (normalized === "next week") {
-    return formatIsoDate(nextWeekday(parseIsoDate(currentDate), WEEKDAYS.get("monday")!));
+    return formatIsoDate(
+      nextWeekday(parseIsoDate(currentDate), WEEKDAYS.get("monday")!),
+    );
   }
-  if (/^end of (?:the )?month$/.test(normalized)) return endOfMonth(currentDate);
+  if (/^end of (?:the )?month$/.test(normalized))
+    return endOfMonth(currentDate);
 
-  const weekdayMatch = normalized.match(/^(this|next)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/);
+  const weekdayMatch = normalized.match(
+    /^(this|next)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/,
+  );
   if (weekdayMatch) {
     const targetDay = WEEKDAYS.get(weekdayMatch[2]!)!;
     const current = parseIsoDate(currentDate);
@@ -191,7 +213,11 @@ function collectDate(
   else constraints.endDate = normalized;
 
   if (source.trim() !== normalized) {
-    constraints.interpretations.push({ source: source.trim(), normalized, kind });
+    constraints.interpretations.push({
+      source: source.trim(),
+      normalized,
+      kind,
+    });
   }
 }
 
@@ -209,9 +235,18 @@ export function extractNormalizedDateConstraints(
     "i",
   );
 
-
-  collectDate(constraints, "startDate", description.match(startPattern)?.[1], currentDate);
-  collectDate(constraints, "endDate", description.match(endPattern)?.[1], currentDate);
+  collectDate(
+    constraints,
+    "startDate",
+    description.match(startPattern)?.[1],
+    currentDate,
+  );
+  collectDate(
+    constraints,
+    "endDate",
+    description.match(endPattern)?.[1],
+    currentDate,
+  );
 
   if (!constraints.startDate && /\bstarting\s+today\b/i.test(description)) {
     collectDate(constraints, "startDate", "today", currentDate);

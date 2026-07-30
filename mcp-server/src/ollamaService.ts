@@ -21,7 +21,10 @@ export interface OllamaResponse {
   [key: string]: unknown;
 }
 
-export function buildOllamaGenerateRequestBody(prompt: string, model: string): string {
+export function buildOllamaGenerateRequestBody(
+  prompt: string,
+  model: string,
+): string {
   return JSON.stringify({
     model,
     prompt,
@@ -62,13 +65,16 @@ export function parseOllamaResponseBody(rawBody: string): OllamaResponse[] {
 
 /** Extract generate.response or chat.message.content and join streamed chunks. */
 export function extractOllamaText(payloads: OllamaResponse[]): string {
-  const apiError = payloads.find((payload) => typeof payload.error === "string")?.error;
+  const apiError = payloads.find(
+    (payload) => typeof payload.error === "string",
+  )?.error;
   if (apiError) throw new Error(`Ollama generation failed: ${apiError}`);
 
   const text = payloads
     .map((payload) => {
       if (typeof payload.response === "string") return payload.response;
-      if (typeof payload.message?.content === "string") return payload.message.content;
+      if (typeof payload.message?.content === "string")
+        return payload.message.content;
       return "";
     })
     .join("")
@@ -100,13 +106,15 @@ export async function getAvailableOllamaModel(): Promise<string> {
   try {
     const response = await fetch(`${config.ollamaBaseUrl}/api/tags`);
     if (!response.ok) return configuredModel;
-    const data = await response.json() as { models?: { name: string }[] };
-    const availableModels = data.models?.map(m => m.name) || [];
-    
+    const data = (await response.json()) as { models?: { name: string }[] };
+    const availableModels = data.models?.map((m) => m.name) || [];
+
     if (availableModels.length === 0) return configuredModel;
     if (availableModels.includes(configuredModel)) return configuredModel;
-    
-    console.warn(`[ollamaService] Configured model ${configuredModel} not found. Falling back to ${availableModels[0]}`);
+
+    console.warn(
+      `[ollamaService] Configured model ${configuredModel} not found. Falling back to ${availableModels[0]}`,
+    );
     return availableModels[0];
   } catch (error) {
     console.error("[ollamaService] Failed to fetch Ollama tags:", error);
@@ -145,7 +153,7 @@ export async function generateWithOllama(prompt: string): Promise<string> {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Connection": "close",
+            Connection: "close",
           },
           body,
           signal: AbortSignal.timeout(config.ollamaTimeoutMs),
@@ -154,11 +162,14 @@ export async function generateWithOllama(prompt: string): Promise<string> {
         const rawBody = await response.text();
 
         if (!response.ok) {
-          throw new Error(`Ollama request failed (${response.status}): ${rawBody}`);
+          throw new Error(
+            `Ollama request failed (${response.status}): ${rawBody}`,
+          );
         }
 
         const payloads = parseOllamaResponseBody(rawBody);
-        const unmodifiedPayload = payloads.length === 1 ? payloads[0] : payloads;
+        const unmodifiedPayload =
+          payloads.length === 1 ? payloads[0] : payloads;
         console.log(
           "[ollamaService] Unmodified Ollama JSON response:",
           JSON.stringify(unmodifiedPayload, null, 2),
@@ -172,8 +183,12 @@ export async function generateWithOllama(prompt: string): Promise<string> {
       } catch (error) {
         lastError = error as Error;
         const errMsg = lastError.message;
-        const causeMsg = lastError.cause ? ` (cause: ${String(lastError.cause)})` : "";
-        console.warn(`[ollamaService] Attempt ${attempt}/${maxRetries} to ${url} failed: ${errMsg}${causeMsg}`);
+        const causeMsg = lastError.cause
+          ? ` (cause: ${String(lastError.cause)})`
+          : "";
+        console.warn(
+          `[ollamaService] Attempt ${attempt}/${maxRetries} to ${url} failed: ${errMsg}${causeMsg}`,
+        );
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 1000));
         }
@@ -184,7 +199,7 @@ export async function generateWithOllama(prompt: string): Promise<string> {
   const detailedMsg = lastError?.message || "Unknown error";
   if (detailedMsg === "fetch failed" || lastError?.name === "TypeError") {
     throw new Error(
-      `Cannot connect to local Ollama server at ${config.ollamaBaseUrl}. Please ensure Ollama is running locally ('ollama serve') and model '${modelToUse}' is pulled.`
+      `Cannot connect to local Ollama server at ${config.ollamaBaseUrl}. Please ensure Ollama is running locally ('ollama serve') and model '${modelToUse}' is pulled.`,
     );
   }
   throw lastError ?? new Error("Ollama generation failed");
@@ -196,7 +211,9 @@ export async function generateWithOllama(prompt: string): Promise<string> {
  */
 export function parseOllamaJson<T>(rawText: string): T {
   if (typeof rawText !== "string" || !rawText.trim()) {
-    throw new Error("Cannot parse Ollama JSON because the extracted response text is empty");
+    throw new Error(
+      "Cannot parse Ollama JSON because the extracted response text is empty",
+    );
   }
 
   // Strip markdown code fences if model added them despite instructions
@@ -220,7 +237,9 @@ export function parseOllamaJson<T>(rawText: string): T {
   try {
     return JSON.parse(cleaned) as T;
   } catch (initialError) {
-    console.warn("[ollamaService] Initial JSON parse failed, attempting truncated JSON repair...");
+    console.warn(
+      "[ollamaService] Initial JSON parse failed, attempting truncated JSON repair...",
+    );
     try {
       const repaired = repairTruncatedJson(cleaned);
       return JSON.parse(repaired) as T;

@@ -1,11 +1,21 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { FLOWBOARD_AUTH_COOKIE, getSessionPayload, type SessionPayload } from "./flowboardAuth";
+import {
+  FLOWBOARD_AUTH_COOKIE,
+  getSessionPayload,
+  type SessionPayload,
+} from "./flowboardAuth";
 
 const plannerUrl = process.env.PLANNER_API_URL ?? "http://127.0.0.1:3001";
 
-async function authError(message: string, status: number): Promise<NextResponse> {
-  const response = NextResponse.json({ success: false, error: message }, { status });
+async function authError(
+  message: string,
+  status: number,
+): Promise<NextResponse> {
+  const response = NextResponse.json(
+    { success: false, error: message },
+    { status },
+  );
   // ONLY clear cookie for 401 Unauthorized (session expired or invalid token)
   if (status === 401) {
     const cookieStore = await cookies();
@@ -30,9 +40,12 @@ export async function requireSession(): Promise<SessionPayload | NextResponse> {
   }
 
   try {
-    const response = await fetch(`${plannerUrl}/api/auth/status?username=${encodeURIComponent(session.username)}`, {
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${plannerUrl}/api/auth/status?username=${encodeURIComponent(session.username)}`,
+      {
+        cache: "no-store",
+      },
+    );
     const data = await response.json();
     if (!response.ok || !data.success) {
       if (data.user?.active === false) {
@@ -68,7 +81,10 @@ export async function requireAdmin(): Promise<SessionPayload | NextResponse> {
 
   if (session.role !== "admin") {
     return NextResponse.json(
-      { success: false, error: "Access denied. Administrator privileges required." },
+      {
+        success: false,
+        error: "Access denied. Administrator privileges required.",
+      },
       { status: 403 },
     );
   }

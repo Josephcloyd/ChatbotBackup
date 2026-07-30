@@ -19,7 +19,11 @@ try {
   // Ignore if .env doesn't exist
 }
 
-function positiveNumber(name: string, value: string | undefined, fallback: number): number {
+function positiveNumber(
+  name: string,
+  value: string | undefined,
+  fallback: number,
+): number {
   const parsed = Number(value ?? fallback);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive number`);
@@ -53,9 +57,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port,
     ollamaBaseUrl: ollamaBaseUrl.replace(/\/$/, ""),
     ollamaModel: env.OLLAMA_MODEL ?? "qwen3:4b",
-    ollamaTimeoutMs: positiveNumber("OLLAMA_TIMEOUT_MS", env.OLLAMA_TIMEOUT_MS, 600_000),
-    ollamaNumPredict: positiveNumber("OLLAMA_NUM_PREDICT", env.OLLAMA_NUM_PREDICT, 8192),
-    supabaseConfigured: Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY),
+    ollamaTimeoutMs: positiveNumber(
+      "OLLAMA_TIMEOUT_MS",
+      env.OLLAMA_TIMEOUT_MS,
+      600_000,
+    ),
+    ollamaNumPredict: positiveNumber(
+      "OLLAMA_NUM_PREDICT",
+      env.OLLAMA_NUM_PREDICT,
+      8192,
+    ),
+    supabaseConfigured: Boolean(
+      env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY,
+    ),
   };
 }
 

@@ -26,7 +26,8 @@ function AcceptInviteForm() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const emailParam = searchParams.get("email") || searchParams.get("username");
+    const emailParam =
+      searchParams.get("email") || searchParams.get("username");
     if (emailParam) {
       setIdentifier(emailParam);
     }
@@ -73,13 +74,17 @@ function AcceptInviteForm() {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error ?? "Failed to activate account and update password.");
+        throw new Error(
+          data.error ?? "Failed to activate account and update password.",
+        );
       }
 
       router.push("/");
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Confirmation failed.");
+      setError(
+        caught instanceof Error ? caught.message : "Confirmation failed.",
+      );
     } finally {
       setLoading(false);
     }
@@ -101,10 +106,14 @@ function AcceptInviteForm() {
 
       <h1 className="auth-title">Confirm Account</h1>
       <p className="auth-subtitle">
-        Enter your temporary password provided by your administrator, then choose a new password to activate your account.
+        Enter your temporary password provided by your administrator, then
+        choose a new password to activate your account.
       </p>
 
-      <div className="auth-fields" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div
+        className="auth-fields"
+        style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+      >
         <FormGroup label="Email or Username" htmlFor="identifier">
           <Input
             id="identifier"
@@ -148,7 +157,10 @@ function AcceptInviteForm() {
               }}
               aria-label={showTempPassword ? "Hide password" : "Show password"}
             >
-              <Icon name={showTempPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+              <Icon
+                name={showTempPassword ? "eyeOff" : "eye"}
+                style={{ width: "1.1em", height: "1.1em" }}
+              />
             </button>
           </div>
         </FormGroup>
@@ -184,7 +196,10 @@ function AcceptInviteForm() {
               }}
               aria-label={showNewPassword ? "Hide password" : "Show password"}
             >
-              <Icon name={showNewPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+              <Icon
+                name={showNewPassword ? "eyeOff" : "eye"}
+                style={{ width: "1.1em", height: "1.1em" }}
+              />
             </button>
           </div>
         </FormGroup>
@@ -218,9 +233,14 @@ function AcceptInviteForm() {
                 justifyContent: "center",
                 padding: "4px",
               }}
-              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+              aria-label={
+                showConfirmPassword ? "Hide password" : "Show password"
+              }
             >
-              <Icon name={showConfirmPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+              <Icon
+                name={showConfirmPassword ? "eyeOff" : "eye"}
+                style={{ width: "1.1em", height: "1.1em" }}
+              />
             </button>
           </div>
         </FormGroup>

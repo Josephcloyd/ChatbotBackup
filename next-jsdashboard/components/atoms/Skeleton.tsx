@@ -7,9 +7,9 @@ interface SkeletonProps {
 
 export function Skeleton({ className = "", style }: SkeletonProps) {
   return (
-    <div 
-      className={`skeleton-atom ${className}`} 
-      style={style} 
+    <div
+      className={`skeleton-atom ${className}`}
+      style={style}
       aria-hidden="true"
     />
   );

@@ -13,7 +13,9 @@ export function normalizeGroupName(name: string): string {
   return name.trim().toLocaleLowerCase();
 }
 
-export function normalizeGroupAccessConfig(config: GroupAccessConfig): GroupAccessConfig {
+export function normalizeGroupAccessConfig(
+  config: GroupAccessConfig,
+): GroupAccessConfig {
   return {
     allowedGroupId: config.allowedGroupId.trim(),
     allowedGroupName: config.allowedGroupName.trim(),
@@ -38,7 +40,10 @@ export function isAllowedWhatsAppGroup(
     return false;
   }
 
-  return normalizeGroupName(chat.name) === normalizeGroupName(normalizedConfig.allowedGroupName);
+  return (
+    normalizeGroupName(chat.name) ===
+    normalizeGroupName(normalizedConfig.allowedGroupName)
+  );
 }
 
 export function maskWhatsAppGroupId(groupId: string): string {

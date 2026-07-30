@@ -10,7 +10,14 @@ interface MetricCardProps {
   isWordValue?: boolean;
 }
 
-export function MetricCard({ icon, colorTheme, label, value, subtext, isWordValue }: MetricCardProps) {
+export function MetricCard({
+  icon,
+  colorTheme,
+  label,
+  value,
+  subtext,
+  isWordValue,
+}: MetricCardProps) {
   return (
     <article className="metric-card">
       <span className={`kpi-icon ${colorTheme}`}>

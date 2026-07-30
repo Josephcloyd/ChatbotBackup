@@ -12,14 +12,20 @@ interface DashboardMetricsProps {
   sheetsCount: number;
 }
 
-export function DashboardMetrics({ metrics, mode, sheetsCount }: DashboardMetricsProps) {
+export function DashboardMetrics({
+  metrics,
+  mode,
+  sheetsCount,
+}: DashboardMetricsProps) {
   return (
     <section className="kpi-grid">
       <MetricCard
         icon="hours"
         colorTheme="blue"
         label={`Planned ${metrics.unitLabel}`}
-        value={metrics.totalPlanned.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+        value={metrics.totalPlanned.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}
         subtext="allocated exactly"
       />
       <MetricCard

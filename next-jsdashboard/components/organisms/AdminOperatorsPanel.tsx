@@ -5,7 +5,12 @@ import type { FrontendRole, OperatorAccount } from "../../lib/adminTypes";
 
 interface AdminOperatorsPanelProps {
   operators: OperatorAccount[];
-  currentUser: { id?: string; username: string; displayName?: string; role: FrontendRole };
+  currentUser: {
+    id?: string;
+    username: string;
+    displayName?: string;
+    role: FrontendRole;
+  };
   onDeleteOperator: (op: OperatorAccount) => void;
   onUpdateOperator: (
     op: OperatorAccount,
@@ -136,8 +141,9 @@ export function AdminOperatorsPanel({
         </div>
 
         <p style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
-          An invitation email will be sent to the specified address. The user must
-          click the link and change their temporary password before signing in.
+          An invitation email will be sent to the specified address. The user
+          must click the link and change their temporary password before signing
+          in.
         </p>
       </form>
 
@@ -150,7 +156,10 @@ export function AdminOperatorsPanel({
         </div>
 
         <div className="table-scroll admin-table-scroll">
-          <table className="admin-table admin-operators-table" style={{ minWidth: 850 }}>
+          <table
+            className="admin-table admin-operators-table"
+            style={{ minWidth: 850 }}
+          >
             <thead>
               <tr>
                 <th style={{ minWidth: 120 }}>Username</th>
@@ -170,10 +179,7 @@ export function AdminOperatorsPanel({
                   op.id === currentUser.id;
                 return (
                   <tr key={op.id}>
-                    <td
-                      className="font-bold"
-                      style={{ whiteSpace: "nowrap" }}
-                    >
+                    <td className="font-bold" style={{ whiteSpace: "nowrap" }}>
                       {op.username}
                     </td>
                     <td
@@ -209,19 +215,21 @@ export function AdminOperatorsPanel({
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       {(() => {
-                        const status = op.status ?? (op.active === false ? "inactive" : "active");
+                        const status =
+                          op.status ??
+                          (op.active === false ? "inactive" : "active");
                         const badgeClass =
                           status === "pending"
                             ? "status-pending"
                             : status === "inactive"
-                            ? "status-archived"
-                            : "status-approved";
+                              ? "status-archived"
+                              : "status-approved";
                         const statusLabel =
                           status === "pending"
                             ? "Pending"
                             : status === "inactive"
-                            ? "Inactive"
-                            : "Active";
+                              ? "Inactive"
+                              : "Active";
                         return (
                           <span className={`compact-badge ${badgeClass}`}>
                             {statusLabel}
@@ -240,24 +248,35 @@ export function AdminOperatorsPanel({
                     </td>
                     <td className="text-right actions-cell">
                       {(() => {
-                        const status = op.status ?? (op.active === false ? "inactive" : "active");
+                        const status =
+                          op.status ??
+                          (op.active === false ? "inactive" : "active");
                         const isInactive = status === "inactive";
                         const isPending = status === "pending";
-                        const actionText = isPending ? "Activate" : isInactive ? "Reactivate" : "Deactivate";
-                        const btnClass = isInactive || isPending ? "edit-btn" : "deactivate-btn";
+                        const actionText = isPending
+                          ? "Activate"
+                          : isInactive
+                            ? "Reactivate"
+                            : "Deactivate";
+                        const btnClass =
+                          isInactive || isPending
+                            ? "edit-btn"
+                            : "deactivate-btn";
                         return (
                           <button
                             className={`action-btn-text ${btnClass}`}
                             onClick={() =>
-                              onUpdateOperator(op, { active: isInactive || isPending })
+                              onUpdateOperator(op, {
+                                active: isInactive || isPending,
+                              })
                             }
                             disabled={isSelf}
                             title={
                               isPending
                                 ? "Activate this user account manually"
                                 : isInactive
-                                ? "Reactivate this user account"
-                                : "Deactivate this user account"
+                                  ? "Reactivate this user account"
+                                  : "Deactivate this user account"
                             }
                           >
                             {actionText}
@@ -272,8 +291,8 @@ export function AdminOperatorsPanel({
                           isSelf
                             ? "You cannot delete your own account"
                             : Number(op.planCount ?? 0) > 0
-                            ? "Reassign this user's plans before deleting"
-                            : "Permanently delete this user account"
+                              ? "Reassign this user's plans before deleting"
+                              : "Permanently delete this user account"
                         }
                       >
                         <Icon name="trash" />

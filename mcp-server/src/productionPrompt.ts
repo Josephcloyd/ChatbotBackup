@@ -1,6 +1,9 @@
 import type { TemplateWorkbookDefinition } from "./services/templateService.js";
 import { promptService } from "./services/promptService.js";
-import type { ProductionPlan, ProductionPlanInput } from "./types/productionPlan.js";
+import type {
+  ProductionPlan,
+  ProductionPlanInput,
+} from "./types/productionPlan.js";
 
 export type { ProductionPlanInput } from "./types/productionPlan.js";
 export type ProductionPlanOutput = ProductionPlan;
@@ -21,15 +24,21 @@ export function buildWhatsAppSummary(plan: ProductionPlan): string {
   const project = plan.project;
   const unit = project.productionUnit ?? "hours";
   const workloadMatch = plan.summary.match(/\bPlanned workload:\s*([^.]*)\./i);
-  const plannedWorkload = workloadMatch?.[1]?.trim() ||
+  const plannedWorkload =
+    workloadMatch?.[1]?.trim() ||
     (unit !== "hours" && project.totalAssets > 0
       ? `${project.totalAssets.toLocaleString()} ${unit}`
       : "See workbook schedule");
-  const riskSheet = plan.workbook.sheets.find((sheet) =>
-    sheet.sheetName === "Risk Register" || sheet.sheetName === "Risks and Assumptions",
+  const riskSheet = plan.workbook.sheets.find(
+    (sheet) =>
+      sheet.sheetName === "Risk Register" ||
+      sheet.sheetName === "Risks and Assumptions",
   );
-  const firstRisk = riskSheet?.rows.find((row) =>
-    String(row.Type ?? "Risk").toLowerCase() === "risk" || row.Description || row.Item,
+  const firstRisk = riskSheet?.rows.find(
+    (row) =>
+      String(row.Type ?? "Risk").toLowerCase() === "risk" ||
+      row.Description ||
+      row.Item,
   );
   const mainRisk = firstRisk
     ? String(firstRisk.Description ?? firstRisk.Item ?? "").trim()
@@ -51,6 +60,8 @@ export function buildWhatsAppSummary(plan: ProductionPlan): string {
     lines.push(`Main risk: ${mainRisk}`);
   }
 
-  lines.push("Workbook attached with schedule, stages, tasks, capacity, KPIs, charts, and risks.");
+  lines.push(
+    "Workbook attached with schedule, stages, tasks, capacity, KPIs, charts, and risks.",
+  );
   return lines.join("\n");
 }

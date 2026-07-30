@@ -33,8 +33,12 @@ export function normalizeBotMessageText(text: string): string {
   return text.replace(mentionTokenPattern, " ").replace(/\s+/g, " ").trim();
 }
 
-export function parseProductionPlanCommand(text: string): ProductionPlanCommand | null {
-  const match = normalizeBotMessageText(text).match(productionPlanCommandPattern);
+export function parseProductionPlanCommand(
+  text: string,
+): ProductionPlanCommand | null {
+  const match = normalizeBotMessageText(text).match(
+    productionPlanCommandPattern,
+  );
   if (!match) {
     return null;
   }
@@ -53,22 +57,39 @@ export function isProductionPlanningRequest(text: string): boolean {
     (total, pattern) => total + (pattern.test(normalized) ? 1 : 0),
     0,
   );
-  const hasPlanningNoun = /\b(?:plan|schedule|timeline|workload|capacity|resource|staffing|throughput|target|deadline|timeframe|duration|workflow|milestone)\b/i
-    .test(normalized);
-  const hasOperationalVerb = /\b(?:collect|capture|process|produce|manufacture|encode|annotate|validate|review|deliver|complete|handle)\b/i
-    .test(normalized);
-  const hasMeasurableWork = /\b\d[\d,]*(?:\.\d+)?\b[\s\S]{0,24}\b(?:images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?|hours?)\b/i
-    .test(normalized) ||
-    /\b(?:images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?|hours?)\b[\s\S]{0,48}\b\d[\d,]*(?:\.\d+)?\b/i
-      .test(normalized);
-  const hasDuration = /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:days?|weeks?|months?|hours?)\b/i
-    .test(normalized);
+  const hasPlanningNoun =
+    /\b(?:plan|schedule|timeline|workload|capacity|resource|staffing|throughput|target|deadline|timeframe|duration|workflow|milestone)\b/i.test(
+      normalized,
+    );
+  const hasOperationalVerb =
+    /\b(?:collect|capture|process|produce|manufacture|encode|annotate|validate|review|deliver|complete|handle)\b/i.test(
+      normalized,
+    );
+  const hasMeasurableWork =
+    /\b\d[\d,]*(?:\.\d+)?\b[\s\S]{0,24}\b(?:images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?|hours?)\b/i.test(
+      normalized,
+    ) ||
+    /\b(?:images?|records?|documents?|receipts?|invoices?|forms?|items?|files?|responses?|entries?|clips?|pages?|units?|samples?|videos?|tasks?|features?|modules?|tickets?|articles?|posts?|batches?|participants?|transactions?|hours?)\b[\s\S]{0,48}\b\d[\d,]*(?:\.\d+)?\b/i.test(
+      normalized,
+    );
+  const hasDuration =
+    /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:days?|weeks?|months?|hours?)\b/i.test(
+      normalized,
+    );
 
-  if (generalQuestionPattern.test(normalized) && !hasOperationalVerb && !hasMeasurableWork) {
+  if (
+    generalQuestionPattern.test(normalized) &&
+    !hasOperationalVerb &&
+    !hasMeasurableWork
+  ) {
     return false;
   }
 
-  return score >= 4 || (hasOperationalVerb && hasMeasurableWork) || (hasPlanningNoun && hasOperationalVerb && hasDuration);
+  return (
+    score >= 4 ||
+    (hasOperationalVerb && hasMeasurableWork) ||
+    (hasPlanningNoun && hasOperationalVerb && hasDuration)
+  );
 }
 
 export function getSocialReply(text: string): string | null {
@@ -117,7 +138,11 @@ export function getSimpleMathReply(text: string): string | null {
     operator === "multiplied by"
   ) {
     result = left * right;
-  } else if (operator === "/" || operator === "÷" || operator === "divided by") {
+  } else if (
+    operator === "/" ||
+    operator === "÷" ||
+    operator === "divided by"
+  ) {
     if (right === 0) return "I cannot divide by zero.";
     result = left / right;
   } else {

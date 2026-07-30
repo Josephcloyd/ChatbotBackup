@@ -24,11 +24,20 @@ export async function DELETE(
     const payload = await response.text();
     return new NextResponse(payload, {
       status: response.status,
-      headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+      headers: {
+        "content-type":
+          response.headers.get("content-type") ?? "application/json",
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Planner service unavailable" },
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Planner service unavailable",
+      },
       { status: 503 },
     );
   }

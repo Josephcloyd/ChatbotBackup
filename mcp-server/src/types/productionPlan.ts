@@ -24,11 +24,7 @@ export type ProductionPlanColumnSemantic =
   | "custom";
 
 export type ProductionPlanColumnDataType =
-  | "text"
-  | "integer"
-  | "decimal"
-  | "date"
-  | "percentage";
+  "text" | "integer" | "decimal" | "date" | "percentage";
 
 export interface ProductionPlanColumnDefinition {
   key: string;

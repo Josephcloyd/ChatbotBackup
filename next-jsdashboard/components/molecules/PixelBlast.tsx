@@ -44,7 +44,8 @@ const createTouchTexture = () => {
     const easeOutSine = (t: number) => Math.sin((t * Math.PI) / 2);
     const easeOutQuad = (t: number) => -t * (t - 2);
     if (p.age < maxAge * 0.3) intensity = easeOutSine(p.age / (maxAge * 0.3));
-    else intensity = easeOutQuad(1 - (p.age - maxAge * 0.3) / (maxAge * 0.7)) || 0;
+    else
+      intensity = easeOutQuad(1 - (p.age - maxAge * 0.3) / (maxAge * 0.7)) || 0;
     intensity *= p.force;
     const color = `${((p.vx + 1) / 2) * 255}, ${((p.vy + 1) / 2) * 255}, ${intensity * 255}`;
     const offset = size * 5;
@@ -105,7 +106,10 @@ const createTouchTexture = () => {
   };
 };
 
-const createLiquidEffect = (texture: THREE.Texture, opts?: { strength?: number; freq?: number }) => {
+const createLiquidEffect = (
+  texture: THREE.Texture,
+  opts?: { strength?: number; freq?: number },
+) => {
   const fragment = `
     uniform sampler2D uTexture;
     uniform float uStrength;
@@ -398,7 +402,8 @@ export function PixelBlast({
         t.composer?.dispose();
         t.renderer.dispose();
         t.renderer.forceContextLoss();
-        if (t.renderer.domElement.parentElement === container) container.removeChild(t.renderer.domElement);
+        if (t.renderer.domElement.parentElement === container)
+          container.removeChild(t.renderer.domElement);
         threeRef.current = null;
       }
       const canvas = document.createElement("canvas");
@@ -419,7 +424,10 @@ export function PixelBlast({
         uTime: { value: 0 },
         uColor: { value: new THREE.Color(color) },
         uClickPos: {
-          value: Array.from({ length: MAX_CLICKS }, () => new THREE.Vector2(-1, -1)),
+          value: Array.from(
+            { length: MAX_CLICKS },
+            () => new THREE.Vector2(-1, -1),
+          ),
         },
         uClickTimes: { value: new Float32Array(MAX_CLICKS) },
         uShapeType: { value: SHAPE_MAP[variant] ?? 0 },
@@ -452,9 +460,15 @@ export function PixelBlast({
         const w = container.clientWidth || 1;
         const h = container.clientHeight || 1;
         renderer.setSize(w, h, false);
-        uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
+        uniforms.uResolution.value.set(
+          renderer.domElement.width,
+          renderer.domElement.height,
+        );
         if (threeRef.current?.composer)
-          threeRef.current.composer.setSize(renderer.domElement.width, renderer.domElement.height);
+          threeRef.current.composer.setSize(
+            renderer.domElement.width,
+            renderer.domElement.height,
+          );
         uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
       };
       setSize();
@@ -503,10 +517,14 @@ export function PixelBlast({
         );
         const noisePass = new EffectPass(camera, noiseEffect);
         noisePass.renderToScreen = true;
-        if (composer && (composer as any).passes?.length > 0) (composer as any).passes.forEach((p: any) => (p.renderToScreen = false));
+        if (composer && (composer as any).passes?.length > 0)
+          (composer as any).passes.forEach(
+            (p: any) => (p.renderToScreen = false),
+          );
         composer.addPass(noisePass);
       }
-      if (composer) composer.setSize(renderer.domElement.width, renderer.domElement.height);
+      if (composer)
+        composer.setSize(renderer.domElement.width, renderer.domElement.height);
       const mapToPixels = (e: MouseEvent | PointerEvent) => {
         const rect = renderer.domElement.getBoundingClientRect();
         const scaleX = renderer.domElement.width / rect.width;
@@ -546,7 +564,8 @@ export function PixelBlast({
         }
         const elapsedTime = (performance.now() - startTime) / 1000;
         uniforms.uTime.value = timeOffset + elapsedTime * speedRef.current;
-        if (liquidEffect) liquidEffect.uniforms.get("uTime")!.value = uniforms.uTime.value;
+        if (liquidEffect)
+          liquidEffect.uniforms.get("uTime")!.value = uniforms.uTime.value;
         if (composer) {
           if (touch) touch.update();
           (composer as any).passes.forEach((p: any) => {
@@ -613,7 +632,8 @@ export function PixelBlast({
       t.composer?.dispose();
       t.renderer.dispose();
       t.renderer.forceContextLoss();
-      if (t.renderer.domElement.parentElement === container) container.removeChild(t.renderer.domElement);
+      if (t.renderer.domElement.parentElement === container)
+        container.removeChild(t.renderer.domElement);
       threeRef.current = null;
     };
   }, [

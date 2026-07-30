@@ -11,17 +11,29 @@ export async function POST(request: Request) {
     const body = await request.text();
     const response = await fetch(`${plannerUrl}/api/operators/reassign`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...adminForwardHeaders(session) },
+      headers: {
+        "content-type": "application/json",
+        ...adminForwardHeaders(session),
+      },
       body,
     });
     const payload = await response.text();
     return new NextResponse(payload, {
       status: response.status,
-      headers: { "content-type": response.headers.get("content-type") ?? "application/json" },
+      headers: {
+        "content-type":
+          response.headers.get("content-type") ?? "application/json",
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Planner service unavailable" },
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Planner service unavailable",
+      },
       { status: 503 },
     );
   }

@@ -8,10 +8,22 @@ import { Textarea } from "../atoms/Input";
 import { SidebarHistory } from "./SidebarHistory";
 
 export const TEMPLATE_OPTIONS = [
-  { id: "HourBased_Annotation_Production_Plan_Template.xlsx", name: "Hour-Based Annotation Plan" },
-  { id: "CollectionBased_Production_Plan_Template.xlsx", name: "Collection-Based Plan" },
-  { id: "Drumming_Production_Plan_Template.xlsx", name: "Drumming Production Plan" },
-  { id: "StatusBased_Production_Plan_Template.xlsx", name: "Status-Based Plan" },
+  {
+    id: "HourBased_Annotation_Production_Plan_Template.xlsx",
+    name: "Hour-Based Annotation Plan",
+  },
+  {
+    id: "CollectionBased_Production_Plan_Template.xlsx",
+    name: "Collection-Based Plan",
+  },
+  {
+    id: "Drumming_Production_Plan_Template.xlsx",
+    name: "Drumming Production Plan",
+  },
+  {
+    id: "StatusBased_Production_Plan_Template.xlsx",
+    name: "Status-Based Plan",
+  },
 ];
 
 interface SidebarProps {
@@ -33,7 +45,8 @@ interface SidebarProps {
   onSelectPlan: (id: string, promptText: string) => void;
 }
 
-const generationPromptPlaceholder = "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
+const generationPromptPlaceholder =
+  "Create a production plan for a class of 4 annotators over 4 calendar months with 400 total hours, starting today.";
 
 export function Sidebar({
   user,
@@ -60,15 +73,15 @@ export function Sidebar({
       </div>
 
       <div className="model-card">
-  <div className="model-topline">
-    <StatusIndicator status={plannerOnline ? "online" : "offline"} />
-    <span>Ollama planner</span>
-    <small>{plannerOnline ? "Online" : "Offline"}</small>
-  </div>
-  <div className="model-name">
-    Active Model <span>LOCAL</span>
-  </div>
-</div>
+        <div className="model-topline">
+          <StatusIndicator status={plannerOnline ? "online" : "offline"} />
+          <span>Ollama planner</span>
+          <small>{plannerOnline ? "Online" : "Offline"}</small>
+        </div>
+        <div className="model-name">
+          Active Model <span>LOCAL</span>
+        </div>
+      </div>
 
       {user.role === "operator" ? (
         <>
@@ -127,7 +140,15 @@ export function Sidebar({
                 className="generation-prompt-input editable-placeholder-field"
                 style={{ paddingBottom: "44px", resize: "none" }}
               />
-              <div style={{ position: "absolute", bottom: "10px", right: "10px", display: "flex", alignItems: "center" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "10px",
+                  right: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
                 {prompt.length > 0 && (
                   <Button
                     onClick={generatePlan}
@@ -144,7 +165,7 @@ export function Sidebar({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      borderRadius: "6px"
+                      borderRadius: "6px",
                     }}
                   >
                     {!loading && <Icon name="arrowUp" />}
@@ -161,7 +182,9 @@ export function Sidebar({
                 {error}
               </div>
             )}
-            <p className="privacy-note">Runs locally through Ollama. Data saved under your account.</p>
+            <p className="privacy-note">
+              Runs locally through Ollama. Data saved under your account.
+            </p>
           </div>
         </>
       ) : (
@@ -196,7 +219,9 @@ export function Sidebar({
           />
 
           <div className="admin-sidebar-composer">
-            <label htmlFor="admin-sidebar-prompt">Describe your production plan</label>
+            <label htmlFor="admin-sidebar-prompt">
+              Describe your production plan
+            </label>
             <div style={{ position: "relative" }}>
               <Textarea
                 id="admin-sidebar-prompt"
@@ -206,7 +231,15 @@ export function Sidebar({
                 className="generation-prompt-input editable-placeholder-field"
                 style={{ paddingBottom: "44px", resize: "none" }}
               />
-              <div style={{ position: "absolute", bottom: "10px", right: "10px", display: "flex", alignItems: "center" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "10px",
+                  right: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
                 {prompt.length > 0 && (
                   <Button
                     onClick={generatePlan}
@@ -223,7 +256,7 @@ export function Sidebar({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      borderRadius: "6px"
+                      borderRadius: "6px",
                     }}
                   >
                     {!loading && <Icon name="arrowUp" />}
@@ -240,7 +273,10 @@ export function Sidebar({
                 {error}
               </div>
             )}
-            <p className="privacy-note">Runs locally through Ollama. Generated plans save under your admin account.</p>
+            <p className="privacy-note">
+              Runs locally through Ollama. Generated plans save under your admin
+              account.
+            </p>
           </div>
         </>
       )}

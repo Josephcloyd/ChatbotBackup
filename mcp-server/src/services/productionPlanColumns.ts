@@ -15,30 +15,62 @@ function inferredSemantic(label: string): ProductionPlanColumnSemantic {
   if (/phase|stage/.test(normalized)) return "phase";
   if (/status/.test(normalized)) return "status";
   if (/note|comment/.test(normalized)) return "notes";
-  if (/completion.*(?:%|rate)|(?:%|rate).*completion/.test(normalized)) return "completion_rate";
+  if (/completion.*(?:%|rate)|(?:%|rate).*completion/.test(normalized))
+    return "completion_rate";
   if (/variance|difference|gap/.test(normalized)) return "variance";
-  if (/actual/.test(normalized) && /per\s+(?:person|worker|annotator|resource|staff)/.test(normalized)) {
+  if (
+    /actual/.test(normalized) &&
+    /per\s+(?:person|worker|annotator|resource|staff)/.test(normalized)
+  ) {
     return "actual_output_per_person";
   }
-  if (/(?:target|planned)/.test(normalized) && /per\s+(?:person|worker|annotator|resource|staff)/.test(normalized)) {
+  if (
+    /(?:target|planned)/.test(normalized) &&
+    /per\s+(?:person|worker|annotator|resource|staff)/.test(normalized)
+  ) {
     return "planned_output_per_person";
   }
-  if (/actual/.test(normalized) && /(?:staff|team|worker|annotator|resource|recorder|validator|developer|operator)/.test(normalized)) {
+  if (
+    /actual/.test(normalized) &&
+    /(?:staff|team|worker|annotator|resource|recorder|validator|developer|operator)/.test(
+      normalized,
+    )
+  ) {
     return "actual_staff";
   }
-  if (/(?:target|planned|scheduled|active)/.test(normalized) && /(?:staff|team|worker|workers|annotator|annotators|resource|resources|operator|operators|headcount|recorder|recorders|validator|validators|developer|developers)/.test(normalized)) {
+  if (
+    /(?:target|planned|scheduled|active)/.test(normalized) &&
+    /(?:staff|team|worker|workers|annotator|annotators|resource|resources|operator|operators|headcount|recorder|recorders|validator|validators|developer|developers)/.test(
+      normalized,
+    )
+  ) {
     return "planned_staff";
   }
-  if (/(?:target|planned|assigned|scheduled)/.test(normalized) && /(?:output|units|tasks|records|documents|images|posts|volume|items|hours)/.test(normalized)) {
+  if (
+    /(?:target|planned|assigned|scheduled)/.test(normalized) &&
+    /(?:output|units|tasks|records|documents|images|posts|volume|items|hours)/.test(
+      normalized,
+    )
+  ) {
     return "planned_output";
   }
-  if (/actual/.test(normalized) && /total\s+hours?/.test(normalized)) return "actual_output";
-  if (/(?:target|planned)/.test(normalized) && /total\s+hours?/.test(normalized)) return "planned_output";
-  if (/actual/.test(normalized) && /hours?/.test(normalized)) return "actual_hours";
-  if (/(?:target|planned|capacity)/.test(normalized) && /hours?/.test(normalized)) return "planned_hours";
+  if (/actual/.test(normalized) && /total\s+hours?/.test(normalized))
+    return "actual_output";
+  if (
+    /(?:target|planned)/.test(normalized) &&
+    /total\s+hours?/.test(normalized)
+  )
+    return "planned_output";
+  if (/actual/.test(normalized) && /hours?/.test(normalized))
+    return "actual_hours";
+  if (
+    /(?:target|planned|capacity)/.test(normalized) &&
+    /hours?/.test(normalized)
+  )
+    return "planned_hours";
   if (/actual/.test(normalized)) return "actual_output";
-  if (/(?:target|planned|assigned|scheduled)/.test(normalized)) return "planned_output";
-
+  if (/(?:target|planned|assigned|scheduled)/.test(normalized))
+    return "planned_output";
 
   return "custom";
 }
@@ -95,7 +127,9 @@ export function findColumnDefinition(
   sheet: Pick<ProductionPlanSheet, "columns" | "columnDefinitions">,
   semantic: ProductionPlanColumnSemantic,
 ): ProductionPlanColumnDefinition | undefined {
-  return getColumnDefinitions(sheet).find((column) => column.semantic === semantic);
+  return getColumnDefinitions(sheet).find(
+    (column) => column.semantic === semantic,
+  );
 }
 
 export function findColumnLabel(

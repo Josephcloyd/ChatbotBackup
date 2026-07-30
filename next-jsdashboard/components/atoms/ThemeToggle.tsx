@@ -11,11 +11,11 @@ export function ThemeToggle() {
 
   return (
     <label className="theme-switch-wrapper" aria-label="Toggle Dark Mode">
-      <input 
-        type="checkbox" 
-        checked={theme === "dark"} 
-        onChange={toggleTheme} 
-        className="theme-switch-checkbox" 
+      <input
+        type="checkbox"
+        checked={theme === "dark"}
+        onChange={toggleTheme}
+        className="theme-switch-checkbox"
       />
       <div className="theme-switch-slider">
         <span className="theme-switch-icon sun-icon">

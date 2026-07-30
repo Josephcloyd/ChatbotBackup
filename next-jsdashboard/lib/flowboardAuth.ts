@@ -6,7 +6,9 @@ function getSessionSecret(): string {
   const secret = process.env.FLOWBOARD_SESSION_SECRET;
 
   if (!secret || secret.trim().length < 16) {
-    throw new Error("FLOWBOARD_SESSION_SECRET must be set and at least 16 characters long.");
+    throw new Error(
+      "FLOWBOARD_SESSION_SECRET must be set and at least 16 characters long.",
+    );
   }
 
   return secret;
@@ -35,7 +37,11 @@ async function createSignature(value: string): Promise<string> {
     ["sign"],
   );
 
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(value),
+  );
   return base64UrlEncode(new Uint8Array(signature));
 }
 
@@ -46,8 +52,18 @@ export interface SessionPayload {
   role: "admin" | "operator";
 }
 
-export async function createSessionToken(username: string, role: string, id?: string, displayName?: string): Promise<string> {
-  const payload: SessionPayload = { id, username, displayName, role: role === "admin" ? "admin" : "operator" };
+export async function createSessionToken(
+  username: string,
+  role: string,
+  id?: string,
+  displayName?: string,
+): Promise<string> {
+  const payload: SessionPayload = {
+    id,
+    username,
+    displayName,
+    role: role === "admin" ? "admin" : "operator",
+  };
   const serialized = JSON.stringify(payload);
   const base64Payload = btoa(unescape(encodeURIComponent(serialized)))
     .replaceAll("+", "-")
@@ -58,7 +74,9 @@ export async function createSessionToken(username: string, role: string, id?: st
   return `${base64Payload}.${signature}`;
 }
 
-export async function getSessionPayload(token: string | undefined): Promise<SessionPayload | null> {
+export async function getSessionPayload(
+  token: string | undefined,
+): Promise<SessionPayload | null> {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -76,8 +94,9 @@ export async function getSessionPayload(token: string | undefined): Promise<Sess
   }
 }
 
-export async function isValidSessionToken(token: string | undefined): Promise<boolean> {
+export async function isValidSessionToken(
+  token: string | undefined,
+): Promise<boolean> {
   const payload = await getSessionPayload(token);
   return payload !== null;
 }
-

@@ -9,7 +9,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { generateProductionPlan } from "./plannerService.js";
 import { config } from "./config.js";
-import { listAvailableTemplates, templateService } from "./services/templateService.js";
+import {
+  listAvailableTemplates,
+  templateService,
+} from "./services/templateService.js";
 import {
   getRecentPlans,
   deletePlan,
@@ -22,7 +25,17 @@ import {
   listGenerationRuns,
   updatePlanReviewStatus,
 } from "./supabaseService.js";
-import { DEFAULT_OPERATOR_USERNAME, verifyUser, listUsers, createUser, deleteUser, seedUsers, updateUserAccess, getUserAccessByUsername, confirmInvitePassword } from "./services/userService.js";
+import {
+  DEFAULT_OPERATOR_USERNAME,
+  verifyUser,
+  listUsers,
+  createUser,
+  deleteUser,
+  seedUsers,
+  updateUserAccess,
+  getUserAccessByUsername,
+  confirmInvitePassword,
+} from "./services/userService.js";
 import { excelService } from "./services/excelService.js";
 import { dynamicExcelService } from "./services/dynamicExcelService.js";
 import {
@@ -45,31 +58,75 @@ const generationInputSchema = z.object({
   projectDescription: z.string().trim().min(10).max(10_000),
   workbookMode: z.enum(["template", "dynamic"]).default("dynamic"),
   selectedTemplate: z.string().optional(),
-  generationSource: z.enum(["whatsapp", "dashboard", "api", "admin"]).default("api"),
+  generationSource: z
+    .enum(["whatsapp", "dashboard", "api", "admin"])
+    .default("api"),
 });
 
-const planPatchSchema = z.object({
-  project_title: z.string().trim().min(1).max(250).optional(),
-  summary: z.string().trim().min(1).max(10_000).optional(),
-  priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
-  progress_percentage: z.number().min(0).max(100).optional(),
-  planning_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  planning_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  actual_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  actual_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  actual_hours: z.number().min(0).nullable().optional(),
-  requested_team_size: z.number().min(0).nullable().optional(),
-}).superRefine((value, ctx) => {
-  if (value.planning_start_date && value.planning_end_date && value.planning_end_date < value.planning_start_date) {
-    ctx.addIssue({ code: "custom", path: ["planning_end_date"], message: "Planning end date cannot be earlier than start date." });
-  }
-  if (value.actual_start_date && value.actual_end_date && value.actual_end_date < value.actual_start_date) {
-    ctx.addIssue({ code: "custom", path: ["actual_end_date"], message: "Actual end date cannot be earlier than start date." });
-  }
-});
+const planPatchSchema = z
+  .object({
+    project_title: z.string().trim().min(1).max(250).optional(),
+    summary: z.string().trim().min(1).max(10_000).optional(),
+    priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    progress_percentage: z.number().min(0).max(100).optional(),
+    planning_start_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    planning_end_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    actual_start_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    actual_end_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    actual_hours: z.number().min(0).nullable().optional(),
+    requested_team_size: z.number().min(0).nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.planning_start_date &&
+      value.planning_end_date &&
+      value.planning_end_date < value.planning_start_date
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["planning_end_date"],
+        message: "Planning end date cannot be earlier than start date.",
+      });
+    }
+    if (
+      value.actual_start_date &&
+      value.actual_end_date &&
+      value.actual_end_date < value.actual_start_date
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actual_end_date"],
+        message: "Actual end date cannot be earlier than start date.",
+      });
+    }
+  });
 
 const reviewSchema = z.object({
-  action: z.enum(["under_review", "approve", "reject", "archive", "restore", "generated", "failed"]),
+  action: z.enum([
+    "under_review",
+    "approve",
+    "reject",
+    "archive",
+    "restore",
+    "generated",
+    "failed",
+  ]),
   rejectionReason: z.string().trim().max(2000).optional(),
 });
 
@@ -105,19 +162,22 @@ function workspaceUser(req: Request): WorkspaceUser | null {
 
 function sendWorkspaceError(res: Response, error: unknown): void {
   if (error instanceof PlanWorkspaceError) {
-    res.status(error.status).json({ success: false, error: error.message, code: error.code });
+    res
+      .status(error.status)
+      .json({ success: false, error: error.message, code: error.code });
     return;
   }
   res.status(500).json({
     success: false,
-    error: error instanceof Error ? error.message : "Plan workspace request failed",
+    error:
+      error instanceof Error ? error.message : "Plan workspace request failed",
   });
 }
 
 export function createMcpServer() {
   const server = new McpServer({
     name: "production-planner-mcp",
-    version: "1.0.0"
+    version: "1.0.0",
   });
 
   server.registerTool(
@@ -129,18 +189,31 @@ export function createMcpServer() {
       inputSchema: {
         whatsappUserId: z.string(),
         projectDescription: z.string(),
-        workbookMode: z.enum(["template", "dynamic"]).default("dynamic").optional(),
-        selectedTemplate: z.string().optional()
-      }
+        workbookMode: z
+          .enum(["template", "dynamic"])
+          .default("dynamic")
+          .optional(),
+        selectedTemplate: z.string().optional(),
+      },
     },
-    async ({ whatsappUserId, projectDescription, workbookMode, selectedTemplate }) => {
+    async ({
+      whatsappUserId,
+      projectDescription,
+      workbookMode,
+      selectedTemplate,
+    }) => {
       console.log("========== TOOL INVOKED ==========");
       console.log("whatsappUserId:", whatsappUserId);
       console.log("projectDescription:", projectDescription);
       console.log("workbookMode:", workbookMode ?? "dynamic");
       console.log("selectedTemplate:", selectedTemplate);
 
-      const result = await generateProductionPlan({ whatsappUserId, projectDescription, workbookMode, selectedTemplate });
+      const result = await generateProductionPlan({
+        whatsappUserId,
+        projectDescription,
+        workbookMode,
+        selectedTemplate,
+      });
 
       if (!result.success) {
         return {
@@ -154,10 +227,10 @@ export function createMcpServer() {
           {
             type: "text",
             text: `${result.whatsappSummary}\n\nExcel file: ${result.workbookPath}`,
-          }
-        ]
+          },
+        ],
       };
-    }
+    },
   );
 
   return server;
@@ -181,7 +254,10 @@ export function createApp() {
       status: "ok",
       service: "production-planner-mcp",
       dependencies: {
-        template: { available: templateAvailable, requiredFor: "template mode only" },
+        template: {
+          available: templateAvailable,
+          requiredFor: "template mode only",
+        },
         ollama: {
           configured: true,
           baseUrl: config.ollamaBaseUrl,
@@ -196,9 +272,12 @@ export function createApp() {
     });
   });
 
-  app.get(["/api/planner/templates", "/api/templates"], (_req: Request, res: Response) => {
-    res.json({ success: true, templates: listAvailableTemplates() });
-  });
+  app.get(
+    ["/api/planner/templates", "/api/templates"],
+    (_req: Request, res: Response) => {
+      res.json({ success: true, templates: listAvailableTemplates() });
+    },
+  );
 
   app.post("/api/generate", async (req: Request, res: Response) => {
     const parsed = generationInputSchema.safeParse(req.body);
@@ -236,7 +315,9 @@ export function createApp() {
     try {
       const { username, password } = req.body;
       if (typeof username !== "string" || typeof password !== "string") {
-        res.status(400).json({ success: false, error: "Username and password required." });
+        res
+          .status(400)
+          .json({ success: false, error: "Username and password required." });
         return;
       }
       const user = await verifyUser(username, password);
@@ -253,24 +334,45 @@ export function createApp() {
     try {
       const { identifier, temporaryPassword, newPassword } = req.body;
       if (
-        typeof identifier !== "string" || !identifier.trim() ||
-        typeof temporaryPassword !== "string" || !temporaryPassword.trim() ||
-        typeof newPassword !== "string" || !newPassword.trim()
+        typeof identifier !== "string" ||
+        !identifier.trim() ||
+        typeof temporaryPassword !== "string" ||
+        !temporaryPassword.trim() ||
+        typeof newPassword !== "string" ||
+        !newPassword.trim()
       ) {
-        res.status(400).json({ success: false, error: "Email/username, temporary password, and new password are required." });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error:
+              "Email/username, temporary password, and new password are required.",
+          });
         return;
       }
       if (newPassword.trim().length < 6) {
-        res.status(400).json({ success: false, error: "New password must be at least 6 characters long." });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: "New password must be at least 6 characters long.",
+          });
         return;
       }
-      const user = await confirmInvitePassword(identifier.trim(), temporaryPassword, newPassword.trim());
+      const user = await confirmInvitePassword(
+        identifier.trim(),
+        temporaryPassword,
+        newPassword.trim(),
+      );
       res.json({ success: true, user });
     } catch (error) {
       console.error("[server] Error confirming invitation password:", error);
       res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to confirm invitation and update password.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to confirm invitation and update password.",
       });
     }
   });
@@ -278,19 +380,25 @@ export function createApp() {
   app.get("/api/operators", async (_req: Request, res: Response) => {
     try {
       const users = await listUsers();
-      const operators = await Promise.all(users.map(async (user) => {
-        if (!config.supabaseConfigured) return user;
-        try {
-          return { ...user, planCount: await countPlansForUser(user.username) };
-        } catch {
-          return { ...user, planCount: 0 };
-        }
-      }));
+      const operators = await Promise.all(
+        users.map(async (user) => {
+          if (!config.supabaseConfigured) return user;
+          try {
+            return {
+              ...user,
+              planCount: await countPlansForUser(user.username),
+            };
+          } catch {
+            return { ...user, planCount: 0 };
+          }
+        }),
+      );
       res.json({ success: true, operators });
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to list operators",
+        error:
+          error instanceof Error ? error.message : "Failed to list operators",
       });
     }
   });
@@ -299,26 +407,42 @@ export function createApp() {
     try {
       const { email, username, password, role } = req.body;
       if (typeof email !== "string" || !email.trim()) {
-        res.status(400).json({ success: false, error: "A valid email address is required." });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: "A valid email address is required.",
+          });
         return;
       }
       if (typeof username !== "string" || !username.trim()) {
-        res.status(400).json({ success: false, error: "Username is required." });
+        res
+          .status(400)
+          .json({ success: false, error: "Username is required." });
         return;
       }
       if (typeof password !== "string" || !password.trim()) {
-        res.status(400).json({ success: false, error: "A temporary password is required." });
+        res
+          .status(400)
+          .json({ success: false, error: "A temporary password is required." });
         return;
       }
       const operatorRole = role === "admin" ? "admin" : "operator";
-      const user = await createUser(email.trim(), username.trim(), password, operatorRole);
+      const user = await createUser(
+        email.trim(),
+        username.trim(),
+        password,
+        operatorRole,
+      );
       res.json({ success: true, user });
     } catch (error) {
       console.error("[server] Error creating operator:", error);
-      const rawError = error instanceof Error ? error.message : "Failed to create operator";
-      const userFacingError = rawError === "fetch failed"
-        ? "Unable to reach Supabase Auth server. Please check your network connection or Supabase settings."
-        : rawError;
+      const rawError =
+        error instanceof Error ? error.message : "Failed to create operator";
+      const userFacingError =
+        rawError === "fetch failed"
+          ? "Unable to reach Supabase Auth server. Please check your network connection or Supabase settings."
+          : rawError;
       res.status(400).json({
         success: false,
         error: userFacingError,
@@ -328,9 +452,12 @@ export function createApp() {
 
   app.get("/api/auth/status", async (req: Request, res: Response) => {
     try {
-      const username = typeof req.query.username === "string" ? req.query.username : "";
+      const username =
+        typeof req.query.username === "string" ? req.query.username : "";
       if (!username) {
-        res.status(400).json({ success: false, error: "Username is required." });
+        res
+          .status(400)
+          .json({ success: false, error: "Username is required." });
         return;
       }
       const access = await getUserAccessByUsername(username);
@@ -342,7 +469,10 @@ export function createApp() {
     } catch (error) {
       res.status(503).json({
         success: false,
-        error: error instanceof Error ? error.message : "Unable to verify user status",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to verify user status",
       });
     }
   });
@@ -351,7 +481,9 @@ export function createApp() {
     try {
       const parsed = userPatchSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: "Invalid user update request" });
+        res
+          .status(400)
+          .json({ success: false, error: "Invalid user update request" });
         return;
       }
       const userId = req.params.id as string;
@@ -373,7 +505,8 @@ export function createApp() {
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to delete operator",
+        error:
+          error instanceof Error ? error.message : "Failed to delete operator",
       });
     }
   });
@@ -382,7 +515,9 @@ export function createApp() {
     try {
       const { fromUsername, toUsername } = req.body;
       if (typeof fromUsername !== "string" || typeof toUsername !== "string") {
-        res.status(400).json({ success: false, error: "Reassignment usernames required." });
+        res
+          .status(400)
+          .json({ success: false, error: "Reassignment usernames required." });
         return;
       }
       await reassignPlans(fromUsername, toUsername);
@@ -390,7 +525,8 @@ export function createApp() {
     } catch (error) {
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to reassign plans",
+        error:
+          error instanceof Error ? error.message : "Failed to reassign plans",
       });
     }
   });
@@ -413,7 +549,9 @@ export function createApp() {
       const planId = req.params.id as string;
       const parsed = planPatchSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: "Invalid plan update request" });
+        res
+          .status(400)
+          .json({ success: false, error: "Invalid plan update request" });
         return;
       }
       const updated = await updatePlan(planId, parsed.data);
@@ -430,21 +568,36 @@ export function createApp() {
     try {
       const parsed = reviewSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: "Invalid review action request" });
+        res
+          .status(400)
+          .json({ success: false, error: "Invalid review action request" });
         return;
       }
       const admin = adminContext(req);
       if (!admin.id) {
-        res.status(403).json({ success: false, error: "Administrator identity is required." });
+        res
+          .status(403)
+          .json({
+            success: false,
+            error: "Administrator identity is required.",
+          });
         return;
       }
       const planId = req.params.id as string;
-      const updated = await updatePlanReviewStatus(planId, parsed.data.action, admin.id, parsed.data.rejectionReason);
+      const updated = await updatePlanReviewStatus(
+        planId,
+        parsed.data.action,
+        admin.id,
+        parsed.data.rejectionReason,
+      );
       res.json({ success: true, plan: updated });
     } catch (error) {
       res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to update plan review status",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update plan review status",
       });
     }
   });
@@ -453,7 +606,12 @@ export function createApp() {
     try {
       const user = workspaceUser(req);
       if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        res
+          .status(401)
+          .json({
+            success: false,
+            error: "Authenticated dashboard user is required.",
+          });
         return;
       }
       const workspace = await loadPlanWorkspace(req.params.id as string, user);
@@ -467,15 +625,30 @@ export function createApp() {
     try {
       const user = workspaceUser(req);
       if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        res
+          .status(401)
+          .json({
+            success: false,
+            error: "Authenticated dashboard user is required.",
+          });
         return;
       }
       const parsed = workspaceMessageSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: "Invalid message request", details: parsed.error.flatten() });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: "Invalid message request",
+            details: parsed.error.flatten(),
+          });
         return;
       }
-      const result = await sendPlanWorkspaceMessage(req.params.id as string, user, parsed.data);
+      const result = await sendPlanWorkspaceMessage(
+        req.params.id as string,
+        user,
+        parsed.data,
+      );
       res.json(result);
     } catch (error) {
       sendWorkspaceError(res, error);
@@ -486,11 +659,20 @@ export function createApp() {
     try {
       const user = workspaceUser(req);
       if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        res
+          .status(401)
+          .json({
+            success: false,
+            error: "Authenticated dashboard user is required.",
+          });
         return;
       }
       const workspace = await loadPlanWorkspace(req.params.id as string, user);
-      res.json({ success: true, revisions: workspace.revisions, currentRevision: workspace.currentRevision });
+      res.json({
+        success: true,
+        revisions: workspace.revisions,
+        currentRevision: workspace.currentRevision,
+      });
     } catch (error) {
       sendWorkspaceError(res, error);
     }
@@ -500,52 +682,29 @@ export function createApp() {
     try {
       const user = workspaceUser(req);
       if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
+        res
+          .status(401)
+          .json({
+            success: false,
+            error: "Authenticated dashboard user is required.",
+          });
         return;
       }
       const parsed = applyProposalSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ success: false, error: "Invalid revision request", details: parsed.error.flatten() });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: "Invalid revision request",
+            details: parsed.error.flatten(),
+          });
         return;
       }
-      const result = await applyPlanWorkspaceProposal(req.params.id as string, user, parsed.data);
-      res.json(result);
-    } catch (error) {
-      sendWorkspaceError(res, error);
-    }
-  });
-
-  app.get("/api/plans/:id/revisions/compare", async (req: Request, res: Response) => {
-    try {
-      const user = workspaceUser(req);
-      if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
-        return;
-      }
-      const from = typeof req.query.from === "string" ? req.query.from : "";
-      const to = typeof req.query.to === "string" ? req.query.to : "";
-      if (!from || !to) {
-        res.status(400).json({ success: false, error: "Both from and to revision IDs are required." });
-        return;
-      }
-      const result = await comparePlanWorkspaceRevisions(req.params.id as string, user, from, to);
-      res.json(result);
-    } catch (error) {
-      sendWorkspaceError(res, error);
-    }
-  });
-
-  app.post("/api/plans/:id/revisions/:revisionId/restore", async (req: Request, res: Response) => {
-    try {
-      const user = workspaceUser(req);
-      if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
-        return;
-      }
-      const result = await restorePlanWorkspaceRevision(
+      const result = await applyPlanWorkspaceProposal(
         req.params.id as string,
         user,
-        req.params.revisionId as string,
+        parsed.data,
       );
       res.json(result);
     } catch (error) {
@@ -553,23 +712,95 @@ export function createApp() {
     }
   });
 
-  app.delete("/api/plans/:id/revisions/:revisionId", async (req: Request, res: Response) => {
-    try {
-      const user = workspaceUser(req);
-      if (!user) {
-        res.status(401).json({ success: false, error: "Authenticated dashboard user is required." });
-        return;
+  app.get(
+    "/api/plans/:id/revisions/compare",
+    async (req: Request, res: Response) => {
+      try {
+        const user = workspaceUser(req);
+        if (!user) {
+          res
+            .status(401)
+            .json({
+              success: false,
+              error: "Authenticated dashboard user is required.",
+            });
+          return;
+        }
+        const from = typeof req.query.from === "string" ? req.query.from : "";
+        const to = typeof req.query.to === "string" ? req.query.to : "";
+        if (!from || !to) {
+          res
+            .status(400)
+            .json({
+              success: false,
+              error: "Both from and to revision IDs are required.",
+            });
+          return;
+        }
+        const result = await comparePlanWorkspaceRevisions(
+          req.params.id as string,
+          user,
+          from,
+          to,
+        );
+        res.json(result);
+      } catch (error) {
+        sendWorkspaceError(res, error);
       }
-      const result = await deletePlanWorkspaceRevision(
-        req.params.id as string,
-        user,
-        req.params.revisionId as string,
-      );
-      res.json(result);
-    } catch (error) {
-      sendWorkspaceError(res, error);
-    }
-  });
+    },
+  );
+
+  app.post(
+    "/api/plans/:id/revisions/:revisionId/restore",
+    async (req: Request, res: Response) => {
+      try {
+        const user = workspaceUser(req);
+        if (!user) {
+          res
+            .status(401)
+            .json({
+              success: false,
+              error: "Authenticated dashboard user is required.",
+            });
+          return;
+        }
+        const result = await restorePlanWorkspaceRevision(
+          req.params.id as string,
+          user,
+          req.params.revisionId as string,
+        );
+        res.json(result);
+      } catch (error) {
+        sendWorkspaceError(res, error);
+      }
+    },
+  );
+
+  app.delete(
+    "/api/plans/:id/revisions/:revisionId",
+    async (req: Request, res: Response) => {
+      try {
+        const user = workspaceUser(req);
+        if (!user) {
+          res
+            .status(401)
+            .json({
+              success: false,
+              error: "Authenticated dashboard user is required.",
+            });
+          return;
+        }
+        const result = await deletePlanWorkspaceRevision(
+          req.params.id as string,
+          user,
+          req.params.revisionId as string,
+        );
+        res.json(result);
+      } catch (error) {
+        sendWorkspaceError(res, error);
+      }
+    },
+  );
 
   app.get("/api/plans/:id/files", async (req: Request, res: Response) => {
     if (!config.supabaseConfigured) {
@@ -582,27 +813,41 @@ export function createApp() {
     } catch (error) {
       res.status(502).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to list workbook files",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to list workbook files",
       });
     }
   });
 
-  app.post("/api/plans/:id/files/:fileId/download", async (req: Request, res: Response) => {
-    try {
-      const download = await createSignedPlanFileDownload(req.params.fileId as string);
-      res.json({ success: true, ...download });
-    } catch (error) {
-      res.status(404).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to create workbook download",
-      });
-    }
-  });
+  app.post(
+    "/api/plans/:id/files/:fileId/download",
+    async (req: Request, res: Response) => {
+      try {
+        const download = await createSignedPlanFileDownload(
+          req.params.fileId as string,
+        );
+        res.json({ success: true, ...download });
+      } catch (error) {
+        res.status(404).json({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to create workbook download",
+        });
+      }
+    },
+  );
 
   app.get("/api/plans/:id/download", async (req: Request, res: Response) => {
     try {
       const planId = req.params.id as string;
-      console.log("[server] GET /api/plans/:id/download. Received planId:", planId);
+      console.log(
+        "[server] GET /api/plans/:id/download. Received planId:",
+        planId,
+      );
       if (!config.supabaseConfigured) {
         res.status(400).json({ error: "Supabase not configured" });
         return;
@@ -616,24 +861,26 @@ export function createApp() {
       }
 
       const isDynamic = planRecord.raw_plan.workbook.sheets.some((s: any) =>
-        ["Weekly Schedule", "Resource Allocation", "Summary"].includes(s.sheetName)
+        ["Weekly Schedule", "Resource Allocation", "Summary"].includes(
+          s.sheetName,
+        ),
       );
 
       let workbookPath: string;
       if (isDynamic) {
         const plan = planRecord.raw_plan;
-        const productionSheet = plan.workbook.sheets.find((sheet: any) => sheet.sheetName === "Production Plan");
+        const productionSheet = plan.workbook.sheets.find(
+          (sheet: any) => sheet.sheetName === "Production Plan",
+        );
         const planRows = productionSheet?.rows || [];
         const plannedHoursLabel = productionSheet
-          ? (
-              findColumnLabel(
-                productionSheet,
-                plan.project.productionUnit && plan.project.productionUnit !== "hours"
-                  ? "planned_hours"
-                  : "planned_output",
-              ) ??
-              findColumnLabel(productionSheet, "planned_output")
-            )
+          ? (findColumnLabel(
+              productionSheet,
+              plan.project.productionUnit &&
+                plan.project.productionUnit !== "hours"
+                ? "planned_hours"
+                : "planned_output",
+            ) ?? findColumnLabel(productionSheet, "planned_output"))
           : undefined;
         const totalHours = planRows.reduce(
           (sum: number, row: any) =>
@@ -644,7 +891,7 @@ export function createApp() {
           ...planRows.map((row: any) =>
             Number(
               productionSheet
-                ? getSemanticCell(row, productionSheet, "planned_staff") ?? 1
+                ? (getSemanticCell(row, productionSheet, "planned_staff") ?? 1)
                 : 1,
             ),
           ),
@@ -655,7 +902,12 @@ export function createApp() {
           : undefined;
         const hasWeekends = planRows.some((r: any) => {
           const day = String(dayLabel ? r[dayLabel] : "").toLowerCase();
-          return day === "sat" || day === "sun" || day === "saturday" || day === "sunday";
+          return (
+            day === "sat" ||
+            day === "sun" ||
+            day === "saturday" ||
+            day === "sunday"
+          );
         });
         const weekdaysOnly = !hasWeekends;
 
@@ -667,16 +919,19 @@ export function createApp() {
 
         const phases = (planRecord.phases || []).map((p: any) => ({
           name: p.phaseName || p.name || "",
-          objective: p.objective || p.description || ""
+          objective: p.objective || p.description || "",
         }));
 
-        const risksSheet = plan.workbook.sheets.find((s: any) => s.sheetName === "Risks and Assumptions");
+        const risksSheet = plan.workbook.sheets.find(
+          (s: any) => s.sheetName === "Risks and Assumptions",
+        );
         const risks = (risksSheet?.rows || [])
           .filter((r: any) => r.Type === "Risk" || r.type === "Risk")
           .map((r: any) => ({
             risk: r.Item || r.Risk || r.risk || "",
             impact: r.Impact || r.impact || "",
-            mitigation: r["Mitigation / Note"] || r.Mitigation || r.mitigation || ""
+            mitigation:
+              r["Mitigation / Note"] || r.Mitigation || r.mitigation || "",
           }));
 
         workbookPath = await dynamicExcelService.writeDynamicProductionPlan({
@@ -685,28 +940,42 @@ export function createApp() {
           phases,
           risks,
           unitLabel:
-            plan.project.productionUnit && plan.project.productionUnit !== "hours"
-              ? String(plan.project.productionUnit)
-                  .replace(/^./, (character: string) => character.toUpperCase())
+            plan.project.productionUnit &&
+            plan.project.productionUnit !== "hours"
+              ? String(plan.project.productionUnit).replace(
+                  /^./,
+                  (character: string) => character.toUpperCase(),
+                )
               : undefined,
           totalQuantity:
-            plan.project.productionUnit && plan.project.productionUnit !== "hours"
+            plan.project.productionUnit &&
+            plan.project.productionUnit !== "hours"
               ? Number(plan.project.totalAssets ?? 0)
               : undefined,
         });
       } else {
         const templateDefinition = await templateService.loadDefinition();
-        workbookPath = await excelService.writeProductionPlan(planRecord.raw_plan, templateDefinition);
+        workbookPath = await excelService.writeProductionPlan(
+          planRecord.raw_plan,
+          templateDefinition,
+        );
       }
 
       const filename = path.basename(workbookPath);
 
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
       res.download(workbookPath, filename);
     } catch (error) {
       res.status(500).json({
-        error: error instanceof Error ? error.message : "Failed to download plan",
+        error:
+          error instanceof Error ? error.message : "Failed to download plan",
       });
     }
   });
@@ -714,59 +983,70 @@ export function createApp() {
   app.get("/api/plans", async (req: Request, res: Response) => {
     if (!config.supabaseConfigured) {
       // Offline fallback: Mock data (empty in test environment)
-      const isTest = process.env.NODE_ENV === "test" || process.argv.some((arg) => arg.includes("test"));
+      const isTest =
+        process.env.NODE_ENV === "test" ||
+        process.argv.some((arg) => arg.includes("test"));
       res.json({
         configured: false,
-        plans: isTest ? [] : [
-          {
-            id: "mock-plan-1",
-            whatsapp_user_id: DEFAULT_OPERATOR_USERNAME,
-            project_title: "Mock Dynamic Plan",
-            summary: "This is a local mock plan since Supabase is not configured.",
-            total_hours_estimate: 80,
-            recommended_team_size: 2,
-            key_risks: ["Mock assumption 1", "Mock assumption 2"],
-            raw_plan: {
-              project: {
-                projectName: "Mock Dynamic Plan",
-                projectDescription: "Mock Description",
-                client: "Internal",
-                startDate: "2026-07-15",
-                deadline: "2026-07-17",
-                assumptions: ["Mock assumption 1", "Mock assumption 2"],
-              },
-              workbook: {
-                sheets: [
-                  {
-                    sheetName: "Production Plan",
-                    rows: [
+        plans: isTest
+          ? []
+          : [
+              {
+                id: "mock-plan-1",
+                whatsapp_user_id: DEFAULT_OPERATOR_USERNAME,
+                project_title: "Mock Dynamic Plan",
+                summary:
+                  "This is a local mock plan since Supabase is not configured.",
+                total_hours_estimate: 80,
+                recommended_team_size: 2,
+                key_risks: ["Mock assumption 1", "Mock assumption 2"],
+                raw_plan: {
+                  project: {
+                    projectName: "Mock Dynamic Plan",
+                    projectDescription: "Mock Description",
+                    client: "Internal",
+                    startDate: "2026-07-15",
+                    deadline: "2026-07-17",
+                    assumptions: ["Mock assumption 1", "Mock assumption 2"],
+                  },
+                  workbook: {
+                    sheets: [
                       {
-                        "No.": 1,
-                        "Date": "2026-07-15",
-                        "Month": "July 2026",
-                        "Day": "Wednesday",
-                        "Target Active Annotators": 2,
-                        "Target Total Hours": 40,
-                        "Target Total Hours per Annotator": 20,
-                        "Status": "Not Started",
+                        sheetName: "Production Plan",
+                        rows: [
+                          {
+                            "No.": 1,
+                            Date: "2026-07-15",
+                            Month: "July 2026",
+                            Day: "Wednesday",
+                            "Target Active Annotators": 2,
+                            "Target Total Hours": 40,
+                            "Target Total Hours per Annotator": 20,
+                            Status: "Not Started",
+                          },
+                        ],
                       },
                     ],
                   },
-                ],
+                  summary:
+                    "This is a local mock plan since Supabase is not configured.",
+                },
+                created_at: new Date().toISOString(),
               },
-              summary: "This is a local mock plan since Supabase is not configured.",
-            },
-            created_at: new Date().toISOString(),
-          },
-        ],
+            ],
       });
       return;
     }
 
     try {
-      const userId = typeof req.query.userId === "string" ? req.query.userId.trim() : undefined;
-      const limit = typeof req.query.limit === "string" ? Number(req.query.limit) : 15;
-      const offset = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+      const userId =
+        typeof req.query.userId === "string"
+          ? req.query.userId.trim()
+          : undefined;
+      const limit =
+        typeof req.query.limit === "string" ? Number(req.query.limit) : 15;
+      const offset =
+        typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
       const plans = await getRecentPlans(userId || undefined, limit, offset);
       res.json({ configured: true, plans });
     } catch (error) {
@@ -785,23 +1065,30 @@ export function createApp() {
     }
     try {
       const runs = await listGenerationRuns({
-        status: typeof req.query.status === "string" ? req.query.status : undefined,
-        modelName: typeof req.query.modelName === "string" ? req.query.modelName : undefined,
-        planId: typeof req.query.planId === "string" ? req.query.planId : undefined,
+        status:
+          typeof req.query.status === "string" ? req.query.status : undefined,
+        modelName:
+          typeof req.query.modelName === "string"
+            ? req.query.modelName
+            : undefined,
+        planId:
+          typeof req.query.planId === "string" ? req.query.planId : undefined,
         date: typeof req.query.date === "string" ? req.query.date : undefined,
       });
       res.json({ success: true, runs });
     } catch (error) {
       res.status(502).json({
         success: false,
-        error: error instanceof Error ? error.message : "Failed to list AI runs",
+        error:
+          error instanceof Error ? error.message : "Failed to list AI runs",
       });
     }
   });
 
   app.get("/files/:filename", (req: Request, res: Response) => {
     const filename = req.params.filename;
-    const safeName = /^(?:dynamic-)?production-plan-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.xlsx$/i;
+    const safeName =
+      /^(?:dynamic-)?production-plan-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.xlsx$/i;
     if (typeof filename !== "string" || !safeName.test(filename)) {
       res.status(404).json({ error: "Workbook not found" });
       return;
@@ -810,7 +1097,8 @@ export function createApp() {
     const filePath = path.join(path.resolve("outputs"), filename);
     res.setHeader("Cache-Control", "private, no-store");
     res.download(filePath, filename, (error) => {
-      if (error && !res.headersSent) res.status(404).json({ error: "Workbook not found" });
+      if (error && !res.headersSent)
+        res.status(404).json({ error: "Workbook not found" });
     });
   });
 
@@ -818,7 +1106,7 @@ export function createApp() {
     const server = createMcpServer();
 
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined
+      sessionIdGenerator: undefined,
     });
 
     try {
@@ -833,9 +1121,9 @@ export function createApp() {
           jsonrpc: "2.0",
           error: {
             code: -32603,
-            message: "Internal server error"
+            message: "Internal server error",
           },
-          id: null
+          id: null,
         });
       }
     } finally {
@@ -850,7 +1138,9 @@ export function createApp() {
 export function startServer(): Server {
   const app = createApp();
   const httpServer = app.listen(config.port, "127.0.0.1", () => {
-    console.log(`Production Planner MCP server running at http://localhost:${config.port}/mcp`);
+    console.log(
+      `Production Planner MCP server running at http://localhost:${config.port}/mcp`,
+    );
     // Seed default users in Supabase Auth asynchronously
     seedUsers();
   });
@@ -872,4 +1162,3 @@ export function startServer(): Server {
 
 const entryPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
 if (import.meta.url === entryPath) startServer();
-

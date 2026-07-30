@@ -45,9 +45,11 @@ function pathBaseName(filePath: string): string {
 
 function buildFriendlyFailure(errorMessage: string): string {
   if (/date|YYYY-MM-DD|start date|end date/i.test(errorMessage)) {
-    return "I understood your request, but I could not validate the planning date. Please use a clearer date like 2026-07-13, or say \"next Monday\".";
+    return 'I understood your request, but I could not validate the planning date. Please use a clearer date like 2026-07-13, or say "next Monday".';
   }
-  if (/hours|teamSize|duration|greater than zero|whole number/i.test(errorMessage)) {
+  if (
+    /hours|teamSize|duration|greater than zero|whole number/i.test(errorMessage)
+  ) {
     return "I understood your request, but the planning numbers did not validate. Please include a positive duration, team/resource count, and total hours.";
   }
   return "I understood your request, but I could not generate a valid production plan. Please try adding a clearer duration, team size, total hours, and start date.";
@@ -73,13 +75,19 @@ export async function generateProductionPlan(
     });
 
     const currentDate = new Date().toISOString().slice(0, 10);
-    const requestedConstraints = extractRequestedConstraints(input.projectDescription, currentDate);
-    const dateInterpretations = (requestedConstraints.dateInterpretations ?? []).map(
-      (item) => `I interpreted "${item.source}" as ${item.normalized}.`,
+    const requestedConstraints = extractRequestedConstraints(
+      input.projectDescription,
+      currentDate,
     );
+    const dateInterpretations = (
+      requestedConstraints.dateInterpretations ?? []
+    ).map((item) => `I interpreted "${item.source}" as ${item.normalized}.`);
 
     // Mixed-metric prompt: both hours and a quantity unit detected — ask the user to clarify.
-    if (requestedConstraints.totalHours !== undefined && requestedConstraints.totalQuantity !== undefined) {
+    if (
+      requestedConstraints.totalHours !== undefined &&
+      requestedConstraints.totalQuantity !== undefined
+    ) {
       const unit = requestedConstraints.unitOfMeasure ?? "items";
       const qty = requestedConstraints.totalQuantity.toLocaleString();
       const hrs = requestedConstraints.totalHours;
@@ -95,12 +103,14 @@ export async function generateProductionPlan(
         dateInterpretations,
       };
     }
-    const templateDefinition = mode === "template"
-      ? await templateService.loadDefinition(input.selectedTemplate)
-      : undefined;
-    const prompt = mode === "dynamic"
-      ? buildDynamicPrompt(input.projectDescription, currentDate)
-      : buildProductionPrompt(input, templateDefinition!, currentDate);
+    const templateDefinition =
+      mode === "template"
+        ? await templateService.loadDefinition(input.selectedTemplate)
+        : undefined;
+    const prompt =
+      mode === "dynamic"
+        ? buildDynamicPrompt(input.projectDescription, currentDate)
+        : buildProductionPrompt(input, templateDefinition!, currentDate);
 
     console.log("[plannerService] Calling Ollama...");
     const rawResponse = await generateWithOllama(prompt);
@@ -111,8 +121,13 @@ export async function generateProductionPlan(
       parsedResponse = parseOllamaJson<unknown>(rawResponse);
     } catch (parseError) {
       console.error("[plannerService] JSON parse failed:", parseError);
-      console.error("[plannerService] Raw response was:", rawResponse.slice(0, 500));
-      throw new Error(`Ollama returned invalid JSON: ${(parseError as Error).message}`);
+      console.error(
+        "[plannerService] Raw response was:",
+        rawResponse.slice(0, 500),
+      );
+      throw new Error(
+        `Ollama returned invalid JSON: ${(parseError as Error).message}`,
+      );
     }
 
     let plan: ProductionPlanOutput;
@@ -120,30 +135,48 @@ export async function generateProductionPlan(
     if (mode === "dynamic") {
       const proposal = validateDynamicProposal(parsedResponse, currentDate);
       const dynamicResult = buildDynamicPlan(input, proposal, currentDate);
-      plan = planRulesService.validate(dynamicResult.plan, { currentDate, input });
-      workbookPath = await dynamicExcelService.writeDynamicProductionPlan(dynamicResult);
+      plan = planRulesService.validate(dynamicResult.plan, {
+        currentDate,
+        input,
+      });
+      workbookPath =
+        await dynamicExcelService.writeDynamicProductionPlan(dynamicResult);
     } else {
       const structurallyValidPlan = validationService.validateProductionPlan(
         parsedResponse,
         templateDefinition!,
       );
-      plan = planRulesService.validate(structurallyValidPlan, { currentDate, input });
-      workbookPath = await excelService.writeProductionPlan(plan, templateDefinition!);
+      plan = planRulesService.validate(structurallyValidPlan, {
+        currentDate,
+        input,
+      });
+      workbookPath = await excelService.writeProductionPlan(
+        plan,
+        templateDefinition!,
+      );
     }
 
     if (!plan.summary || !plan.summary.trim()) {
-      const scopeDesc = plan.project.totalAssets > 0 ? `${plan.project.totalAssets.toLocaleString()} units` : "production targets";
+      const scopeDesc =
+        plan.project.totalAssets > 0
+          ? `${plan.project.totalAssets.toLocaleString()} units`
+          : "production targets";
       plan.summary = `${plan.project.projectDescription || "Production plan"} for ${plan.project.projectName || "requested project"}. Scheduled from ${plan.project.startDate} to ${plan.project.deadline} covering ${scopeDesc}.`;
     }
 
-    console.log("[plannerService] Plan validated successfully:", plan.project.projectName);
+    console.log(
+      "[plannerService] Plan validated successfully:",
+      plan.project.projectName,
+    );
     console.log("[plannerService] Workbook written:", workbookPath);
 
     let planId: string | undefined;
     let workbookSignedUrl: string | undefined;
     let workbookStoragePath: string | undefined;
     let workbookSignedUrlExpiresInSeconds: number | undefined;
-    let uploadResult: Awaited<ReturnType<typeof uploadWorkbookAndCreateSignedUrl>> = null;
+    let uploadResult: Awaited<
+      ReturnType<typeof uploadWorkbookAndCreateSignedUrl>
+    > = null;
 
     try {
       uploadResult = await uploadWorkbookAndCreateSignedUrl(
@@ -155,7 +188,10 @@ export async function generateProductionPlan(
         workbookSignedUrl = uploadResult.signedUrl;
         workbookStoragePath = uploadResult.objectPath;
         workbookSignedUrlExpiresInSeconds = uploadResult.expiresInSeconds;
-        console.log("[plannerService] Workbook uploaded to Supabase Storage:", workbookStoragePath);
+        console.log(
+          "[plannerService] Workbook uploaded to Supabase Storage:",
+          workbookStoragePath,
+        );
       }
     } catch (storageError) {
       console.error(
@@ -184,13 +220,19 @@ export async function generateProductionPlan(
             planId,
             revisionNumber: 1,
             createdBy: input.whatsappUserId,
-            createdByRole: input.generationSource === "admin" ? "admin" : "operator",
+            createdByRole:
+              input.generationSource === "admin" ? "admin" : "operator",
             revisionSource: "initial_generation",
             changeSummary: "Initial production plan generated.",
             planData: plan,
-            validationResult: { status: "passed", generatedAt: new Date().toISOString() },
+            validationResult: {
+              status: "passed",
+              generatedAt: new Date().toISOString(),
+            },
             workbookMode: mode,
-            workbookFilename: uploadResult?.filename ?? (workbookPath ? pathBaseName(workbookPath) : null),
+            workbookFilename:
+              uploadResult?.filename ??
+              (workbookPath ? pathBaseName(workbookPath) : null),
             workbookStoragePath: uploadResult?.objectPath ?? null,
             workbookSignedUrl: uploadResult?.signedUrl ?? null,
           });
@@ -225,7 +267,17 @@ export async function generateProductionPlan(
 
     const whatsappSummary = buildWhatsAppSummary(plan);
     console.log("========== PLAN GENERATION COMPLETE ==========\n");
-    return { success: true, planId, whatsappSummary, plan, workbookPath, workbookSignedUrl, workbookStoragePath, workbookSignedUrlExpiresInSeconds, dateInterpretations };
+    return {
+      success: true,
+      planId,
+      whatsappSummary,
+      plan,
+      workbookPath,
+      workbookSignedUrl,
+      workbookStoragePath,
+      workbookSignedUrlExpiresInSeconds,
+      dateInterpretations,
+    };
   } catch (error) {
     const errorMessage = (error as Error).message;
     console.error("[plannerService] FAILED:", errorMessage);
@@ -244,4 +296,3 @@ export async function generateProductionPlan(
     };
   }
 }
-

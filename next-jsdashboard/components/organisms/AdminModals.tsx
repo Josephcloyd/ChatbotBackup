@@ -32,19 +32,43 @@ export function EditPlanModal({
   onClose,
   onSubmit,
 }: EditPlanModalProps) {
-  const textFields: Array<[keyof EditPlanFormValues, string, string, string]> = [
-    ["planning_start_date", "Planning start date", "date", "Choose planning start date"],
-    ["planning_end_date", "Planning end date", "date", "Choose planning end date"],
-    ["actual_start_date", "Actual start date", "date", "Choose actual start date"],
-    ["actual_end_date", "Actual end date", "date", "Choose actual end date"],
-    ["actual_hours", "Actual hours", "number", "Enter actual hours"],
-    ["requested_team_size", "Requested team size", "number", "Set team size"],
-  ];
+  const textFields: Array<[keyof EditPlanFormValues, string, string, string]> =
+    [
+      [
+        "planning_start_date",
+        "Planning start date",
+        "date",
+        "Choose planning start date",
+      ],
+      [
+        "planning_end_date",
+        "Planning end date",
+        "date",
+        "Choose planning end date",
+      ],
+      [
+        "actual_start_date",
+        "Actual start date",
+        "date",
+        "Choose actual start date",
+      ],
+      ["actual_end_date", "Actual end date", "date", "Choose actual end date"],
+      ["actual_hours", "Actual hours", "number", "Enter actual hours"],
+      ["requested_team_size", "Requested team size", "number", "Set team size"],
+    ];
 
   return (
     <div className="modal-overlay" role="presentation">
-      <form onSubmit={onSubmit} className="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="edit-plan-title">
-        <h3 id="edit-plan-title" className="modal-title">Edit Plan Information</h3>
+      <form
+        onSubmit={onSubmit}
+        className="modal-content modal-wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-plan-title"
+      >
+        <h3 id="edit-plan-title" className="modal-title">
+          Edit Plan Information
+        </h3>
 
         <div className="form-group-compact">
           <label htmlFor="edit-project-title">Project Title</label>
@@ -56,7 +80,9 @@ export function EditPlanModal({
             placeholder="Enter project title"
             className="input-atom editable-placeholder-field"
           />
-          {errors.project_title && <p className="field-error">{errors.project_title}</p>}
+          {errors.project_title && (
+            <p className="field-error">{errors.project_title}</p>
+          )}
         </div>
 
         <div className="form-group-compact">
@@ -90,10 +116,24 @@ export function EditPlanModal({
           ))}
         </div>
 
-        {message && <div className={message.startsWith("Saved") ? "success-box" : "error-box"} role="alert">{message}</div>}
+        {message && (
+          <div
+            className={
+              message.startsWith("Saved") ? "success-box" : "error-box"
+            }
+            role="alert"
+          >
+            {message}
+          </div>
+        )}
 
         <div className="modal-actions">
-          <Button variant="ghost" onClick={onClose} type="button" disabled={saving}>
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            type="button"
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button type="submit" isLoading={saving}>
@@ -115,12 +155,30 @@ interface RejectPlanModalProps {
   onConfirm: () => void;
 }
 
-export function RejectPlanModal({ planTitle, reason, setReason, saving, error, onClose, onConfirm }: RejectPlanModalProps) {
+export function RejectPlanModal({
+  planTitle,
+  reason,
+  setReason,
+  saving,
+  error,
+  onClose,
+  onConfirm,
+}: RejectPlanModalProps) {
   return (
     <div className="modal-overlay" role="presentation">
-      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="reject-plan-title">
-        <h3 id="reject-plan-title" className="modal-title danger">Reject Plan</h3>
-        <p className="modal-text">Rejecting <strong>{planTitle}</strong> requires a reason for the review record.</p>
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-plan-title"
+      >
+        <h3 id="reject-plan-title" className="modal-title danger">
+          Reject Plan
+        </h3>
+        <p className="modal-text">
+          Rejecting <strong>{planTitle}</strong> requires a reason for the
+          review record.
+        </p>
         <div className="form-group-compact">
           <label htmlFor="rejection-reason">Rejection reason</label>
           <textarea
@@ -132,10 +190,21 @@ export function RejectPlanModal({ planTitle, reason, setReason, saving, error, o
             required
           />
         </div>
-        {error && <div className="error-box" role="alert">{error}</div>}
+        {error && (
+          <div className="error-box" role="alert">
+            {error}
+          </div>
+        )}
         <div className="modal-actions">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm} isLoading={saving} disabled={reason.trim().length === 0}>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={onConfirm}
+            isLoading={saving}
+            disabled={reason.trim().length === 0}
+          >
             Reject Plan
           </Button>
         </div>
@@ -152,18 +221,40 @@ interface DeletePlanModalProps {
   onConfirm: () => void;
 }
 
-export function DeletePlanModal({ plan, saving, error, onClose, onConfirm }: DeletePlanModalProps) {
+export function DeletePlanModal({
+  plan,
+  saving,
+  error,
+  onClose,
+  onConfirm,
+}: DeletePlanModalProps) {
   return (
     <div className="modal-overlay" role="presentation">
-      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="delete-plan-title">
-        <h3 id="delete-plan-title" className="modal-title danger">Delete Plan</h3>
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-plan-title"
+      >
+        <h3 id="delete-plan-title" className="modal-title danger">
+          Delete Plan
+        </h3>
         <p className="modal-text">
-          This will permanently delete <strong>{plan.project_title}</strong>. This is destructive and cannot be undone.
+          This will permanently delete <strong>{plan.project_title}</strong>.
+          This is destructive and cannot be undone.
         </p>
-        {error && <div className="error-box" role="alert">{error}</div>}
+        {error && (
+          <div className="error-box" role="alert">
+            {error}
+          </div>
+        )}
         <div className="modal-actions">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm} isLoading={saving}>Delete Plan</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={onConfirm} isLoading={saving}>
+            Delete Plan
+          </Button>
         </div>
       </div>
     </div>
@@ -178,13 +269,27 @@ interface BulkDeletePlansModalProps {
   onConfirm: () => void;
 }
 
-export function BulkDeletePlansModal({ plans, saving, error, onClose, onConfirm }: BulkDeletePlansModalProps) {
+export function BulkDeletePlansModal({
+  plans,
+  saving,
+  error,
+  onClose,
+  onConfirm,
+}: BulkDeletePlansModalProps) {
   return (
     <div className="modal-overlay" role="presentation">
-      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="bulk-delete-plan-title">
-        <h3 id="bulk-delete-plan-title" className="modal-title danger">Delete Selected Plans</h3>
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-delete-plan-title"
+      >
+        <h3 id="bulk-delete-plan-title" className="modal-title danger">
+          Delete Selected Plans
+        </h3>
         <p className="modal-text">
-          This will permanently delete <strong>{plans.length}</strong> selected production plans. This is destructive and cannot be undone.
+          This will permanently delete <strong>{plans.length}</strong> selected
+          production plans. This is destructive and cannot be undone.
         </p>
         <div className="bulk-delete-list">
           {plans.slice(0, 6).map((plan) => (
@@ -192,10 +297,18 @@ export function BulkDeletePlansModal({ plans, saving, error, onClose, onConfirm 
           ))}
           {plans.length > 6 && <span>and {plans.length - 6} more...</span>}
         </div>
-        {error && <div className="error-box" role="alert">{error}</div>}
+        {error && (
+          <div className="error-box" role="alert">
+            {error}
+          </div>
+        )}
         <div className="modal-actions">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm} isLoading={saving}>Delete Selected</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={onConfirm} isLoading={saving}>
+            Delete Selected
+          </Button>
         </div>
       </div>
     </div>
@@ -221,11 +334,19 @@ export function DeleteOperatorModal({
 }: DeleteOperatorModalProps) {
   return (
     <div className="modal-overlay" role="presentation">
-      <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
-        <h3 id="delete-user-title" className="modal-title danger">Delete User: {operatorName}</h3>
+      <div
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-user-title"
+      >
+        <h3 id="delete-user-title" className="modal-title danger">
+          Delete User: {operatorName}
+        </h3>
         <p className="modal-text">
-          Before deleting operator <strong>{operatorName}</strong>, you can reassign their generated
-          production schedules to another active operator to avoid losing historical analytics.
+          Before deleting operator <strong>{operatorName}</strong>, you can
+          reassign their generated production schedules to another active
+          operator to avoid losing historical analytics.
         </p>
 
         <div className="form-group-compact">
@@ -238,7 +359,12 @@ export function DeleteOperatorModal({
           >
             <option value="">Do not reassign</option>
             {operators
-              .filter((op) => op.username !== operatorName && op.role === "operator" && op.active !== false)
+              .filter(
+                (op) =>
+                  op.username !== operatorName &&
+                  op.role === "operator" &&
+                  op.active !== false,
+              )
               .map((op) => (
                 <option key={op.id} value={op.username}>
                   {op.username}

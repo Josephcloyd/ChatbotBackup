@@ -53,7 +53,8 @@ export default function LoginPage() {
 
         <h1 className="auth-title">Production Planner</h1>
         <p className="auth-subtitle">
-          Log in with your operator or administrator credentials to manage schedules.
+          Log in with your operator or administrator credentials to manage
+          schedules.
         </p>
 
         <div className="auth-fields">
@@ -101,7 +102,10 @@ export default function LoginPage() {
                 }}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                <Icon name={showPassword ? "eyeOff" : "eye"} style={{ width: "1.1em", height: "1.1em" }} />
+                <Icon
+                  name={showPassword ? "eyeOff" : "eye"}
+                  style={{ width: "1.1em", height: "1.1em" }}
+                />
               </button>
             </div>
           </FormGroup>
@@ -117,7 +121,9 @@ export default function LoginPage() {
           type="submit"
           className="w-full mt-6"
           isLoading={loading}
-          disabled={username.trim().length === 0 || password.trim().length === 0}
+          disabled={
+            username.trim().length === 0 || password.trim().length === 0
+          }
         >
           Sign In
         </Button>
