@@ -1394,7 +1394,7 @@ th {
   padding: 10px 12px;
   color: #77869a;
   background: #f5f7f9;
-  text-align: left;
+  text-align: center;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1404,11 +1404,15 @@ td {
   padding: 11px 12px;
   border-bottom: 1px solid #edf1f4;
   color: #415267;
+  text-align: center;
 }
 
 .status-badge {
   display: inline-flex;
-  padding: 5px 8px;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  padding: 5px 10px;
   border-radius: 999px;
   color: #867024;
   background: #fff8d9;
