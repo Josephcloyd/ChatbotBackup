@@ -78,7 +78,8 @@ export function AdminPlansPanel({
     const needle = search.trim().toLowerCase();
     return plans
       .filter(
-        (plan) => !needle || plan.project_title.toLowerCase().includes(needle),
+        (plan) =>
+          !needle || (plan.project_title || "").toLowerCase().includes(needle),
       )
       .filter((plan) => !statusFilter || statusOf(plan) === statusFilter)
       .filter((plan) => !sourceFilter || sourceOf(plan) === sourceFilter)
@@ -306,7 +307,7 @@ export function AdminPlansPanel({
               <th style={{ width: 90 }}>Team size</th>
               <th style={{ width: 90 }}>Source</th>
               <th style={{ width: 140 }}>Created at</th>
-              <th style={{ width: 110, textAlign: "center" }}>Actions</th>
+              <th style={{ width: 150, textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>

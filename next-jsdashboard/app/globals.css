@@ -3419,7 +3419,6 @@ td {
 /* Revision History Accordion inside Communication Panel */
 .revision-history-accordion {
   border-bottom: 1px solid var(--line);
-  background: #fbfcfd;
 }
 
 .revision-history-toggle {
