@@ -94,6 +94,12 @@ a {
   border: 1px solid var(--line);
 }
 
+.btn-outline {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
 .spinner-atom {
   width: 17px;
   height: 17px;
